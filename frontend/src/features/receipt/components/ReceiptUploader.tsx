@@ -6,52 +6,92 @@ export const ReceiptUploader: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ReceiptResponse | null>(null);
+  const [pendingReceipts, setPendingReceipts] = useState<Receipt[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [results, setResults] = useState<Receipt[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
       setPreview(URL.createObjectURL(selectedFile));
-      setResult(null);
+      setPendingReceipts([]);
+      setCurrentIndex(0);
+      setResults([]);
     }
   };
 
   const handleUpload = async () => {
     if (!file) return;
     setIsLoading(true);
-
     try {
       const data = await analyzeReceipt(file);
-      setResult(data);
+      setPendingReceipts(data.receipts);
+      setCurrentIndex(0);
+      setResults([]);
     } catch (error) {
-      console.error("Error analyzing receipt:", error);
+      console.error("解析に失敗しました", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSave = (data: Receipt) => {
-    console.log("Saved receipt data:", data);
-    alert("レシートデータが保存されました！");
-    setFile(null);
-    setPreview(null);
-    setResult(null);
+  const handleSaveCurrent = (data: Receipt) => {
+    const newResults = [...results, data];
+    setResults(newResults);
+    const nextIndex = currentIndex + 1;
+
+    if (nextIndex < pendingReceipts.length) {
+      setCurrentIndex(nextIndex);
+    } else {
+      console.log("すべてのレシートが保存されました:", newResults);
+      alert(`${newResults.length}件のレシートが保存されました。`);
+      
+      setFile(null);
+      setPreview(null);
+      setPendingReceipts([]);
+      setResults([]);
+    }
   };
 
-  const handleCancel = () => {
-    setResult(null);
+  const handleSkipCurrent = () => {
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < pendingReceipts.length) {
+      setCurrentIndex(nextIndex);
+    } else {
+      if (results.length > 0) {
+        alert(`${results.length}件のレシートが保存されました。`);
+      }
+      setFile(null);
+      setPreview(null);
+      setPendingReceipts([]);
+      setResults([]);
+    }
   };
 
-  if (result && result.receipts.length > 0) {
+  if (pendingReceipts.length > 0 && currentIndex < pendingReceipts.length) {
     return (
-      <ReceiptEditor
-        initialData={result.receipts[0]}
-        onSave={handleSave}
-        onCancel={handleCancel}
-      />
-    )
+      <div>
+        {/* 進捗表示バー */}
+        <div className="max-w-2xl mx-auto mb-2 flex justify-between items-end px-2">
+          <span className="text-sm font-bold text-gray-500">
+             レシート連続処理モード
+          </span>
+          <span className="text-xl font-bold text-blue-600">
+            {currentIndex + 1} <span className="text-sm text-gray-400">/ {pendingReceipts.length}</span>
+          </span>
+        </div>
+
+        <ReceiptEditor
+          key={currentIndex} // これ重要: keyが変わるとコンポーネントが再描画され、初期値がリセットされる
+          initialData={pendingReceipts[currentIndex]}
+          onSave={handleSaveCurrent}
+          onCancel={handleSkipCurrent}
+        />
+      </div>
+    );
   }
+  
 
   return (
     <div className="p-4 max-w-md mx-auto bg-white rounded-xl shadow-md space-y-4">
@@ -86,13 +126,6 @@ export const ReceiptUploader: React.FC = () => {
       >
         {isLoading ? "分析中..." : "レシートを分析"}
       </button>
-
-      {result && (
-        <div className="mt-4 p-4 bg-green-50 rounded text-sm text-gray-700 overflow-auto max-h-60">
-          <h3 className="font-bold mb-2">分析結果:</h3>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
-        </div>
-      )}
     </div>
   );
 };
