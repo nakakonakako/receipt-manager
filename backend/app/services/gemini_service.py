@@ -28,11 +28,11 @@ class GeminiService:
     config = types.GenerateContentConfig(
       temperature=0.0,
       response_mime_type="application/json",
-      response_scheme=ReceiptDatas
+      response_schema=ReceiptDatas
     )
     
     try:
-      response = self.client.generate_content(
+      response = self.client.models.generate_content(
         model="gemini-2.5-flash",
         contents=[
           types.Part.from_bytes(
@@ -43,7 +43,7 @@ class GeminiService:
         ],
         config=config,
       )
-      return json.loads(response.content)
+      return json.loads(response.text)
     except Exception as e:
       print(f"Error during Gemini API call: {e}")
       raise e
