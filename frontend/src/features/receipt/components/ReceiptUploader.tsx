@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { analyzeReceipt, type ReceiptResponse, type Receipt } from "../api/receiptService";
+import { analyzeReceipt, type Receipt } from "../api/receiptService";
 import { ReceiptEditor } from "./ReceiptEditor";
 
 export const ReceiptUploader: React.FC = () => {
