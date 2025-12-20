@@ -72,7 +72,6 @@ export const ReceiptUploader: React.FC = () => {
   if (pendingReceipts.length > 0 && currentIndex < pendingReceipts.length) {
     return (
       <div>
-        {/* 進捗表示バー */}
         <div className="max-w-2xl mx-auto mb-2 flex justify-between items-end px-2">
           <span className="text-sm font-bold text-gray-500">
              レシート連続処理モード
@@ -83,7 +82,7 @@ export const ReceiptUploader: React.FC = () => {
         </div>
 
         <ReceiptEditor
-          key={currentIndex} // これ重要: keyが変わるとコンポーネントが再描画され、初期値がリセットされる
+          key={currentIndex}
           initialData={pendingReceipts[currentIndex]}
           onSave={handleSaveCurrent}
           onCancel={handleSkipCurrent}

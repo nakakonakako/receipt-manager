@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { type Receipt, type ReceiptItem } from "../api/receiptService";
+import { Button } from "../../../components/ui/Button";
 
 interface ReceiptEditorProps {
   initialData: Receipt;
@@ -68,7 +69,6 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ initialData, onSav
         </div>
       </div>
 
-      {/* 以下、品目リスト部分は変更なし */}
       <div className="mb-6">
         <div className="flex justify-between items-center mb-2">
           <label className="block text-sm font-medium text-gray-700">購入品目</label>
@@ -125,18 +125,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ initialData, onSav
       </div>
 
       <div className="flex justify-end gap-3 mt-8">
-        <button
-          onClick={onCancel}
-          className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
-        >
+        <Button variant="secondary" onClick={onCancel}>
           キャンセル
-        </button>
-        <button
-          onClick={handleSaveClick}
-          className="px-6 py-2 bg-blue-600 text-white font-bold rounded shadow hover:bg-blue-700 transition-colors"
-        >
+        </Button>
+        <Button variant="primary" onClick={handleSaveClick}>
           保存する
-        </button>
+        </Button>
       </div>
     </div>
   );
