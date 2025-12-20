@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { type Receipt, type ReceiptItem } from "../api/receiptService";
 import { Button } from "../../../components/ui/Button";
+import { Input } from "../../../components/ui/Input";
 
 interface ReceiptEditorProps {
   initialData: Receipt;
@@ -48,25 +49,20 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ initialData, onSav
       <h2 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">レシート内容の確認・修正</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">購入日</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">店舗名</label>
-          <input
-            type="text"
-            value={store}
-            onChange={(e) => setStore(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-            placeholder="店舗名を入力"
-          />
-        </div>
+        <Input
+          label="購入日"
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+        />
+        <Input
+          label="店舗名"
+          type="text"
+          placeholder="店舗名を入力"
+          value={store}
+          onChange={(e) => setStore(e.target.value)}
+        />
       </div>
 
       <div className="mb-6">
@@ -88,40 +84,39 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({ initialData, onSav
               {items.map((item, index) => (
                 <tr key={index} className="bg-white border-b hover:bg-gray-50">
                   <td className="px-2 py-2">
-                    <input
-                      type="text"
+                    <Input
+                      className="w-full"
                       value={item.item_name}
-                      onChange={(e) => handleItemChange(index, 'item_name', e.target.value)}
-                      className="w-full p-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500"
+                      onChange={(e) => handleItemChange(index, "item_name", e.target.value)}
                     />
                   </td>
                   <td className="px-2 py-2">
-                    <input
+                    <Input
+                      className="w-full text-right"
                       type="number"
                       value={item.price}
-                      onChange={(e) => handleItemChange(index, 'price', e.target.value)}
-                      className="w-full p-1 border border-gray-300 rounded text-right focus:outline-none focus:border-blue-500"
+                      onChange={(e) => handleItemChange(index, "price", e.target.value)}
                     />
                   </td>
                   <td className="px-2 py-2 text-center">
-                    <button
+                    <Button
+                      variant="danger"
                       onClick={() => handleDeleteItem(index)}
-                      className="text-red-500 hover:text-red-700 font-bold px-2"
                     >
                       ✕
-                    </button>
+                    </Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <button
-          onClick={handleAddItem}
-          className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center"
-        >
-          ＋ 商品を追加する
-        </button>
+        
+        <div className="mt-2">
+          <Button variant="icon" onClick={handleAddItem}>
+            ＋ 商品を追加する
+          </Button>
+        </div>
       </div>
 
       <div className="flex justify-end gap-3 mt-8">
