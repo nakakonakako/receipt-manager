@@ -1,10 +1,14 @@
-import React from "react";
+import React from 'react'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label?: string;
+  label?: string
 }
 
-export const Input: React.FC<InputProps> = ({ label, className = "", ...props}) => {
+export const Input: React.FC<InputProps> = ({
+  label,
+  className = '',
+  ...props
+}) => {
   return (
     <div className={className}>
       {label && (
@@ -17,5 +21,5 @@ export const Input: React.FC<InputProps> = ({ label, className = "", ...props}) 
         {...props}
       />
     </div>
-  );
-};
+  )
+}

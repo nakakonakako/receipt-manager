@@ -1,4 +1,4 @@
-import { ReceiptUploader } from "./features/receipt/components/ReceiptUploader";
+import { ReceiptUploader } from './features/receipt/components/ReceiptUploader'
 
 function App() {
   return (
@@ -7,7 +7,7 @@ function App() {
         <ReceiptUploader />
       </div>
     </div>
-  );
+  )
 }
 
-export default App;
+export default App
