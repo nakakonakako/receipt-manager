@@ -3,6 +3,7 @@ backend/venv/
 backend/__pycache__/
 *.pyc
 .env
+service_account.json
 
 # --- Frontend (Node.js) ---
 frontend/node_modules/
