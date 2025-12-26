@@ -9,5 +9,6 @@ dependencies = [
     "google-genai>=1.53.0",
     "python-dotenv>=1.2.1",
     "python-multipart>=0.0.20",
+    "ruff>=0.14.10",
     "uvicorn>=0.38.0",
 ]
