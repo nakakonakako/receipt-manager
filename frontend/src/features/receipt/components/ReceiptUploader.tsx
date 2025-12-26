@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { analyzeReceipt, type Receipt } from "../api/receiptService";
+import { analyzeReceipt, saveReceipt, type Receipt } from "../api/receiptService";
 import { ReceiptEditor } from "./ReceiptEditor";
 
 export const ReceiptUploader: React.FC = () => {
@@ -36,21 +36,27 @@ export const ReceiptUploader: React.FC = () => {
     }
   };
 
-  const handleSaveCurrent = (data: Receipt) => {
-    const newResults = [...results, data];
-    setResults(newResults);
-    const nextIndex = currentIndex + 1;
+  const handleSaveCurrent = async (data: Receipt) => {
+    try {
+      await saveReceipt(data);
 
-    if (nextIndex < pendingReceipts.length) {
-      setCurrentIndex(nextIndex);
-    } else {
-      console.log("すべてのレシートが保存されました:", newResults);
-      alert(`${newResults.length}件のレシートが保存されました。`);
-      
-      setFile(null);
-      setPreview(null);
-      setPendingReceipts([]);
-      setResults([]);
+      const newResults = [...results, data];
+      setResults(newResults);
+      const nextIndex = currentIndex + 1;
+  
+      if (nextIndex < pendingReceipts.length) {
+        setCurrentIndex(nextIndex);
+      } else {
+        console.log("すべてのレシートが保存されました:", newResults);
+        alert(`${newResults.length}件のレシートが保存されました。`);
+        
+        setFile(null);
+        setPreview(null);
+        setPendingReceipts([]);
+        setResults([]);
+      }
+    } catch (error) {
+      console.error("レシートの保存に失敗しました", error);
     }
   };
 

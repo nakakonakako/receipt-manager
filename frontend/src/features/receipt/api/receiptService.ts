@@ -33,3 +33,7 @@ export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
 
   return response.data;
 };
+
+export const saveReceipt = async (receipt: Receipt): Promise<void> => {
+  await axios.post(`${API_URL}/save`, receipt);
+};

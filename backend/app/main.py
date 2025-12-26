@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.gemini_service import GeminiService
+from app.services.gemini_service import ReceiptData
+from app.services.sheets_service import SheetsService
 
 app = FastAPI()
 
@@ -13,6 +15,7 @@ app.add_middleware(
 )
 
 gemini_service = GeminiService()
+sheets_service = SheetsService()
 
 @app.get("/")
 def read_root():
@@ -25,5 +28,13 @@ async def analyze_receipt(file: UploadFile = File(...)):
         result = gemini_service.analyze_receipt(image_bytes)
         
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/save")
+async def save_receipt(data: ReceiptData):
+    try:
+        result = sheets_service.add_receipt_data(data)
+        return {"message": "Receipt data saved successfully.", "details": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
