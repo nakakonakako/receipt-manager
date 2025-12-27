@@ -2,9 +2,11 @@
   "name": "receipt-manager",
   "private": true,
   "scripts": {
+    "dev": "concurrently -n \"FRONT,BACK\" -c \"cyan,magenta\" \"npm run dev --prefix frontend\" \"cd backend && uv run uvicorn app.main:app --reload\"",
     "prepare": "husky"
   },
   "devDependencies": {
+    "concurrently": "^9.2.1",
     "husky": "^9.0.0",
     "lint-staged": "^15.0.0"
   },
