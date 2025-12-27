@@ -1,7 +1,8 @@
 import os
+
 import gspread
-from dotenv import load_dotenv
 from app.services.gemini_service import ReceiptData
+from dotenv import load_dotenv
 
 load_dotenv()
 

@@ -1,9 +1,10 @@
-import os
 import json
-from pydantic import BaseModel, Field
+import os
+
+from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from dotenv import load_dotenv
+from pydantic import BaseModel, Field
 
 load_dotenv()
 

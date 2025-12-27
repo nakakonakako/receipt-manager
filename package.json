@@ -1,0 +1,20 @@
+{
+  "name": "receipt-manager",
+  "private": true,
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0"
+  },
+  "lint-staged": {
+    "frontend/**/*.{js,jsx,ts,tsx,json,css}": [
+      "prettier --write"
+    ],
+    "backend/**/*.py": [
+      "uv run --directory backend ruff check --fix",
+      "uv run --directory backend ruff format"
+    ]
+  }
+}

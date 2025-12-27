@@ -1,8 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from app.services.gemini_service import GeminiService
-from app.services.gemini_service import ReceiptData
+from app.services.gemini_service import GeminiService, ReceiptData
 from app.services.sheets_service import SheetsService
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
