@@ -10,7 +10,7 @@ load_dotenv()
 
 
 class SheetsService:
-    def __init__(self):
+    def __init__(self) -> None:
         json_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "service_account.json",
@@ -25,7 +25,7 @@ class SheetsService:
 
         self.sh = self.gc.open_by_key(sheet_id)
 
-    def add_receipt_data(self, receipt: ReceiptData):
+    def add_receipt_data(self, receipt: ReceiptData) -> dict:
         self.worksheet = self.get_monthly_sheet(receipt.purchase_date)
 
         rows_to_add = []
@@ -44,7 +44,7 @@ class SheetsService:
 
         return {"added_rows": len(rows_to_add)}
 
-    def _get_monthly_sheet(self, date_str):
+    def _get_monthly_sheet(self, date_str: str) -> gspread.Worksheet:
         dt = datetime.strptime(date_str, "%Y-%m-%d")
         sheet_name = dt.strftime("%Y-%m")
 
@@ -57,3 +57,22 @@ class SheetsService:
             worksheet.append_row(header)
 
         return worksheet
+
+    def get_all_data(self) -> str:
+        all_data = []
+
+        headers = ["purchase_date", "item_name", "store_name", "price"]
+        all_data.append(",".join(headers))
+
+        for ws in self.sh.worksheets():
+            rows = ws.get_all_values()
+
+            if len(rows) <= 1:
+                continue
+
+            data_rows = rows[1:]
+            for row in data_rows:
+                line = ",".join(map(str, row))
+                all_data.append(line)
+
+        return "\n".join(all_data)
