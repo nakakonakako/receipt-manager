@@ -4,6 +4,8 @@ import gspread
 from app.services.gemini_service import ReceiptData
 from dotenv import load_dotenv
 
+from datetime import datetime
+
 load_dotenv()
 
 
@@ -22,9 +24,10 @@ class SheetsService:
             raise ValueError("SPREADSHEET_ID environment variable not set.")
 
         self.sh = self.gc.open_by_key(sheet_id)
-        self.worksheet = self.sh.sheet1
 
     def add_receipt_data(self, receipt: ReceiptData):
+        self.worksheet = self.get_monthly_sheet(receipt.purchase_date)
+
         rows_to_add = []
 
         for item in receipt.items:
@@ -40,3 +43,17 @@ class SheetsService:
             self.worksheet.append_rows(rows_to_add)
 
         return {"added_rows": len(rows_to_add)}
+
+    def _get_monthly_sheet(self, date_str):
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        sheet_name = dt.strftime("%Y-%m")
+
+        try:
+            worksheet = self.sh.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            worksheet = self.sh.add_worksheet(title=sheet_name, rows=1000, cols=20)
+
+            header = ["購入日", "商品名", "店舗名", "価格"]
+            worksheet.append_row(header)
+
+        return worksheet
