@@ -19,7 +19,7 @@ sheets_service = SheetsService()
 
 
 class SearchQuery(BaseModel):
-    question: str
+    query: str
 
 
 @app.get("/")
@@ -57,7 +57,7 @@ async def search_receipts(search_query: SearchQuery):
         if not data:
             return {"answer": "レシートデータが存在しません。"}
 
-        answer = gemini_service.answer_question(search_query.question, data)
+        answer = gemini_service.answer_question(search_query.query, data)
 
         return {"answer": answer}
 

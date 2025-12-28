@@ -17,6 +17,10 @@ export interface ReceiptResponse {
   receipts: Receipt[]
 }
 
+export interface SearchResponse {
+  answer: string
+}
+
 export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
   const formData = new FormData()
   formData.append('file', file)
@@ -36,4 +40,11 @@ export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
 
 export const saveReceipt = async (receipt: Receipt): Promise<void> => {
   await axios.post(`${API_URL}/save`, receipt)
+}
+
+export const searchReceipts = async (query: string): Promise<string> => {
+  const response = await axios.post<SearchResponse>(`${API_URL}/search`, {
+    query,
+  })
+  return response.data.answer
 }

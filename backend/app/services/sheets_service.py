@@ -26,7 +26,7 @@ class SheetsService:
         self.sh = self.gc.open_by_key(sheet_id)
 
     def add_receipt_data(self, receipt: ReceiptData) -> dict:
-        self.worksheet = self.get_monthly_sheet(receipt.purchase_date)
+        self.worksheet = self._get_monthly_sheet(receipt.purchase_date)
 
         rows_to_add = []
 
