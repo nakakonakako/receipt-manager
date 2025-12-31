@@ -20,6 +20,7 @@ export const LoginPage = ({ onLoginSuccess }: LoginPageProps) => {
         password: passwordInput,
       })
 
+      sessionStorage.setItem('receipt_app_key', passwordInput)
       onLoginSuccess()
     } catch (error) {
       console.error(error)

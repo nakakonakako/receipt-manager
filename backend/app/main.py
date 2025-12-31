@@ -1,10 +1,11 @@
 from app.services.gemini_service import GeminiService, ReceiptData
 from app.services.sheets_service import SheetsService
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 from dotenv import load_dotenv
+from fastapi.security import APIKeyHeader
 
 app = FastAPI()
 
@@ -21,6 +22,8 @@ load_dotenv()
 gemini_service = GeminiService()
 sheets_service = SheetsService()
 
+api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
+
 
 class SearchQuery(BaseModel):
     query: str
@@ -35,6 +38,13 @@ def read_root():
     return {"message": "Receipt Manager API is running."}
 
 
+async def verify_api_key(api_key: str = Security(api_key_header)):
+    if api_key == os.getenv("APP_PASSWORD"):
+        return api_key
+    else:
+        raise HTTPException(status_code=403, detail="認証されていません")
+
+
 @app.post("/check_auth")
 async def check_auth(data: PasswordCheck):
     APP_PASSWORD = os.getenv("APP_PASSWORD")
@@ -44,7 +54,7 @@ async def check_auth(data: PasswordCheck):
         raise HTTPException(status_code=401, detail="パスワードが違います")
 
 
-@app.post("/analyze")
+@app.post("/analyze", dependencies=[Depends(verify_api_key)])
 async def analyze_receipt(file: UploadFile = File(...)):
     try:
         image_bytes = await file.read()
@@ -56,7 +66,7 @@ async def analyze_receipt(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/save")
+@app.post("/save", dependencies=[Depends(verify_api_key)])
 async def save_receipt(data: ReceiptData):
     try:
         result = sheets_service.add_receipt_data(data)
@@ -66,7 +76,7 @@ async def save_receipt(data: ReceiptData):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/search")
+@app.post("/search", dependencies=[Depends(verify_api_key)])
 async def search_receipts(search_query: SearchQuery):
     try:
         data = sheets_service.get_all_data()

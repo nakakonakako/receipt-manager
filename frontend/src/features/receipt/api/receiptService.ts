@@ -21,6 +21,8 @@ export interface SearchResponse {
   answer: string
 }
 
+const getApiKey = () => sessionStorage.getItem('receipt_app_key') || ''
+
 export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
   const formData = new FormData()
   formData.append('file', file)
@@ -31,6 +33,7 @@ export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
     {
       headers: {
         'Content-Type': 'multipart/form-data',
+        'x-api-key': getApiKey(),
       },
     }
   )
@@ -39,12 +42,24 @@ export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
 }
 
 export const saveReceipt = async (receipt: Receipt): Promise<void> => {
-  await axios.post(`${API_URL}/save`, receipt)
+  await axios.post(`${API_URL}/save`, receipt, {
+    headers: {
+      'x-api-key': getApiKey(),
+    },
+  })
 }
 
 export const searchReceipts = async (query: string): Promise<string> => {
-  const response = await axios.post<SearchResponse>(`${API_URL}/search`, {
-    query,
-  })
+  const response = await axios.post<SearchResponse>(
+    `${API_URL}/search`,
+    {
+      query,
+    },
+    {
+      headers: {
+        'x-api-key': getApiKey(),
+      },
+    }
+  )
   return response.data.answer
 }
