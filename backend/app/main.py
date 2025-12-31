@@ -3,6 +3,8 @@ from app.services.sheets_service import SheetsService
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import os
+from dotenv import load_dotenv
 
 app = FastAPI()
 
@@ -14,6 +16,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+load_dotenv()
+
 gemini_service = GeminiService()
 sheets_service = SheetsService()
 
@@ -22,9 +26,22 @@ class SearchQuery(BaseModel):
     query: str
 
 
+class PasswordCheck(BaseModel):
+    password: str
+
+
 @app.get("/")
 def read_root():
     return {"message": "Receipt Manager API is running."}
+
+
+@app.post("/check_auth")
+async def check_auth(data: PasswordCheck):
+    APP_PASSWORD = os.getenv("APP_PASSWORD")
+    if data.password == APP_PASSWORD:
+        return {"status": "ok", "message": "認証成功"}
+    else:
+        raise HTTPException(status_code=401, detail="パスワードが違います")
 
 
 @app.post("/analyze")

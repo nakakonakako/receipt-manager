@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { ReceiptUploader } from '../features/receipt/components/ReceiptUploader'
 import { ChatInterface } from '../features/receipt/components/ChatInterface'
 
-export const MainLayout = () => {
+interface MainLayoutProps {
+  onLogout: () => void
+}
+
+export const MainLayout = ({ onLogout }: MainLayoutProps) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'chat'>('upload')
 
   return (
@@ -12,6 +16,12 @@ export const MainLayout = () => {
           <h1 className="text-3xl font-bold text-gray-800">
             AIレシート家計簿 🧾
           </h1>
+          <button
+            onClick={onLogout}
+            className="text-sm text-gray-500 hover:text-red-500 underline"
+          >
+            ログアウト
+          </button>
         </div>
 
         <div className="flex mb-6 bg-white rounded-lg shadow p-1">
