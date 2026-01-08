@@ -3,6 +3,9 @@ import { type Receipt, type ReceiptItem } from '../api/receiptService'
 import { Button } from '../../../components/ui/Button'
 import { Input } from '../../../components/ui/Input'
 
+type EditingItem = Omit<ReceiptItem, 'price'> & {
+  price: number | ''
+}
 interface ReceiptEditorProps {
   initialData: Receipt
   onSave: (data: Receipt) => void
@@ -16,9 +19,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
 }) => {
   const [date, setDate] = useState(initialData.purchase_date || '')
   const [store, setStore] = useState(initialData.store_name || '')
-  const [items, setItems] = useState<ReceiptItem[]>(initialData.items || [])
+  const [items, setItems] = useState<EditingItem[]>(initialData.items || [])
 
-  const totalAmount = items.reduce((sum, item) => sum + item.price, 0)
+  const totalAmount = items.reduce(
+    (sum, item) => sum + Number(item.price || 0),
+    0
+  )
 
   const handleItemChange = (
     index: number,
@@ -27,7 +33,8 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   ) => {
     const newItems = [...items]
     if (field === 'price') {
-      newItems[index] = { ...newItems[index], [field]: Number(value) }
+      const newValue = value === '' ? '' : Number(value)
+      newItems[index] = { ...newItems[index], [field]: newValue }
     } else {
       newItems[index] = { ...newItems[index], [field]: value as string }
     }
@@ -44,10 +51,15 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   }
 
   const handleSaveClick = () => {
+    const newItems: ReceiptItem[] = items.map((item) => ({
+      ...item,
+      price: item.price === '' ? 0 : item.price,
+    }))
+
     const savedData: Receipt = {
       purchase_date: date,
       store_name: store,
-      items: items,
+      items: newItems,
     }
     onSave(savedData)
   }
@@ -114,6 +126,11 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                       onChange={(e) =>
                         handleItemChange(index, 'price', e.target.value)
                       }
+                      onBlur={() => {
+                        if (item.price === '') {
+                          handleItemChange(index, 'price', 0)
+                        }
+                      }}
                     />
                   </td>
                   <td className="px-2 py-2 text-center">
