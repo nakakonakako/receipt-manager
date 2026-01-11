@@ -90,6 +90,9 @@ export const ReceiptUploader: React.FC = () => {
 
     try {
       await saveReceipt(data)
+      alert(
+        `${data.purchase_date}/${data.store_name} のレシートを保存しました。`
+      )
 
       if (currentTask && resultIndex < currentTask.results.length - 1) {
         setEditingState({ taskId, resultIndex: resultIndex + 1 })
@@ -107,6 +110,8 @@ export const ReceiptUploader: React.FC = () => {
     if (!editingState) return
     const { taskId, resultIndex } = editingState
     const currentTask = tasks.find((t) => t.id === taskId)
+
+    alert('このレシートの登録をスキップしました。')
 
     if (currentTask && resultIndex < currentTask.results.length - 1) {
       setEditingState({ taskId, resultIndex: resultIndex + 1 })
