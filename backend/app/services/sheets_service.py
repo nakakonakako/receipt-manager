@@ -26,7 +26,7 @@ class SheetsService:
         self.sh = self.gc.open_by_key(sheet_id)
 
     def add_receipt_data(self, receipt: ReceiptData) -> dict:
-        self.worksheet = self._get_monthly_sheet(receipt.purchase_date)
+        target_sheet = self._get_monthly_sheet(receipt.purchase_date)
 
         rows_to_add = []
 
@@ -40,7 +40,12 @@ class SheetsService:
             rows_to_add.append(row)
 
         if rows_to_add:
-            self.worksheet.append_rows(rows_to_add)
+            target_sheet.append_rows(rows_to_add)
+
+            try:
+                target_sheet.sort((1, "asc"))
+            except Exception as e:
+                print(f"Sort failed: {e}")
 
         return {"added_rows": len(rows_to_add)}
 
@@ -55,6 +60,8 @@ class SheetsService:
 
             header = ["購入日", "商品名", "店舗名", "価格"]
             worksheet.append_row(header)
+
+            worksheet.freeze(rows=1)
 
         return worksheet
 
