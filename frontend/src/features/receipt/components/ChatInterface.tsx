@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { searchReceipts } from '../api/receiptService'
 import { Button } from '../../../components/ui/Button'
 import { Input } from '../../../components/ui/Input'
@@ -60,10 +62,16 @@ export const ChatInterface: React.FC = () => {
               className={`max-w-[80%] rounded-lg p-3 whitespace-pre-wrap ${
                 msg.role === 'user'
                   ? 'bg-blue-500 text-white rounded-br-none'
-                  : 'bg-white text-gray-800 shadow rounded-bl-none'
+                  : 'bg-white text-gray-800 shadow rounded-bl-none prose prose-sm max-w-none'
               }`}
             >
-              {msg.content}
+              {msg.role === 'assistant' ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                msg.content
+              )}
             </div>
           </div>
         ))}
