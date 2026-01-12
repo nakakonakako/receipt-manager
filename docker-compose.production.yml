@@ -18,6 +18,3 @@ services:
       - ./.env
     volumes:
       - ./service_account.json:/app/service_account.json
-  
-volumes:
-  https-portal-data:
