@@ -131,6 +131,11 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                           handleItemChange(index, 'price', 0)
                         }
                       }}
+                      onKeyDown={(e) => {
+                        if (['e', 'E', '+', '-'].includes(e.key)) {
+                          e.preventDefault()
+                        }
+                      }}
                     />
                   </td>
                   <td className="px-2 py-2 text-center">
