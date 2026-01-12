@@ -89,10 +89,10 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
 
       <div className="mb-6">
         <div className="flex justify-between items-center mb-2">
-          <label className="block text-sm font-medium text-gray-700">
+          <label className="block text-lg font-medium text-gray-700">
             購入品目
           </label>
-          <span className="text-sm font-bold text-gray-600">
+          <span className="text-lg font-bold text-gray-700 mr-4">
             合計: ¥{totalAmount.toLocaleString()}
           </span>
         </div>
