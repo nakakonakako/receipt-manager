@@ -44,6 +44,36 @@ class SheetsService:
 
             try:
                 target_sheet.sort((1, "asc"))
+
+                requests = [
+                    {
+                        "updateDimensionProperties": {
+                            "range": {
+                                "sheetId": target_sheet.id,
+                                "dimension": "COLUMNS",
+                                "startIndex": 1,
+                                "endIndex": 2,
+                            },
+                            "properties": {"pixelSize": 300},
+                            "fields": "pixelSize",
+                        }
+                    },
+                    {
+                        "updateDimensionProperties": {
+                            "range": {
+                                "sheetId": target_sheet.id,
+                                "dimension": "COLUMNS",
+                                "startIndex": 2,
+                                "endIndex": 3,
+                            },
+                            "properties": {"pixelSize": 300},
+                            "fields": "pixelSize",
+                        }
+                    },
+                ]
+
+                self.sh.batch_update({"requests": requests})
+
             except Exception as e:
                 print(f"Sort failed: {e}")
 
