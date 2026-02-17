@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { ReceiptUploader } from '../features/receipt/components/ReceiptUploader'
-import { ChatInterface } from '../features/receipt/components/ChatInterface'
+import { ReceiptUploader } from '@/features/receipt/components/ReceiptUploader'
+import { ChatInterface } from '@/features/search/components/ChatInterface'
 
 interface MainLayoutProps {
   onLogout: () => void

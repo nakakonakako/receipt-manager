@@ -1,11 +1,13 @@
 import React, { useState } from 'react'
-import { type Receipt, type ReceiptItem } from '../api/receiptService'
-import { Button } from '../../../components/ui/Button'
-import { Input } from '../../../components/ui/Input'
+import { type Receipt, type ReceiptItem } from '@/types'
+import { Button } from '@/components/ui/Button'
+import { Input } from '@/components/ui/Input'
 
+// 編集用のアイテム型 価格は空文字も許容
 type EditingItem = Omit<ReceiptItem, 'price'> & {
   price: number | ''
 }
+
 interface ReceiptEditorProps {
   initialData: Receipt
   onSave: (data: Receipt) => void

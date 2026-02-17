@@ -1,9 +1,7 @@
 import React, { useState } from 'react'
-import {
-  analyzeReceipt,
-  saveReceipt,
-  type Receipt,
-} from '../api/receiptService'
+import { type Receipt } from '@/types'
+import { analyzeReceipt } from '../api/receiptApi'
+import { saveTransaction } from '@/api/transactApi'
 import { ReceiptEditor } from './ReceiptEditor'
 import axios from 'axios'
 
@@ -89,7 +87,7 @@ export const ReceiptUploader: React.FC = () => {
     const currentTask = tasks.find((t) => t.id === taskId)
 
     try {
-      await saveReceipt(data)
+      await saveTransaction(data)
       alert(
         `${data.purchase_date}/${data.store_name} のレシートを保存しました。`
       )
