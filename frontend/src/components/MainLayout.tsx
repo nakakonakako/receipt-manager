@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ReceiptUploader } from '@/features/receipt/components/ReceiptUploader'
+import { RegisterPage } from '@/pages/RegisterPage'
 import { ChatInterface } from '@/features/search/components/ChatInterface'
 
 interface MainLayoutProps {
@@ -7,7 +7,7 @@ interface MainLayoutProps {
 }
 
 export const MainLayout = ({ onLogout }: MainLayoutProps) => {
-  const [activeTab, setActiveTab] = useState<'upload' | 'chat'>('upload')
+  const [activeTab, setActiveTab] = useState<'register' | 'chat'>('register')
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4">
@@ -26,14 +26,14 @@ export const MainLayout = ({ onLogout }: MainLayoutProps) => {
 
         <div className="flex mb-6 bg-white rounded-lg shadow p-1">
           <button
-            onClick={() => setActiveTab('upload')}
+            onClick={() => setActiveTab('register')}
             className={`flex-1 py-2 text-center rounded-md font-bold transition-colors ${
-              activeTab === 'upload'
+              activeTab === 'register'
                 ? 'bg-blue-100 text-blue-700'
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            📸 レシート登録
+            📸 データ登録
           </button>
           <button
             onClick={() => setActiveTab('chat')}
@@ -48,7 +48,7 @@ export const MainLayout = ({ onLogout }: MainLayoutProps) => {
         </div>
 
         <div className="transition-opacity duration-300">
-          {activeTab === 'upload' ? <ReceiptUploader /> : <ChatInterface />}
+          {activeTab === 'register' ? <RegisterPage /> : <ChatInterface />}
         </div>
       </div>
     </div>
