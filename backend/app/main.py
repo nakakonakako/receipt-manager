@@ -1,11 +1,12 @@
+import os
+
 from app.services.gemini_service import GeminiService, ReceiptData
 from app.services.sheets_service import SheetsService
-from fastapi import FastAPI, File, HTTPException, UploadFile, Depends, Security
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import os
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -31,6 +32,10 @@ class SearchQuery(BaseModel):
 
 class PasswordCheck(BaseModel):
     password: str
+
+
+class CsvAnalysisRequest(BaseModel):
+    csv_text: str
 
 
 @app.get("/")
@@ -88,5 +93,14 @@ async def search_receipts(search_query: SearchQuery):
 
         return {"answer": answer}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/analyze_csv", dependencies=[Depends(verify_api_key)])
+async def analyze_csv(request: CsvAnalysisRequest):
+    try:
+        result = gemini_service.analyze_csv(request.csv_text)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

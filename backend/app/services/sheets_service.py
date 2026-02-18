@@ -1,10 +1,9 @@
 import os
+from datetime import datetime
 
 import gspread
 from app.services.gemini_service import ReceiptData
 from dotenv import load_dotenv
-
-from datetime import datetime
 
 load_dotenv()
 
