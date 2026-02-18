@@ -51,11 +51,14 @@ class GeminiService:
             temperature=0.0,
             response_mime_type="application/json",
             response_schema=ReceiptDatas,
+            thinking_config=types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel.LOW
+            ),
         )
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3-flash-preview",
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
                     "Extract receipt data.",
@@ -93,9 +96,14 @@ class GeminiService:
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3-flash-preview",
                 contents=[prompt],
-                config=types.GenerateContentConfig(temperature=0.0),
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level=types.ThinkingLevel.LOW
+                    ),
+                ),
             )
             return response.text
         except Exception as e:
@@ -122,11 +130,14 @@ class GeminiService:
             temperature=0.0,
             response_mime_type="application/json",
             response_schema=CsvMapping,
+            thinking_config=types.ThinkingConfig(
+                thinking_level=types.ThinkingLevel.LOW
+            ),
         )
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-2.5-flash",
+                model="gemini-3-flash-preview",
                 contents=[prompt],
                 config=config,
             )
