@@ -1,6 +1,6 @@
 import { apiClient } from '@/lib/apiClient'
 
-export interface SearchResponse {
+interface SearchResponse {
   answer: string
 }
 

@@ -1,7 +1,7 @@
 import { apiClient } from '@/lib/apiClient'
 import type { Receipt } from '@/types'
 
-export interface ReceiptResponse {
+interface ReceiptResponse {
   receipts: Receipt[]
 }
 
