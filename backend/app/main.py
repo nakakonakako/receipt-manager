@@ -1,12 +1,14 @@
 import os
 
-from app.services.gemini_service import GeminiService, ReceiptData
+from app.schemas.common import PasswordCheck
+from app.schemas.csv import CsvAnalysisRequest
+from app.schemas.receipt import ReceiptData, SearchQuery
+from app.services.gemini_service import GeminiService
 from app.services.sheets_service import SheetsService
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
-from pydantic import BaseModel
 
 app = FastAPI()
 
@@ -24,18 +26,6 @@ gemini_service = GeminiService()
 sheets_service = SheetsService()
 
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
-
-
-class SearchQuery(BaseModel):
-    query: str
-
-
-class PasswordCheck(BaseModel):
-    password: str
-
-
-class CsvAnalysisRequest(BaseModel):
-    csv_text: str
 
 
 @app.get("/")
