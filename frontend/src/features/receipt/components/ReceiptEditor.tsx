@@ -22,6 +22,9 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   const [date, setDate] = useState(initialData.purchase_date || '')
   const [store, setStore] = useState(initialData.store_name || '')
   const [items, setItems] = useState<EditingItem[]>(initialData.items || [])
+  const [paymentMethod, setPaymentMethod] = useState(
+    initialData.payment_method || 'unknown'
+  )
 
   const totalAmount = items.reduce(
     (sum, item) => sum + Number(item.price || 0),
@@ -62,6 +65,8 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       purchase_date: date,
       store_name: store,
       items: newItems,
+      total_amount: initialData.total_amount || 0,
+      payment_method: paymentMethod || '',
     }
     onSave(savedData)
   }
@@ -87,6 +92,20 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           value={store}
           onChange={(e) => setStore(e.target.value)}
         />
+        <div className="flex flex-col">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            支払い方法
+          </label>
+          <select
+            value={paymentMethod}
+            onChange={(e) => setPaymentMethod(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none h-[42px] bg-white"
+          >
+            <option value="unknown">不明</option>
+            <option value="cash">現金</option>
+            <option value="cashless">キャッシュレス</option>
+          </select>
+        </div>
       </div>
 
       <div className="mb-6">
