@@ -2,43 +2,13 @@ import datetime
 import json
 import os
 
+from app.schemas.csv import CsvMapping
+from app.schemas.receipt import ReceiptDatas
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
 
 load_dotenv()
-
-
-class ReceiptItem(BaseModel):
-    item_name: str = Field(description="Name of the the product")
-    price: int = Field(description="Price of the product including 8% tax")
-
-
-class ReceiptData(BaseModel):
-    purchase_date: str = Field(description="Date of purchase in YYYY-MM-DD format")
-    store_name: str = Field(description="Name of the store")
-    items: list[ReceiptItem]
-
-
-class ReceiptDatas(BaseModel):
-    receipts: list[ReceiptData]
-
-
-class CsvMapping(BaseModel):
-    date_col_idx: int = Field(
-        description="Index of the column for 'Purchase Date' (0-based)"
-    )
-    item_col_idx: int = Field(
-        description="Index of the column for 'Item Name' (0-based). If mixed with store name, select the description column."
-    )
-    store_col_idx: int = Field(
-        description="Index of the column for 'Store Name' (0-based). If not present, use same index as Item Name."
-    )
-    price_col_idx: int = Field(
-        description="Index of the column for 'Price/Amount' (0-based)"
-    )
-    # confidence: float = Field(description="Confidence score of the analysis (0.0 to 1.0)")
 
 
 class GeminiService:
@@ -56,12 +26,14 @@ class GeminiService:
             ),
         )
 
+        prompt = "Analyze the receipt image and extract data according to the schema."
+
         try:
             response = self.client.models.generate_content(
                 model="gemini-3-flash-preview",
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                    "Extract receipt data.",
+                    prompt,
                 ],
                 config=config,
             )
