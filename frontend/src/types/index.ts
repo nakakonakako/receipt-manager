@@ -7,4 +7,6 @@ export interface Receipt {
   purchase_date: string
   store_name: string
   items: ReceiptItem[]
+  total_amount: number
+  payment_method: string
 }
