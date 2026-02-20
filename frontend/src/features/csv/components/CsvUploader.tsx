@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import axios from 'axios'
 import { analyzeCsv, saveCsv } from '../api/csvApi'
 import { type ParsedTransaction } from '../types'
@@ -11,7 +11,8 @@ type EditingTransaction = Omit<ParsedTransaction, 'price'> & {
 }
 
 export const CsvUploader: React.FC = () => {
-  const [file, setFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const [csvText, setCsvText] = useState<string>('')
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
   const [parsedData, setParsedData] = useState<EditingTransaction[]>([])
@@ -23,7 +24,6 @@ export const CsvUploader: React.FC = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
-      setFile(selectedFile)
       setParsedData([])
 
       const buffer = await selectedFile.arrayBuffer()
@@ -126,7 +126,10 @@ export const CsvUploader: React.FC = () => {
       alert('全てのデータを保存しました！')
       setParsedData([])
       setCsvText('')
-      if (file) setFile(null)
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
     }
 
     setIsSaving(false)
@@ -138,6 +141,7 @@ export const CsvUploader: React.FC = () => {
         <input
           type="file"
           accept=".csv"
+          ref={fileInputRef}
           onChange={handleFileChange}
           className="w-full"
         />
@@ -245,7 +249,14 @@ export const CsvUploader: React.FC = () => {
           )}
 
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" onClick={() => setParsedData([])}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setParsedData([])
+                setCsvText('')
+                if (fileInputRef.current) fileInputRef.current.value = ''
+              }}
+            >
               やり直す
             </Button>
             <Button
