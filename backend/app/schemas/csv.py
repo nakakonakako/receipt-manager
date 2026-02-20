@@ -6,16 +6,29 @@ class CsvAnalysisRequest(BaseModel):
 
 
 class CsvMapping(BaseModel):
-    date_col_idx: int = Field(
-        description="Index of the column for 'Purchase Date' (0-based)"
+    has_header: bool = Field(
+        description="True if the 1st row contains column headers (like '日付', 'ご利用店名'). False if it starts directly with transaction data."
     )
-    item_col_idx: int = Field(
-        description="Index of the column for 'Item Name' (0-based). If mixed with store name, select the description column."
+    date_col_index: int = Field(
+        description="0-based column index for the transaction Date (e.g., '利用日', 'お取扱日')."
     )
-    store_col_idx: int = Field(
-        description="Index of the column for 'Store Name' (0-based). If not present, use same index as Item Name."
+    store_col_index: int = Field(
+        description="0-based column index for the Store name or Payee (e.g., 'ご利用店名', '摘要')."
     )
-    price_col_idx: int = Field(
-        description="Index of the column for 'Price/Amount' (0-based)"
+    price_col_index: int = Field(
+        description="0-based column index for the Withdrawal Amount or Expense (e.g., 'お支払金額', '出金金額', 'ご利用金額'). If there are separate columns for income and expense, choose the expense column."
     )
-    # confidence: float = Field(description="Confidence score of the analysis (0.0 to 1.0)")
+
+
+class ParsedCsvTransaction(BaseModel):
+    date: str
+    store: str
+    price: int
+
+
+class CsvParseResponse(BaseModel):
+    transactions: list[ParsedCsvTransaction]
+
+
+class CsvSaveRequest(BaseModel):
+    transactions: list[ParsedCsvTransaction]

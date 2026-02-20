@@ -82,38 +82,25 @@ class GeminiService:
             print(f"Error during Gemini API call: {e}")
             raise e
 
-    def analyze_csv(self, masked_csv_text: str) -> dict:
-        prompt = f"""
-        Analyze the provided CSV snippet (masked) and identify the column indices.
-        
-        Target Columns (0-based index):
-        - date_col_idx: Purchase date (e.g., 2024/01/01, 1111-11-11)
-        - item_col_idx: Product name or description
-        - store_col_idx: Store name (if not present, use item_col_idx)
-        - price_col_idx: Transaction amount (e.g., -1000, 9999)
-
-        CSV Data:
-        ---
-        {masked_csv_text}
-        ---
-        """
-
-        config = types.GenerateContentConfig(
-            temperature=0.0,
-            response_mime_type="application/json",
-            response_schema=CsvMapping,
-            thinking_config=types.ThinkingConfig(
-                thinking_level=types.ThinkingLevel.LOW
-            ),
-        )
+    def analyze_csv(self, csv_sample: str) -> dict:
+        prompt = "Analyze the provided CSV sample lines and determine the column indices according to the schema."
 
         try:
             response = self.client.models.generate_content(
                 model="gemini-3-flash-preview",
-                contents=[prompt],
-                config=config,
+                contents=[prompt, f"CSV Sample:\n{csv_sample}"],
+                config=types.GenerateContentConfig(
+                    temperature=0.0,
+                    response_mime_type="application/json",
+                    response_schema=CsvMapping,
+                    thinking_config=types.ThinkingConfig(
+                        thinking_level=types.ThinkingLevel.LOW
+                    ),
+                ),
             )
+
             return json.loads(response.text)
+
         except Exception as e:
-            print(f"Error during Gemini API call: {e}")
+            print(f"Gemini CSV Mapping Error: {e}")
             raise e
