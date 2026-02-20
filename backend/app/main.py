@@ -1,8 +1,9 @@
 import os
 
 from app.schemas.common import PasswordCheck
-from app.schemas.csv import CsvAnalysisRequest
+from app.schemas.csv import CsvAnalysisRequest, CsvParseResponse, CsvSaveRequest
 from app.schemas.receipt import ReceiptData, SearchQuery
+from app.services.csv_service import CsvService
 from app.services.gemini_service import GeminiService
 from app.services.sheets_service import SheetsService
 from dotenv import load_dotenv
@@ -24,6 +25,7 @@ load_dotenv()
 
 gemini_service = GeminiService()
 sheets_service = SheetsService()
+csv_service = CsvService()
 
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
@@ -90,7 +92,22 @@ async def search_receipts(search_query: SearchQuery):
 @app.post("/analyze_csv", dependencies=[Depends(verify_api_key)])
 async def analyze_csv(request: CsvAnalysisRequest):
     try:
-        result = gemini_service.analyze_csv(request.csv_text)
-        return result
+        lines = request.csv_text.strip().split("\n")
+        sample_text = "\n".join(lines[:5])
+        mapping = gemini_service.analyze_csv(sample_text)
+        transactions = csv_service.parse_csv(request.csv_text, mapping)
+
+        return CsvParseResponse(transactions=transactions)
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/save_csv", dependencies=[Depends(verify_api_key)])
+async def save_csv(request: CsvSaveRequest):
+    try:
+        result = sheets_service.add_csv_data(request.transactions)
+        return {"message": "CSV data saved successfully.", "details": result}
+    except Exception as e:
+        if "RATE_LIMIT_EXCEEDED" in str(e):
+            raise HTTPException(status_code=429, detail="API rate limit exceeded")
         raise HTTPException(status_code=500, detail=str(e))
