@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from datetime import datetime
 
 import gspread
@@ -40,7 +41,7 @@ class SheetsService:
 
         if rows_to_add:
             target_sheet.append_rows(rows_to_add)
-            self._apply_formatting(target_sheet)
+            self._apply_formatting(target_sheet, is_receipt=True)
 
         log_result = "skipped"
         if getattr(receipt, "payment_method", "unknown") == "cash":
@@ -52,6 +53,46 @@ class SheetsService:
             "payment_method": getattr(receipt, "payment_method", "unknown"),
             "log_status": log_result,
         }
+
+    def add_csv_data(self, transactions: list) -> dict:
+        rows_by_month = defaultdict(list)
+        for t in transactions:
+            row = [t.date, t.store, t.price, "cashless"]
+            month_key = t.date[:7]
+            rows_by_month[month_key].append(row)
+
+        total_added = 0
+
+        try:
+            existing_worksheets = {ws.title: ws for ws in self.sh.worksheets()}
+
+            for month_key, rows_to_add in rows_by_month.items():
+                sheet_title = f"Log_{month_key}"
+
+                if sheet_title not in existing_worksheets:
+                    ws = self.sh.add_worksheet(title=sheet_title, rows=1000, cols=20)
+                    ws.append_row(["購入日", "店舗名", "金額", "支払い方法"])
+                    existing_worksheets[sheet_title] = ws
+
+                ws = existing_worksheets[sheet_title]
+                ws.append_rows(rows_to_add)
+
+                self._apply_formatting(ws, is_receipt=False)
+                total_added += len(rows_to_add)
+
+        except Exception as e:
+            error_msg = str(e)
+            if (
+                "429" in error_msg
+                or "Quota" in error_msg
+                or "500" in error_msg
+                or "503" in error_msg
+            ):
+                raise Exception("RATE_LIMIT_EXCEEDED")
+            else:
+                raise e
+
+        return {"total_added": total_added}
 
     def _add_to_transaction_sheet(self, receipt: ReceiptData) -> None:
         log_sheet = self._get_transaction_sheet(receipt.purchase_date)
@@ -74,11 +115,8 @@ class SheetsService:
             worksheet = self.sh.worksheet(sheet_name)
         except gspread.exceptions.WorksheetNotFound:
             worksheet = self.sh.add_worksheet(title=sheet_name, rows=1000, cols=20)
-
             header = ["購入日", "店舗名", "商品名", "価格"]
             worksheet.append_row(header)
-
-            worksheet.freeze(rows=1)
 
         return worksheet
 
@@ -90,50 +128,62 @@ class SheetsService:
             worksheet = self.sh.worksheet(sheet_name)
         except gspread.exceptions.WorksheetNotFound:
             worksheet = self.sh.add_worksheet(title=sheet_name, rows=1000, cols=20)
-            header = ["購入日", "店舗名", "合計金額", "支払い方法"]
+            header = ["購入日", "店舗名", "金額", "支払い方法"]
             worksheet.append_row(header)
-            worksheet.freeze(rows=1)
 
         return worksheet
 
     def _apply_formatting(self, sheet: gspread.Worksheet, is_receipt=True) -> None:
-        try:
-            sheet.sort((1, "asc"))
+        requests = [
+            {
+                "updateSheetProperties": {
+                    "properties": {
+                        "sheetId": sheet.id,
+                        "gridProperties": {"frozenRowCount": 1},
+                    },
+                    "fields": "gridProperties.frozenRowCount",
+                }
+            },
+            {
+                "sortRange": {
+                    "range": {
+                        "sheetId": sheet.id,
+                        "startRowIndex": 1,
+                    },
+                    "sortSpecs": [{"dimensionIndex": 0, "sortOrder": "ASCENDING"}],
+                }
+            },
+            {
+                "updateDimensionProperties": {
+                    "range": {
+                        "sheetId": sheet.id,
+                        "dimension": "COLUMNS",
+                        "startIndex": 1,
+                        "endIndex": 2,
+                    },
+                    "properties": {"pixelSize": 300},
+                    "fields": "pixelSize",
+                }
+            },
+        ]
 
-            requests = [
+        if is_receipt:
+            requests.append(
                 {
                     "updateDimensionProperties": {
                         "range": {
                             "sheetId": sheet.id,
                             "dimension": "COLUMNS",
-                            "startIndex": 1,
-                            "endIndex": 2,
+                            "startIndex": 2,
+                            "endIndex": 3,
                         },
                         "properties": {"pixelSize": 300},
                         "fields": "pixelSize",
                     }
                 },
-            ]
-            if is_receipt:
-                requests.append(
-                    {
-                        "updateDimensionProperties": {
-                            "range": {
-                                "sheetId": sheet.id,
-                                "dimension": "COLUMNS",
-                                "startIndex": 2,
-                                "endIndex": 3,
-                            },
-                            "properties": {"pixelSize": 300},
-                            "fields": "pixelSize",
-                        }
-                    },
-                )
+            )
 
-            self.sh.batch_update({"requests": requests})
-
-        except Exception as e:
-            print(f"Formatting failed: {e}")
+        self.sh.batch_update({"requests": requests})
 
     def get_all_data(self) -> str:
         all_data = []
