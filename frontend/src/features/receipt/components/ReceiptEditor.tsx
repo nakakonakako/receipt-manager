@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { type Receipt, type ReceiptItem } from '@/types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { NumberInput } from '@/components/ui/NumberInput'
 
 // 編集用のアイテム型 価格は空文字も許容
 type EditingItem = Omit<ReceiptItem, 'price'> & {
@@ -140,23 +141,10 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                     />
                   </td>
                   <td className="px-2 py-2">
-                    <Input
-                      className="w-full text-right"
-                      type="number"
+                    <NumberInput
                       value={item.price}
-                      onChange={(e) =>
-                        handleItemChange(index, 'price', e.target.value)
-                      }
-                      onBlur={() => {
-                        if (item.price === '') {
-                          handleItemChange(index, 'price', 0)
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (['e', 'E', '+', '-'].includes(e.key)) {
-                          e.preventDefault()
-                        }
-                      }}
+                      onChange={(val) => handleItemChange(index, 'price', val)}
+                      className="w-full"
                     />
                   </td>
                   <td className="px-2 py-2 text-center">
