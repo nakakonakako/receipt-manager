@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { type Receipt, type ReceiptItem } from '@/types'
+import { type Receipt, type ReceiptItem } from '../types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { NumberInput } from '@/components/ui/NumberInput'

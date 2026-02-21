@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
-import { type Receipt } from '@/types'
-import { analyzeReceipt } from '../api/receiptApi'
-import { saveTransaction } from '@/api/transactApi'
+import { type Receipt } from '../types'
+import { analyzeReceipt, saveTransaction } from '../api/receiptApi'
 import { ReceiptEditor } from './ReceiptEditor'
 import axios from 'axios'
 
