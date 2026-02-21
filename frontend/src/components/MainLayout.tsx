@@ -2,11 +2,7 @@ import { useState } from 'react'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { ChatInterface } from '@/features/search/components/ChatInterface'
 
-interface MainLayoutProps {
-  onLogout: () => void
-}
-
-export const MainLayout = ({ onLogout }: MainLayoutProps) => {
+export const MainLayout = () => {
   const [activeTab, setActiveTab] = useState<'register' | 'chat'>('register')
 
   return (
@@ -16,12 +12,6 @@ export const MainLayout = ({ onLogout }: MainLayoutProps) => {
           <h1 className="text-3xl font-bold text-gray-800">
             AIレシート家計簿 🧾
           </h1>
-          <button
-            onClick={onLogout}
-            className="text-sm text-gray-500 hover:text-red-500 underline"
-          >
-            ログアウト
-          </button>
         </div>
 
         <div className="flex mb-6 bg-white rounded-lg shadow p-1">
