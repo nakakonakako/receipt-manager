@@ -1,29 +1,25 @@
-import os
 from collections import defaultdict
 from datetime import datetime
 
 import gspread
 from app.schemas.receipt import ReceiptData
 from dotenv import load_dotenv
+from google.oauth2.creadentials import Credentials
 
 load_dotenv()
 
 
 class SheetsService:
-    def __init__(self) -> None:
-        json_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "service_account.json",
-        )
-        if not os.path.exists(json_path):
-            raise FileNotFoundError("Service account JSON file not found.")
-        self.gc = gspread.service_account(filename=json_path)
+    def __init__(self, access_token: str, spreadsheet_id: str) -> None:
+        if not access_token:
+            raise ValueError("Google Sheets access token is required.")
+        if not spreadsheet_id:
+            raise ValueError("Google Sheets spreadsheet ID is required.")
 
-        sheet_id = os.getenv("SPREADSHEET_ID")
-        if not sheet_id:
-            raise ValueError("SPREADSHEET_ID environment variable not set.")
+        creds = Credentials(token=access_token)
+        self.gc = gspread.authorize(creds)
 
-        self.sh = self.gc.open_by_key(sheet_id)
+        self.sh = self.gc.open_by_key(spreadsheet_id)
 
     def add_receipt_data(self, receipt: ReceiptData) -> dict:
         target_sheet = self._get_receipt_sheet(receipt.purchase_date)

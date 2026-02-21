@@ -1,15 +1,11 @@
-import os
-
-from app.schemas.common import PasswordCheck
 from app.schemas.csv import CsvAnalysisRequest, CsvParseResponse, CsvSaveRequest
 from app.schemas.receipt import ReceiptData, SearchQuery
 from app.services.csv_service import CsvService
 from app.services.gemini_service import GeminiService
 from app.services.sheets_service import SheetsService
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, Security, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import APIKeyHeader
 
 app = FastAPI()
 
@@ -24,10 +20,7 @@ app.add_middleware(
 load_dotenv()
 
 gemini_service = GeminiService()
-sheets_service = SheetsService()
 csv_service = CsvService()
-
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
 
 @app.get("/")
@@ -35,23 +28,21 @@ def read_root():
     return {"message": "Receipt Manager API is running."}
 
 
-async def verify_api_key(api_key: str = Security(api_key_header)):
-    if api_key == os.getenv("APP_PASSWORD"):
-        return api_key
-    else:
-        raise HTTPException(status_code=403, detail="認証されていません")
+async def get_user_sheets_service(
+    x_access_token: str = Header(..., alias="x-access-token"),
+    x_spreadsheet_id: str = Header(..., alias="x-spreadsheet-id"),
+) -> SheetsService:
+    try:
+        return SheetsService(
+            access_token=x_access_token, spreadsheet_id=x_spreadsheet_id
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=401, detail=f"Google Sheetsの認証に失敗しました: {str(e)}"
+        )
 
 
-@app.post("/check_auth")
-async def check_auth(data: PasswordCheck):
-    APP_PASSWORD = os.getenv("APP_PASSWORD")
-    if data.password == APP_PASSWORD:
-        return {"status": "ok", "message": "認証成功"}
-    else:
-        raise HTTPException(status_code=401, detail="パスワードが違います")
-
-
-@app.post("/analyze", dependencies=[Depends(verify_api_key)])
+@app.post("/analyze")
 async def analyze_receipt(file: UploadFile = File(...)):
     try:
         image_bytes = await file.read()
@@ -63,8 +54,11 @@ async def analyze_receipt(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/save", dependencies=[Depends(verify_api_key)])
-async def save_receipt(data: ReceiptData):
+@app.post("/save")
+async def save_receipt(
+    data: ReceiptData,
+    sheets_service: SheetsService = Depends(get_user_sheets_service),
+):
     try:
         result = sheets_service.add_receipt_data(data)
         return {"message": "Receipt data saved successfully.", "details": result}
@@ -73,8 +67,11 @@ async def save_receipt(data: ReceiptData):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/search", dependencies=[Depends(verify_api_key)])
-async def search_receipts(search_query: SearchQuery):
+@app.post("/search")
+async def search_receipts(
+    search_query: SearchQuery,
+    sheets_service: SheetsService = Depends(get_user_sheets_service),
+):
     try:
         data = sheets_service.get_all_data()
 
@@ -89,7 +86,7 @@ async def search_receipts(search_query: SearchQuery):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/analyze_csv", dependencies=[Depends(verify_api_key)])
+@app.post("/analyze_csv")
 async def analyze_csv(request: CsvAnalysisRequest):
     try:
         lines = request.csv_text.strip().split("\n")
@@ -102,8 +99,11 @@ async def analyze_csv(request: CsvAnalysisRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/save_csv", dependencies=[Depends(verify_api_key)])
-async def save_csv(request: CsvSaveRequest):
+@app.post("/save_csv")
+async def save_csv(
+    request: CsvSaveRequest,
+    sheets_service: SheetsService = Depends(get_user_sheets_service),
+):
     try:
         result = sheets_service.add_csv_data(request.transactions)
         return {"message": "CSV data saved successfully.", "details": result}
