@@ -1,28 +1,12 @@
-import { useState, useEffect } from 'react'
-import { MainLayout } from './components/MainLayout'
+import { useAuth } from './contexts/AuthContext'
 import { Auth } from './components/Auth'
-import { supabase } from './lib/supabase'
-import { type Session } from '@supabase/supabase-js'
+import { MainLayout } from './components/MainLayout'
 
 export const App: React.FC = () => {
-  const [session, setSession] = useState<Session | null>(null)
+  const { session, isLoading, logout } = useAuth()
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session)
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
+  if (isLoading) {
+    return <div className="p-8 text-center">読み込み中...</div>
   }
 
   if (!session) {
@@ -38,7 +22,7 @@ export const App: React.FC = () => {
             ログイン中: {session.user.email}
           </p>
           <button
-            onClick={handleLogout}
+            onClick={logout}
             className="text-sm px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
           >
             ログアウト
