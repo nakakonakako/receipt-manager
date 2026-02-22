@@ -1,15 +1,11 @@
 import React, { useState, useRef } from 'react'
 import axios from 'axios'
 import { analyzeCsv, saveCsv } from '../api/csvApi'
-import { type ParsedTransaction } from '../types'
+import { type ParsedTransaction, type EditingTransaction } from '../types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { NumberInput } from '@/components/ui/NumberInput'
 import { useApiConfig } from '@/hooks/useApiConfig'
-
-type EditingTransaction = Omit<ParsedTransaction, 'price'> & {
-  price: number | ''
-}
 
 export const CsvUploader: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)

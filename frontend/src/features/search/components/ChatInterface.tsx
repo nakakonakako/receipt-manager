@@ -5,11 +5,7 @@ import { useApiConfig } from '@/hooks/useApiConfig'
 import { searchReceipts } from '../api/searchApi'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
+import { type Message } from '../types'
 
 export const ChatInterface: React.FC = () => {
   const { getHeaders } = useApiConfig()

@@ -10,3 +10,14 @@ export interface Receipt {
   total_amount: number
   payment_method: string
 }
+
+// 編集用のアイテム型 価格は空文字も許容
+export type EditingItem = Omit<ReceiptItem, 'price'> & {
+  price: number | ''
+}
+
+export interface ReceiptEditorProps {
+  initialData: Receipt
+  onSave: (data: Receipt) => void
+  onCancel: () => void
+}

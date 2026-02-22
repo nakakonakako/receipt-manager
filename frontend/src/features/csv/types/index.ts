@@ -11,3 +11,7 @@ export interface ParsedTransaction {
   store: string
   price: number
 }
+
+export type EditingTransaction = Omit<ParsedTransaction, 'price'> & {
+  price: number | ''
+}
