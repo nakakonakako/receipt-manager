@@ -4,7 +4,7 @@ from datetime import datetime
 import gspread
 from app.schemas.receipt import ReceiptData
 from dotenv import load_dotenv
-from google.oauth2.creadentials import Credentials
+from google.oauth2.credentials import Credentials
 
 load_dotenv()
 
