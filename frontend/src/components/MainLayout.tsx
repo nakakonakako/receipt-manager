@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RegisterPage } from '@/pages/RegisterPage'
+import { RegisterPage } from '@/components/RegisterPage'
 import { ChatInterface } from '@/features/search/components/ChatInterface'
 
 export const MainLayout = () => {
