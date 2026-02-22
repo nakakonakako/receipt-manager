@@ -12,13 +12,44 @@ export const MainLayout = () => {
   const [tempId, setTempId] = useState('')
 
   const handleOpenSettings = () => {
-    setTempId(spreadsheetId)
+    const fullUrl = spreadsheetId
+      ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}`
+      : ''
+
+    setTempId(fullUrl)
     setIsSettingsOpen(true)
   }
 
+  const extractSpreadsheetId = (input: string) => {
+    const cleanInput = input.trim()
+    const match = cleanInput.match(
+      /^https:\/\/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/
+    )
+
+    if (match && match[1]) {
+      return match[1]
+    }
+
+    return null
+  }
+
   const handleSaveSettings = () => {
-    setSpreadsheetId(tempId)
-    localStorage.setItem('spreadsheetId', tempId)
+    if (!tempId) {
+      alert('URLを入力してください。')
+      return
+    }
+
+    const extractedId = extractSpreadsheetId(tempId)
+
+    if (!extractedId) {
+      alert(
+        '正しいGoogleスプレッドシートの共有URLを入力してください。\n例: https://docs.google.com/spreadsheets/d/...'
+      )
+      return
+    }
+
+    setSpreadsheetId(extractedId)
+    localStorage.setItem('spreadsheetId', extractedId)
     setIsSettingsOpen(false)
   }
 
@@ -83,18 +114,28 @@ export const MainLayout = () => {
             <div className="p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-2">連携設定</h2>
               <p className="text-sm text-gray-600 mb-6">
-                データ保存先となるGoogleスプレッドシートのIDを入力してください。
+                データ保存先となるGoogleスプレッドシートの共有URLを入力してください。
               </p>
+
+              <div className="bg-blue-50 border border-blue-100 rounded-md p-3 mb-6">
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  <span className="font-bold">💡 共有URLの取得方法：</span>
+                  <br />
+                  Google
+                  Driveで指定したいスプレッドシートを右クリックして、「共有」 ＞
+                  「リンクをコピー」から取得してください。
+                </p>
+              </div>
 
               <div className="space-y-2">
                 <label className="block text-sm font-bold text-gray-700">
-                  スプレッドシートID
+                  スプレッドシートの共有URL
                 </label>
                 <input
                   type="text"
                   value={tempId}
                   onChange={(e) => setTempId(e.target.value)}
-                  placeholder="例: 1BxiMVs0XRYFgwnm..."
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
                   className="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 />
               </div>
