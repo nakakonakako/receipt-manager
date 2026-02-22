@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { useApiConfig } from '@/hooks/useApiConfig'
 import { searchReceipts } from '../api/searchApi'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -11,6 +12,8 @@ interface Message {
 }
 
 export const ChatInterface: React.FC = () => {
+  const { getHeaders } = useApiConfig()
+
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -21,6 +24,9 @@ export const ChatInterface: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSend = async () => {
+    const headers = getHeaders()
+    if (!headers) return
+
     if (!query.trim()) return
 
     const userMessage: Message = { role: 'user', content: query }
@@ -29,7 +35,7 @@ export const ChatInterface: React.FC = () => {
     setIsLoading(true)
 
     try {
-      const answer = await searchReceipts(userMessage.content)
+      const answer = await searchReceipts(userMessage.content, headers)
       const assistantMessage: Message = { role: 'assistant', content: answer }
       setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {

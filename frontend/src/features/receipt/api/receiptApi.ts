@@ -18,6 +18,9 @@ export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
   return response.data
 }
 
-export const saveTransaction = async (data: Receipt) => {
-  return apiClient.post('/save', data)
+export const saveTransaction = async (
+  data: Receipt,
+  headers: Record<string, string>
+) => {
+  return apiClient.post('/save', data, { headers })
 }

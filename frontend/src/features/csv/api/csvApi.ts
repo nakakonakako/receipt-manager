@@ -15,9 +15,14 @@ export const analyzeCsv = async (
   return response.data
 }
 
-export const saveCsv = async (transactions: ParsedTransaction[]) => {
-  const response = await apiClient.post('/save_csv', {
-    transactions,
-  })
+export const saveCsv = async (
+  transactions: ParsedTransaction[],
+  headers: Record<string, string>
+) => {
+  const response = await apiClient.post(
+    '/save_csv',
+    { transactions },
+    { headers }
+  )
   return response.data
 }

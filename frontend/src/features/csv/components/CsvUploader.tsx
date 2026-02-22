@@ -5,6 +5,7 @@ import { type ParsedTransaction } from '../types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { NumberInput } from '@/components/ui/NumberInput'
+import { useApiConfig } from '@/hooks/useApiConfig'
 
 type EditingTransaction = Omit<ParsedTransaction, 'price'> & {
   price: number | ''
@@ -20,6 +21,8 @@ export const CsvUploader: React.FC = () => {
   const [isWaiting, setIsWaiting] = useState<boolean>(false)
   const [waitTime, setWaitTime] = useState<number>(0)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
+
+  const { getHeaders } = useApiConfig()
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -72,6 +75,9 @@ export const CsvUploader: React.FC = () => {
   }
 
   const handleSaveClick = async () => {
+    const headers = await getHeaders()
+    if (!headers) return
+
     setIsSaving(true)
     setProgress({ current: 0, total: 0 })
     const finalData: ParsedTransaction[] = parsedData.map((row) => ({
@@ -98,7 +104,7 @@ export const CsvUploader: React.FC = () => {
       const dataToSend = groupedByMonth[targetMonth]
 
       try {
-        await saveCsv(dataToSend)
+        await saveCsv(dataToSend, headers)
 
         currentIdx++
         setProgress({ current: currentIdx, total: months.length })

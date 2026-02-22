@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useApiConfig } from '@/hooks/useApiConfig'
 import { type Receipt } from '../types'
 import { analyzeReceipt, saveTransaction } from '../api/receiptApi'
 import { ReceiptEditor } from './ReceiptEditor'
@@ -13,6 +14,8 @@ interface UploadTask {
 }
 
 export const ReceiptUploader: React.FC = () => {
+  const { getHeaders } = useApiConfig()
+
   const [tasks, setTasks] = useState<UploadTask[]>([])
   const [editingState, setEditingState] = useState<{
     taskId: string
@@ -81,12 +84,15 @@ export const ReceiptUploader: React.FC = () => {
   }
 
   const handleSaveCurrent = async (data: Receipt) => {
+    const headers = getHeaders()
+    if (!headers) return
+
     if (!editingState) return
     const { taskId, resultIndex } = editingState
     const currentTask = tasks.find((t) => t.id === taskId)
 
     try {
-      await saveTransaction(data)
+      await saveTransaction(data, headers)
       alert(
         `${data.purchase_date}/${data.store_name} のレシートを保存しました。`
       )
