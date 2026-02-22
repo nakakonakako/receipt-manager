@@ -21,3 +21,11 @@ export interface ReceiptEditorProps {
   onSave: (data: Receipt) => void
   onCancel: () => void
 }
+
+export interface UploadTask {
+  id: string
+  file: File
+  previewUrl: string
+  status: 'idle' | 'analyzing' | 'success' | 'error'
+  results: Receipt[]
+}

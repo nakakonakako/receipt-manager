@@ -1,17 +1,9 @@
 import React, { useState } from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
-import { type Receipt } from '../types'
+import { type Receipt, type UploadTask } from '../types'
 import { analyzeReceipt, saveTransaction } from '../api/receiptApi'
 import { ReceiptEditor } from './ReceiptEditor'
 import axios from 'axios'
-
-interface UploadTask {
-  id: string
-  file: File
-  previewUrl: string
-  status: 'idle' | 'analyzing' | 'success' | 'error'
-  results: Receipt[]
-}
 
 export const ReceiptUploader: React.FC = () => {
   const { getHeaders } = useApiConfig()
