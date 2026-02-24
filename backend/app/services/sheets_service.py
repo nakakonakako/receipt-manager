@@ -181,15 +181,45 @@ class SheetsService:
 
         self.sh.batch_update({"requests": requests})
 
-    def get_all_data(self) -> str:
+    def get_all_data(self, data_type: str = "all", period: str = "3months") -> str:
         all_data = []
 
         headers = ["purchase_date", "store_name", "item_name", "price"]
         all_data.append(",".join(headers))
 
+        target_months = []
+        if period in ["1month", "3months"]:
+            today = datetime.today()
+            num_months = 1 if period == "1month" else 3
+            for i in range(num_months):
+                m = today.month - i
+                y = today.year
+                if m <= 0:
+                    m += 12
+                    y -= 1
+                target_months.append(f"{y}-{m:02d}")
+
         for ws in self.sh.worksheets():
-            if ws.title.startswith("Log_"):
+            title = ws.title
+
+            is_log = title.startswith("Log_")
+            is_receipt = title.startswith("Receipt_")
+
+            if not (is_log or is_receipt):
                 continue
+
+            if data_type == "receipt" and not is_receipt:
+                continue
+            if data_type == "log" and not is_log:
+                continue
+
+            if target_months:
+                try:
+                    sheet_month = title.split("_")[1]
+                    if sheet_month not in target_months:
+                        continue
+                except IndexError:
+                    continue
 
             rows = ws.get_all_values()
 

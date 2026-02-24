@@ -24,3 +24,5 @@ class ReceiptDatas(BaseModel):
 
 class SearchQuery(BaseModel):
     query: str
+    data_type: str = "all"
+    period: str = "3months"
