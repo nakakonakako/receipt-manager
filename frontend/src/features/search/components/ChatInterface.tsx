@@ -16,9 +16,10 @@ export const ChatInterface: React.FC = () => {
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-
   const [historyQueries, setHistoryQueries] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [dataType, setDataType] = useState('all')
+  const [period, setPeriod] = useState('3months')
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -71,7 +72,12 @@ export const ChatInterface: React.FC = () => {
         content: currentQuery,
       })
 
-      const answer = await searchReceipts(currentQuery, headers)
+      const answer = await searchReceipts(
+        currentQuery,
+        dataType,
+        period,
+        headers
+      )
       const assistantMessage: Message = { role: 'assistant', content: answer }
 
       setMessages((prev) => [...prev, assistantMessage])
@@ -105,6 +111,33 @@ export const ChatInterface: React.FC = () => {
     <div className="flex flex-col h-[600px] bg-gray-50 rounded-xl shadow-md overflow-hidden relative">
       <div className="bg-blue-600 p-4 text-white font-bold flex justify-between items-center">
         <span>家計簿AIチャット 🤖</span>
+      </div>
+
+      <div className="bg-blue-50 border-b border-blue-100 px-4 py-2 flex gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 font-medium text-xs">対象データ:</span>
+          <select
+            value={dataType}
+            onChange={(e) => setDataType(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-700 outline-none focus:border-blue-500"
+          >
+            <option value="all">すべて</option>
+            <option value="receipt">レシート詳細のみ</option>
+            <option value="log">決済履歴のみ</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600 font-medium text-xs">対象期間:</span>
+          <select
+            value={period}
+            onChange={(e) => setPeriod(e.target.value)}
+            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-700 outline-none focus:border-blue-500"
+          >
+            <option value="3months">過去3ヶ月</option>
+            <option value="1month">今月のみ</option>
+            <option value="all">全期間</option>
+          </select>
+        </div>
       </div>
 
       <div className="flex-1 p-4 overflow-y-auto space-y-4">
