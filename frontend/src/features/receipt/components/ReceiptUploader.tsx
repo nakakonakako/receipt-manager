@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import { type Receipt, type UploadTask } from '../types'
 import { analyzeReceipt, saveTransaction } from '../api/receiptApi'
-import { ReceiptEditor } from './ReceiptEditor'
+import { ReceiptReviewWorkspace } from './ReceiptReviewWorkspace'
+
 import axios from 'axios'
 
 export const ReceiptUploader: React.FC = () => {
@@ -118,29 +119,14 @@ export const ReceiptUploader: React.FC = () => {
 
   if (editingState) {
     const task = tasks.find((t) => t.id === editingState.taskId)
-    if (task && task.results[editingState.resultIndex]) {
-      const currentReceipt = task.results[editingState.resultIndex]
-      const totalInTask = task.results.length
-
+    if (task) {
       return (
-        <div>
-          <div className="max-w-2xl mx-auto mb-2 flex justify-between items-end px-2">
-            <span className="text-sm font-bold text-gray-500">
-              レシート確認中 ({task.file.name})
-            </span>
-            <span className="text-xl font-bold text-blue-600">
-              {editingState.resultIndex + 1}
-              <span className="text-sm text-gray-400">/ {totalInTask}</span>
-            </span>
-          </div>
-
-          <ReceiptEditor
-            key={`${editingState.taskId}-${editingState.resultIndex}`}
-            initialData={currentReceipt}
-            onSave={handleSaveCurrent}
-            onCancel={handleSkipCurrent}
-          />
-        </div>
+        <ReceiptReviewWorkspace
+          task={task}
+          resultIndex={editingState.resultIndex}
+          onSave={handleSaveCurrent}
+          onCancel={handleSkipCurrent}
+        />
       )
     }
   }
