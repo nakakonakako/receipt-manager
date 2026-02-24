@@ -12,7 +12,7 @@ export const searchReceipts = async (
 ) => {
   const response = await apiClient.post<SearchResponse>(
     '/search',
-    { query, dataType: dataType, period },
+    { query, data_type: dataType, period },
     { headers }
   )
   return response.data.answer
