@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useApiConfig } from '@/hooks/useApiConfig'
@@ -12,6 +12,8 @@ import { type Message } from '../types'
 export const ChatInterface: React.FC = () => {
   const { getHeaders } = useApiConfig()
   const { session } = useAuth()
+
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
@@ -52,6 +54,10 @@ export const ChatInterface: React.FC = () => {
 
     fetchHistory()
   }, [session])
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' })
+  }, [messages])
 
   const handleSend = async () => {
     const headers = getHeaders()
@@ -176,6 +182,8 @@ export const ChatInterface: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="p-4 bg-white border-t border-gray-200 flex flex-col relative">
