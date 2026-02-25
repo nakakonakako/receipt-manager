@@ -1,36 +1,46 @@
 import React from 'react'
-import { Input } from './Input'
 
-interface NumberInputProps {
+interface NumberInputProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'onChange' | 'value'
+> {
   value: number | ''
   onChange: (value: number | '') => void
-  className?: string
+  maxLength?: number
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
   value,
   onChange,
-  className,
+  maxLength = 7,
+  className = '',
+  ...props
 }) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value
+
+    val = val.replace(/\D/g, '')
+
+    if (val.length > 1 && val.startsWith('0')) {
+      val = val.replace(/^0+/, '')
+      if (val === '') val = '0'
+    }
+
+    if (maxLength && val.length > maxLength) {
+      val = val.slice(0, maxLength)
+    }
+
+    onChange(val === '' ? '' : Number(val))
+  }
+
   return (
-    <Input
-      type="number"
-      className={`text-right ${className || ''}`}
+    <input
+      type="text"
+      inputMode="numeric"
       value={value}
-      onChange={(e) => {
-        const val = e.target.value
-        onChange(val === '' ? '' : Number(val))
-      }}
-      onBlur={() => {
-        if (value === '') {
-          onChange(0)
-        }
-      }}
-      onKeyDown={(e) => {
-        if (['e', 'E', '+', '-'].includes(e.key)) {
-          e.preventDefault()
-        }
-      }}
+      onChange={handleChange}
+      className={`p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none ${className}`}
+      {...props}
     />
   )
 }
