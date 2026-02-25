@@ -16,7 +16,7 @@ class GeminiService:
         api_key = os.getenv("GEMINI_API_KEY")
         self.client = genai.Client(api_key=api_key)
 
-    def analyze_receipt(self, image_bytes: bytes) -> dict:
+    def analyze_receipt(self, image_bytes_list: list[bytes]) -> dict:
         config = types.GenerateContentConfig(
             temperature=0.0,
             response_mime_type="application/json",
@@ -26,15 +26,22 @@ class GeminiService:
             ),
         )
 
-        prompt = "Analyze the receipt image and extract data according to the schema."
+        prompt = """
+        Analyze the receipt image(s) and extract data according to the schema.
+        If multiple images are provided, they are parts of a single long receipt. 
+        Please combine the items appropriately without duplicating them.
+        """
+
+        contents = [
+            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
+            for img_bytes in image_bytes_list
+        ]
+        contents.append(prompt)
 
         try:
             response = self.client.models.generate_content(
                 model="gemini-3-flash-preview",
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                    prompt,
-                ],
+                contents=contents,
                 config=config,
             )
             return json.loads(response.text)

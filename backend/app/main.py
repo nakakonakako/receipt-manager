@@ -43,10 +43,10 @@ async def get_user_sheets_service(
 
 
 @app.post("/analyze")
-async def analyze_receipt(file: UploadFile = File(...)):
+async def analyze_receipt(files: list[UploadFile] = File(...)):
     try:
-        image_bytes = await file.read()
-        result = gemini_service.analyze_receipt(image_bytes)
+        image_bytes_list = [await file.read() for file in files]
+        result = gemini_service.analyze_receipt(image_bytes_list)
 
         return result
 
