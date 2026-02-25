@@ -133,6 +133,7 @@ export const ReceiptUploader: React.FC = () => {
     if (task) {
       return (
         <ReceiptReviewWorkspace
+          key={`${editingState.taskId}-${editingState.resultIndex}`}
           task={task}
           resultIndex={editingState.resultIndex}
           onSave={handleSaveCurrent}

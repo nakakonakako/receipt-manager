@@ -88,26 +88,26 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">
-        レシート内容の確認・修正
-      </h2>
+    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 w-full">
+      <div className="border-b pb-3 mb-6">
+        <h2 className="text-xl font-bold text-gray-800">
+          レシート内容の確認・修正
+        </h2>
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <Input
-          label="購入日"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none"
-        />
-        <Input
-          label="店舗名"
-          type="text"
-          placeholder="店舗名を入力"
-          value={store}
-          onChange={(e) => setStore(e.target.value)}
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-8">
+        <div className="flex flex-col">
+          <label className="block text-sm font-bold text-gray-700 mb-1">
+            購入日
+          </label>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="w-full"
+          />
+        </div>
+
         <div className="flex flex-col">
           <label className="block text-sm font-medium text-gray-700 mb-1">
             支払い方法
@@ -122,50 +122,75 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
             <option value="cashless">キャッシュレス</option>
           </select>
         </div>
+
+        <div className="md:col-span-2 flex flex-col">
+          <label
+            htmlFor="store"
+            className="block text-sm font-bold text-gray-700 mb-1"
+          >
+            店舗名 <span className="text-red-500 text-xs ml-1">必須</span>
+          </label>
+          <Input
+            id="store"
+            value={store}
+            onChange={(e) => setStore(e.target.value)}
+            placeholder="例: スーパーABC"
+            className="w-full"
+          />
+        </div>
       </div>
 
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-2">
-          <label className="block text-lg font-medium text-gray-700">
-            購入品目
-          </label>
-          <span className="text-lg font-bold text-gray-700 mr-4">
+      <div>
+        <div className="flex justify-between items-end mb-3 border-b pb-2">
+          <h3 className="font-bold text-gray-700">購入品目</h3>
+          <div className="text-lg font-bold text-gray-800">
             合計: ¥{totalAmount.toLocaleString()}
-          </span>
+          </div>
         </div>
 
-        <div className="border border-gray-200 rounded overflow-hidden">
-          <table className="w-full text-sm text-left text-gray-500">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+        <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-3">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 w-8/12">商品名</th>
-                <th className="px-4 py-3 w-3/12">金額 (税込)</th>
-                <th className="px-4 py-3 w-1/12 text-center">削除</th>
+                <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[200px]">
+                  商品名 <span className="text-red-500">*</span>
+                </th>
+                <th className="p-3 text-xs font-bold text-gray-600 border-b w-32 text-right">
+                  金額 (税込)
+                </th>
+                <th className="p-3 text-xs font-bold text-gray-600 border-b w-16 text-center">
+                  削除
+                </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-100 bg-white">
               {items.map((item, index) => (
-                <tr key={index} className="bg-white border-b hover:bg-gray-50">
-                  <td className="px-2 py-2">
+                <tr key={index} className="hover:bg-gray-50 transition-colors">
+                  <td className="p-2">
                     <Input
-                      className="w-full"
                       value={item.item_name}
                       onChange={(e) =>
                         handleItemChange(index, 'item_name', e.target.value)
                       }
+                      placeholder="商品名を入力"
+                      className="w-full border-gray-200"
                     />
                   </td>
-                  <td className="px-2 py-2">
+                  <td className="p-2">
                     <NumberInput
                       value={item.price}
-                      onChange={(val) => handleItemChange(index, 'price', val)}
-                      className="w-full"
+                      onChange={(value) =>
+                        handleItemChange(index, 'price', value)
+                      }
+                      className="w-full text-right border-gray-200"
+                      placeholder="0"
                     />
                   </td>
-                  <td className="px-2 py-2 text-center">
+                  <td className="p-2 text-center">
                     <Button
                       variant="danger"
                       onClick={() => handleDeleteItem(index)}
+                      className="px-3"
                     >
                       ✕
                     </Button>
@@ -174,16 +199,22 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
               ))}
             </tbody>
           </table>
+
+          {items.length === 0 && (
+            <div className="text-center py-6 text-gray-400 text-sm">
+              購入品目がありません。下のボタンから追加してください。
+            </div>
+          )}
         </div>
 
-        <div className="mt-2">
-          <Button variant="icon" onClick={handleAddItem}>
+        <div className="flex justify-start">
+          <Button variant="icon" onClick={handleAddItem} className="py-2">
             ＋ 商品を追加する
           </Button>
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 mt-8">
+      <div className="flex justify-end gap-3 mt-8 pt-4 border-t">
         <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
           キャンセル
         </Button>
@@ -191,6 +222,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           variant="primary"
           onClick={handleSaveClick}
           disabled={isSubmitting}
+          className={isSubmitting ? 'opacity-75 cursor-wait' : ''}
         >
           {isSubmitting ? '保存中...' : '保存する'}
         </Button>
