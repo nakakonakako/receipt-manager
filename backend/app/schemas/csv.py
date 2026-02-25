@@ -1,8 +1,11 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
 class CsvAnalysisRequest(BaseModel):
     csv_text: str
+    mapping: dict[str, Any] | None = None
 
 
 class CsvMapping(BaseModel):
@@ -28,6 +31,7 @@ class ParsedCsvTransaction(BaseModel):
 
 class CsvParseResponse(BaseModel):
     transactions: list[ParsedCsvTransaction]
+    mapping: dict[str, Any]
 
 
 class CsvSaveRequest(BaseModel):

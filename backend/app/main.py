@@ -92,12 +92,16 @@ async def search_receipts(
 @app.post("/analyze_csv")
 async def analyze_csv(request: CsvAnalysisRequest):
     try:
-        lines = request.csv_text.strip().split("\n")
-        sample_text = "\n".join(lines[:5])
-        mapping = gemini_service.analyze_csv(sample_text)
+        if request.mapping:
+            mapping = request.mapping
+        else:
+            lines = request.csv_text.strip().split("\n")
+            sample_text = "\n".join(lines[:5])
+            mapping = gemini_service.analyze_csv(sample_text)
+
         transactions = csv_service.parse_csv(request.csv_text, mapping)
 
-        return CsvParseResponse(transactions=transactions)
+        return CsvParseResponse(transactions=transactions, mapping=mapping)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
