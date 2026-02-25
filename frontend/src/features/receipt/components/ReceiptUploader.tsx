@@ -14,20 +14,31 @@ export const ReceiptUploader: React.FC = () => {
     taskId: string
     resultIndex: number
   } | null>(null)
+  const [isCombineMode, setIsCombineMode] = useState(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files)
 
-      const newTasks: UploadTask[] = newFiles.map((file) => ({
-        id: crypto.randomUUID(),
-        file: file,
-        previewUrl: URL.createObjectURL(file),
-        status: 'idle',
-        results: [],
-      }))
-
-      setTasks((prev) => [...prev, ...newTasks])
+      if (isCombineMode) {
+        const newTask: UploadTask = {
+          id: crypto.randomUUID(),
+          files: newFiles,
+          previewUrls: newFiles.map((f) => URL.createObjectURL(f)),
+          status: 'idle',
+          results: [],
+        }
+        setTasks((prev) => [...prev, newTask])
+      } else {
+        const newTasks: UploadTask[] = newFiles.map((file) => ({
+          id: crypto.randomUUID(),
+          files: [file],
+          previewUrls: [URL.createObjectURL(file)],
+          status: 'idle',
+          results: [],
+        }))
+        setTasks((prev) => [...prev, ...newTasks])
+      }
 
       e.target.value = ''
     }
@@ -42,7 +53,7 @@ export const ReceiptUploader: React.FC = () => {
     if (!t) return
 
     try {
-      const data = await analyzeReceipt(t.file)
+      const data = await analyzeReceipt(t.files)
 
       setTasks((prev) =>
         prev.map((t) =>
@@ -137,13 +148,41 @@ export const ReceiptUploader: React.FC = () => {
         レシート一括登録
       </h2>
 
-      <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 bg-gray-50 text-center">
+      <div className="flex items-center justify-center gap-2 mb-4">
+        <label className="flex items-center cursor-pointer">
+          <div className="relative">
+            <input
+              type="checkbox"
+              className="sr-only"
+              checked={isCombineMode}
+              onChange={() => setIsCombineMode(!isCombineMode)}
+            />
+            <div
+              className={`block w-14 h-8 rounded-full transition-colors ${isCombineMode ? 'bg-blue-500' : 'bg-gray-300'}`}
+            ></div>
+            <div
+              className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${isCombineMode ? 'transform translate-x-6' : ''}`}
+            ></div>
+          </div>
+          <div className="ml-3 font-bold text-sm text-gray-700">
+            複数画像を1枚のレシートとして結合する
+          </div>
+        </label>
+      </div>
+
+      <div
+        className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${isCombineMode ? 'border-blue-400 bg-blue-50' : 'border-gray-300 bg-gray-50'}`}
+      >
         <label className="cursor-pointer block">
           <span className="text-gray-500 font-bold block mb-2">
             ここをタップして画像を選択、または画像をドラッグ＆ドロップ
           </span>
           <span className="text-xs text-gray-400 block mb-4">
-            (まとめて複数選択できます)
+            (
+            {isCombineMode
+              ? '選んだ画像がすべて1つのレシートになります'
+              : 'まとめて複数選択できます'}
+            )
           </span>
           <input
             type="file"
@@ -152,7 +191,9 @@ export const ReceiptUploader: React.FC = () => {
             onChange={handleFileChange}
             className="hidden"
           />
-          <div className="bg-blue-100 text-blue-600 py-2 px-4 rounded-full inline-block font-bold">
+          <div
+            className={`py-2 px-4 rounded-full inline-block font-bold ${isCombineMode ? 'bg-blue-600 text-white shadow' : 'bg-blue-100 text-blue-600'}`}
+          >
             📸 画像を追加
           </div>
         </label>
@@ -175,15 +216,24 @@ export const ReceiptUploader: React.FC = () => {
             key={task.id}
             className="flex items-center bg-white p-3 rounded shadow-sm border border-gray-100"
           >
-            <img
-              src={task.previewUrl}
-              alt="preview"
-              className="w-16 h-16 object-cover rounded mr-4"
-            />
+            <div className="relative mr-4">
+              <img
+                src={task.previewUrls[0]}
+                alt="preview"
+                className="w-16 h-16 object-cover rounded"
+              />
+              {task.previewUrls.length > 1 && (
+                <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white">
+                  {task.previewUrls.length}
+                </span>
+              )}
+            </div>
 
             <div className="flex-1 min-w-0">
               <div className="text-sm font-bold text-gray-700 truncate">
-                {task.file.name}
+                {task.files.length > 1
+                  ? `${task.files[0].name} ほか ${task.files.length - 1}件`
+                  : task.files[0].name}
               </div>
 
               <div className="text-sm mt-1">

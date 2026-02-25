@@ -24,8 +24,15 @@ export interface ReceiptEditorProps {
 
 export interface UploadTask {
   id: string
-  file: File
-  previewUrl: string
+  files: File[]
+  previewUrls: string[]
   status: 'idle' | 'analyzing' | 'success' | 'error'
   results: Receipt[]
+}
+
+export interface ReceiptReviewWorkspaceProps {
+  task: UploadTask
+  resultIndex: number
+  onSave: (data: Receipt) => void
+  onCancel: () => void
 }

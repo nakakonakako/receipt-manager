@@ -5,9 +5,13 @@ interface ReceiptResponse {
   receipts: Receipt[]
 }
 
-export const analyzeReceipt = async (file: File): Promise<ReceiptResponse> => {
+export const analyzeReceipt = async (
+  files: File[]
+): Promise<ReceiptResponse> => {
   const formData = new FormData()
-  formData.append('file', file)
+  files.forEach((file) => {
+    formData.append('files', file)
+  })
 
   const response = await apiClient.post<ReceiptResponse>('/analyze', formData, {
     headers: {

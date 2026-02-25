@@ -31,7 +31,10 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
         <span className="text-sm font-bold text-gray-600 flex items-center gap-2">
           <span>レシート確認・修正</span>
           <span className="text-xs font-normal text-gray-400 bg-gray-100 px-2 py-1 rounded">
-            ファイル: {task.file.name}
+            ファイル:{' '}
+            {task.files.length > 1
+              ? `${task.files[0].name} ほか ${task.files.length - 1}件`
+              : task.files[0].name}
           </span>
         </span>
         <span className="text-xl font-bold text-blue-600">
@@ -66,17 +69,20 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
             </div>
           </div>
 
-          <div className="relative w-full h-[50vh] lg:h-[70vh] overflow-auto bg-gray-50 border border-gray-200 rounded-lg flex justify-center items-start p-2 custom-scrollbar">
-            <img
-              src={task.previewUrl}
-              alt="receipt preview"
-              style={{
-                width: `${zoomLevel}%`,
-                maxWidth: 'none',
-                transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              }}
-              className="h-auto object-contain origin-top shadow-sm"
-            />
+          <div className="relative w-full h-[50vh] lg:h-[70vh] overflow-auto bg-gray-50 border border-gray-200 rounded-lg flex flex-col items-center justify-start p-2 gap-2 custom-scrollbar">
+            {task.previewUrls.map((url, index) => (
+              <img
+                key={index}
+                src={url}
+                alt={`receipt preview ${index + 1}`}
+                style={{
+                  width: `${zoomLevel}%`,
+                  maxWidth: 'none',
+                  transition: 'width 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                }}
+                className="h-auto object-contain origin-top shadow-sm border border-gray-100"
+              />
+            ))}
           </div>
         </div>
 
