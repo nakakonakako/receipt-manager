@@ -20,6 +20,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   const [paymentMethod, setPaymentMethod] = useState(
     initialData.payment_method || 'unknown'
   )
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const totalAmount = items.reduce(
     (sum, item) => sum + Number(item.price || 0),
@@ -50,7 +51,21 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
     setItems([...items, { item_name: '', price: 0 }])
   }
 
-  const handleSaveClick = () => {
+  const handleSaveClick = async () => {
+    if (!store.trim()) {
+      alert('店舗名を入力してください')
+      return
+    }
+    if (items.length === 0) {
+      alert('少なくとも1つの購入品目を追加してください')
+      return
+    }
+    const hasEmptyItem = items.some((item) => !item.item_name.trim())
+    if (hasEmptyItem) {
+      alert('商品名が空欄の項目があります')
+      return
+    }
+
     const newItems: ReceiptItem[] = items.map((item) => ({
       ...item,
       price: item.price === '' ? 0 : item.price,
@@ -63,7 +78,13 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       total_amount: initialData.total_amount || 0,
       payment_method: paymentMethod || '',
     }
-    onSave(savedData)
+
+    setIsSubmitting(true)
+    try {
+      await onSave(savedData)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -163,11 +184,15 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       </div>
 
       <div className="flex justify-end gap-3 mt-8">
-        <Button variant="secondary" onClick={onCancel}>
+        <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
           キャンセル
         </Button>
-        <Button variant="primary" onClick={handleSaveClick}>
-          保存する
+        <Button
+          variant="primary"
+          onClick={handleSaveClick}
+          disabled={isSubmitting}
+        >
+          {isSubmitting ? '保存中...' : '保存する'}
         </Button>
       </div>
     </div>

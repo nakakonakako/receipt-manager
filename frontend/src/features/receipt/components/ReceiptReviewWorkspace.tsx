@@ -15,8 +15,8 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
 
   if (!currentReceipt) return null
 
-  const handleSave = (data: Receipt) => {
-    onSave(data)
+  const handleSave = async (data: Receipt) => {
+    await onSave(data)
     setZoomLevel(100)
   }
 
