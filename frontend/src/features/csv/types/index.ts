@@ -15,3 +15,38 @@ export interface ParsedTransaction {
 export type EditingTransaction = Omit<ParsedTransaction, 'price'> & {
   price: number | ''
 }
+
+export interface CsvPreset {
+  id?: string
+  user_id?: string
+  name: string
+  mapping: CsvMapping
+}
+
+export interface CsvAnalysisFormProps {
+  csvText: string
+  presets: CsvPreset[]
+  selectedPreset: string
+  onSelectPreset: (val: string) => void
+  isAnalyzing: boolean
+  onAnalyze: () => void
+}
+
+export interface CsvEditorTableProps {
+  parsedData: EditingTransaction[]
+  onDataChange: (
+    index: number,
+    field: keyof ParsedTransaction,
+    value: string | number
+  ) => void
+  onDeleteRow: (index: number) => void
+  newPresetName: string
+  onNewPresetNameChange: (val: string) => void
+  onSavePreset: () => void
+  isSaving: boolean
+  isWaiting: boolean
+  waitTime: number
+  progress: { current: number; total: number }
+  onReset: () => void
+  onSaveClick: () => void
+}

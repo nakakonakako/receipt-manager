@@ -1,11 +1,16 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import axios from 'axios'
 import { analyzeCsv, saveCsv } from '../api/csvApi'
-import { type ParsedTransaction, type EditingTransaction } from '../types'
-import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
-import { NumberInput } from '@/components/ui/NumberInput'
+import {
+  type CsvMapping,
+  type ParsedTransaction,
+  type EditingTransaction,
+  type CsvPreset,
+} from '../types'
 import { useApiConfig } from '@/hooks/useApiConfig'
+import { supabase } from '@/lib/supabase'
+import { CsvAnalysisForm } from './CsvAnalysisForm'
+import { CsvEditorTable } from './CsvEditorTable'
 
 export const CsvUploader: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -13,17 +18,41 @@ export const CsvUploader: React.FC = () => {
   const [csvText, setCsvText] = useState<string>('')
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
   const [parsedData, setParsedData] = useState<EditingTransaction[]>([])
+
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [isWaiting, setIsWaiting] = useState<boolean>(false)
   const [waitTime, setWaitTime] = useState<number>(0)
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
+  const [presets, setPresets] = useState<CsvPreset[]>([])
+  const [selectedPreset, setSelectedPreset] = useState<string>('')
+  const [currentMapping, setCurrentMapping] = useState<CsvMapping | null>(null)
+  const [newPresetName, setNewPresetName] = useState<string>('')
+
   const { getHeaders } = useApiConfig()
+
+  useEffect(() => {
+    const fetchPresets = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data, error } = await supabase
+        .from('csv_presets')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+
+      if (data && !error) setPresets(data)
+    }
+    fetchPresets()
+  }, [])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
-      setParsedData([])
+      handleReset()
 
       const buffer = await selectedFile.arrayBuffer()
       let text = ''
@@ -46,12 +75,50 @@ export const CsvUploader: React.FC = () => {
     setIsAnalyzing(true)
 
     try {
-      const result = await analyzeCsv(csvText)
+      const preset = presets.find((p) => p.name === selectedPreset)
+      const result = await analyzeCsv(csvText, preset?.mapping)
+
       setParsedData(result.transactions)
+      setCurrentMapping(result.mapping)
     } catch (error) {
       console.error('Error analyzing CSV:', error)
+      alert('CSVの解析中にエラーが発生しました')
     } finally {
       setIsAnalyzing(false)
+    }
+  }
+
+  const handleSavePreset = async () => {
+    if (!newPresetName.trim() || !currentMapping) return
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      alert('ユーザーが認証されていません')
+      return
+    }
+
+    const newPreset = {
+      user_id: user.id,
+      name: newPresetName,
+      mapping: currentMapping,
+    }
+
+    const { data, error } = await supabase
+      .from('csv_presets')
+      .insert([newPreset])
+      .select()
+
+    if (error) {
+      alert('プリセットの保存中にエラーが発生しました')
+      return
+    }
+
+    if (data && data.length > 0) {
+      setPresets([...presets, data[0]])
+      setNewPresetName('')
+      alert(`プリセット「${newPresetName}」を保存しました！`)
     }
   }
 
@@ -68,6 +135,13 @@ export const CsvUploader: React.FC = () => {
   const handleDeleteRow = (index: number) => {
     const newData = parsedData.filter((_, i) => i !== index)
     setParsedData(newData)
+  }
+
+  const handleReset = () => {
+    setParsedData([])
+    setCsvText('')
+    setCurrentMapping(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const handleSaveClick = async () => {
@@ -126,12 +200,7 @@ export const CsvUploader: React.FC = () => {
 
     if (currentIdx === months.length) {
       alert('全てのデータを保存しました！')
-      setParsedData([])
-      setCsvText('')
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      handleReset()
     }
 
     setIsSaving(false)
@@ -150,126 +219,31 @@ export const CsvUploader: React.FC = () => {
       </div>
 
       {csvText && parsedData.length === 0 && (
-        <div className="bg-gray-50 p-4 rounded border">
-          <h3 className="font-bold mb-2 text-gray-700">📄 送信データの確認</h3>
-          <p className="text-sm text-gray-600 mb-2">
-            以下のCSVデータをAIに送信し、フォーマットを自動解析して一覧表示します。
-          </p>
-          <pre className="bg-gray-800 text-white p-3 text-xs overflow-x-auto rounded max-h-40 overflow-y-auto mb-4">
-            {csvText}
-          </pre>
-
-          <Button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            variant="primary"
-          >
-            {isAnalyzing ? 'パース処理を実行中...' : 'この内容で解析する'}
-          </Button>
-        </div>
+        <CsvAnalysisForm
+          csvText={csvText}
+          presets={presets}
+          selectedPreset={selectedPreset}
+          onSelectPreset={setSelectedPreset}
+          isAnalyzing={isAnalyzing}
+          onAnalyze={handleAnalyze}
+        />
       )}
 
       {parsedData.length > 0 && (
-        <div className="space-y-4">
-          <div className="bg-green-50 p-4 rounded border border-green-200">
-            <h3 className="font-bold text-green-800 mb-1">
-              ✅ 解析完了 ({parsedData.length} 件)
-            </h3>
-            <p className="text-sm text-green-700">
-              内容を確認してください。クリックすると直接編集できます。不要な行は削除してください。
-            </p>
-          </div>
-
-          <div className="border border-gray-200 rounded overflow-hidden bg-white max-h-[60vh] overflow-y-auto">
-            <table className="w-full text-sm text-left text-gray-500">
-              <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm">
-                <tr>
-                  <th className="px-4 py-3 w-2/12">日付</th>
-                  <th className="px-4 py-3 w-6/12">店名</th>
-                  <th className="px-4 py-3 w-3/12">金額</th>
-                  <th className="px-4 py-3 w-1/12 text-center">削除</th>
-                </tr>
-              </thead>
-              <tbody>
-                {parsedData.map((row, i) => (
-                  <tr key={i} className="bg-white border-b hover:bg-gray-50">
-                    <td className="px-2 py-2">
-                      <Input
-                        type="date"
-                        value={row.date}
-                        onChange={(e) =>
-                          handleDataChange(i, 'date', e.target.value)
-                        }
-                        className={`w-full ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <Input
-                        value={row.store}
-                        onChange={(e) =>
-                          handleDataChange(i, 'store', e.target.value)
-                        }
-                        className="w-full"
-                      />
-                    </td>
-                    <td className="px-2 py-2">
-                      <NumberInput
-                        value={row.price}
-                        onChange={(val) => handleDataChange(i, 'price', val)}
-                        className="w-full"
-                      />
-                    </td>
-                    <td className="px-2 py-2 text-center">
-                      <Button
-                        variant="danger"
-                        onClick={() => handleDeleteRow(i)}
-                      >
-                        ✕
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {isSaving && (
-            <div
-              className={`p-4 rounded border text-center font-bold ${isWaiting ? 'bg-red-50 border-red-200 text-red-600' : 'bg-blue-50 border-blue-200 text-blue-800'}`}
-            >
-              {isWaiting ? (
-                <p className="animate-pulse">
-                  ⚠️ API制限に到達しました。安全に書き込むため {waitTime}{' '}
-                  秒待機しています...
-                </p>
-              ) : (
-                <p>
-                  保存中... ({progress.current} / {progress.total} ヶ月分 完了)
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setParsedData([])
-                setCsvText('')
-                if (fileInputRef.current) fileInputRef.current.value = ''
-              }}
-            >
-              やり直す
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleSaveClick}
-              disabled={isSaving}
-            >
-              {isSaving ? '保存中...' : `全 ${parsedData.length} 件を保存する`}
-            </Button>
-          </div>
-        </div>
+        <CsvEditorTable
+          parsedData={parsedData}
+          onDataChange={handleDataChange}
+          onDeleteRow={handleDeleteRow}
+          newPresetName={newPresetName}
+          onNewPresetNameChange={setNewPresetName}
+          onSavePreset={handleSavePreset}
+          isSaving={isSaving}
+          isWaiting={isWaiting}
+          waitTime={waitTime}
+          progress={progress}
+          onReset={handleReset}
+          onSaveClick={handleSaveClick}
+        />
       )}
     </div>
   )
