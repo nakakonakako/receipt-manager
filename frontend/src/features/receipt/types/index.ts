@@ -36,3 +36,7 @@ export interface ReceiptReviewWorkspaceProps {
   onSave: (data: Receipt) => void
   onCancel: () => void
 }
+
+export interface ReceiptViewerProps {
+  urls: string[]
+}
