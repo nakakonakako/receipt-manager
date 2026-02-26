@@ -81,7 +81,7 @@ export const useCsvUploader = () => {
     setIsAnalyzing(true)
 
     try {
-      const preset = presets.find((p) => p.name === selectedPresetId)
+      const preset = presets.find((p) => p.id === selectedPresetId)
       const result = await analyzeCsv(csvText, preset?.mapping)
 
       setParsedData(result.transactions)

@@ -91,7 +91,7 @@ async def search_receipts(
 @app.post("/analyze_csv")
 async def analyze_csv(request: CsvAnalysisRequest):
     try:
-        if request.mapping:
+        if request.mapping is not None:
             mapping = request.mapping
         else:
             lines = request.csv_text.strip().split("\n")
