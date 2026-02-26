@@ -25,8 +25,19 @@ export const useCsvUploader = () => {
   const [presets, setPresets] = useState<CsvPreset[]>([])
   const [selectedPresetId, setSelectedPresetId] = useState<string>('')
   const [currentMapping, setCurrentMapping] = useState<CsvMapping | null>(null)
-  const [newPresetName, setNewPresetName] = useState<string>('')
   const [isLoadingPresets, setIsLoadingPresets] = useState<boolean>(true)
+  const [showPresetSaveModal, setShowPresetSaveModal] = useState<boolean>(false)
+  const [newPresetName, setNewPresetName] = useState<string>('')
+
+  const [renameTarget, setRenameTarget] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [editPresetName, setEditPresetName] = useState<string>('')
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string
+    name: string
+  } | null>(null)
 
   const { getHeaders } = useApiConfig()
 
@@ -67,7 +78,6 @@ export const useCsvUploader = () => {
         const utf8Decoder = new TextDecoder('utf-8', { fatal: true })
         text = utf8Decoder.decode(buffer)
       } catch {
-        console.log('UTF-8デコードに失敗したため、Shift_JISで再試行します...')
         const sjisDecoder = new TextDecoder('shift_jis')
         text = sjisDecoder.decode(buffer)
       }
@@ -102,7 +112,12 @@ export const useCsvUploader = () => {
   }
 
   const handleSavePreset = async () => {
-    if (!newPresetName.trim() || !currentMapping) return
+    const trimmedName = newPresetName.trim()
+    if (!trimmedName || !currentMapping) return
+
+    if (presets.some((p) => p.name === trimmedName)) {
+      alert('同名のプリセットが存在します。別の名前を指定してください。')
+    }
 
     const {
       data: { user },
@@ -130,50 +145,85 @@ export const useCsvUploader = () => {
 
     if (data && data.length > 0) {
       setPresets([...presets, data[0]])
+
+      setShowPresetSaveModal(false)
       setNewPresetName('')
-      alert(`プリセット「${newPresetName}」を保存しました！`)
+      handleReset()
     }
   }
 
-  const handleRenamePreset = async (id: string) => {
-    const preset = presets.find((p) => p.id === id)
-    if (!preset) return
+  const handleSkipPresetSave = () => {
+    setShowPresetSaveModal(false)
+    setNewPresetName('')
+    handleReset()
+  }
 
-    const newName = window.prompt(
-      '新しいプリセット名を入力してください',
-      preset.name
-    )
+  const openRenameModal = (id: string, currentName: string) => {
+    setRenameTarget({ id, name: currentName })
+    setEditPresetName(currentName)
+  }
 
-    if (!newName || newName.trim() === '' || newName === preset.name) return
+  const closeRenameModal = () => {
+    setRenameTarget(null)
+    setEditPresetName('')
+  }
+
+  const executeRenamePreset = async () => {
+    if (!renameTarget) return
+    const trimmedName = editPresetName.trim()
+
+    if (!trimmedName || trimmedName === renameTarget.name) {
+      closeRenameModal()
+      return
+    }
+
+    if (
+      presets.some((p) => p.id !== renameTarget.id && p.name === trimmedName)
+    ) {
+      alert('同名のプリセットが存在します。別の名前を指定してください。')
+      return
+    }
 
     const { error } = await supabase
       .from('csv_presets')
-      .update({ name: newName.trim() })
-      .eq('id', id)
-
+      .update({ name: trimmedName })
+      .eq('id', renameTarget.id)
     if (error) {
       alert('プリセットの名前変更中にエラーが発生しました')
       return
     }
 
     setPresets((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, name: newName.trim() } : p))
+      prev.map((p) =>
+        p.id === renameTarget.id ? { ...p, name: trimmedName } : p
+      )
     )
+    closeRenameModal()
   }
 
-  const handleDeletePreset = async (id: string) => {
-    if (!window.confirm('このプリセットを削除してもよろしいですか？')) return
+  const openDeleteModal = (id: string, name: string) => {
+    setDeleteTarget({ id, name })
+  }
 
-    const { error } = await supabase.from('csv_presets').delete().eq('id', id)
+  const closeDeleteModal = () => {
+    setDeleteTarget(null)
+  }
+
+  const executeDeletePreset = async () => {
+    if (!deleteTarget) return
+    const { error } = await supabase
+      .from('csv_presets')
+      .delete()
+      .eq('id', deleteTarget.id)
 
     if (error) {
       alert('プリセットの削除中にエラーが発生しました')
       return
     }
 
-    setPresets((prev) => prev.filter((p) => p.id !== id))
-
-    if (selectedPresetId === id) setSelectedPresetId('')
+    setPresets((prev) => prev.filter((p) => p.id !== deleteTarget.id))
+    if (selectedPresetId === deleteTarget.id) setSelectedPresetId('')
+    closeDeleteModal()
   }
 
   const handleDataChange = (
@@ -254,7 +304,12 @@ export const useCsvUploader = () => {
 
     if (currentIdx === months.length) {
       alert('全てのデータを保存しました！')
-      handleReset()
+
+      if (selectedPresetId === '' && currentMapping) {
+        setShowPresetSaveModal(true)
+      } else {
+        handleReset()
+      }
     }
 
     setIsSaving(false)
@@ -262,10 +317,10 @@ export const useCsvUploader = () => {
 
   return {
     fileInputRef,
+    isLoadingPresets,
     csvText,
     isAnalyzing,
     parsedData,
-    isLoadingPresets,
     isSaving,
     isWaiting,
     waitTime,
@@ -273,13 +328,23 @@ export const useCsvUploader = () => {
     presets,
     selectedPresetId,
     newPresetName,
+    showPresetSaveModal,
+    renameTarget,
+    editPresetName,
+    deleteTarget,
     setSelectedPresetId,
     setNewPresetName,
+    setEditPresetName,
     handleFileChange,
     handleAnalyze,
     handleSavePreset,
-    handleRenamePreset,
-    handleDeletePreset,
+    handleSkipPresetSave,
+    openRenameModal,
+    closeRenameModal,
+    executeRenamePreset,
+    openDeleteModal,
+    closeDeleteModal,
+    executeDeletePreset,
     handleDataChange,
     handleDeleteRow,
     handleReset,
