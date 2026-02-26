@@ -26,15 +26,21 @@ export const useCsvUploader = () => {
   const [selectedPresetId, setSelectedPresetId] = useState<string>('')
   const [currentMapping, setCurrentMapping] = useState<CsvMapping | null>(null)
   const [newPresetName, setNewPresetName] = useState<string>('')
+  const [isLoadingPresets, setIsLoadingPresets] = useState<boolean>(true)
 
   const { getHeaders } = useApiConfig()
 
   useEffect(() => {
     const fetchPresets = async () => {
+      setIsLoadingPresets(true)
+
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) {
+        setIsLoadingPresets(false)
+        return
+      }
 
       const { data, error } = await supabase
         .from('csv_presets')
@@ -43,6 +49,8 @@ export const useCsvUploader = () => {
         .order('created_at', { ascending: true })
 
       if (data && !error) setPresets(data)
+
+      setIsLoadingPresets(false)
     }
     fetchPresets()
   }, [])
@@ -250,6 +258,7 @@ export const useCsvUploader = () => {
     csvText,
     isAnalyzing,
     parsedData,
+    isLoadingPresets,
     isSaving,
     isWaiting,
     waitTime,

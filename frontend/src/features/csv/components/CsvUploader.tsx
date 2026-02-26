@@ -9,6 +9,7 @@ export const CsvUploader: React.FC = () => {
     csvText,
     isAnalyzing,
     parsedData,
+    isLoadingPresets,
     isSaving,
     isWaiting,
     waitTime,
@@ -41,37 +42,51 @@ export const CsvUploader: React.FC = () => {
         />
       </div>
 
-      {!csvText && presets.length > 0 && (
-        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm mt-6">
+      {!csvText && (
+        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm mt-6 min-h-[120px]">
           <h3 className="font-bold text-gray-700 mb-3">
             ⚙️ 保存済みの抽出ルール管理
           </h3>
-          <div className="space-y-2">
-            {presets.map((p) => (
-              <div
-                key={p.id}
-                className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
-              >
-                <span className="font-bold text-sm text-gray-700">
-                  ☁️ {p.name}
-                </span>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleRenamePreset(p.id!)}
-                    className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors"
-                  >
-                    ✏️ 名前変更
-                  </button>
-                  <button
-                    onClick={() => handleDeletePreset(p.id!)}
-                    className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors"
-                  >
-                    🗑️ 削除
-                  </button>
+
+          {isLoadingPresets ? (
+            <div className="animate-pulse space-y-2">
+              <div className="h-12 bg-gray-100 rounded border border-gray-200 w-full"></div>
+              <div className="h-12 bg-gray-100 rounded border border-gray-200 w-full"></div>
+            </div>
+          ) : presets.length > 0 ? (
+            <div className="space-y-2">
+              {presets.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
+                >
+                  <span className="font-bold text-sm text-gray-700">
+                    ☁️ {p.name}
+                  </span>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => handleRenamePreset(p.id!)}
+                      className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      ✏️ 名前変更
+                    </button>
+                    <button
+                      onClick={() => handleDeletePreset(p.id!)}
+                      className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      🗑️ 削除
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded bg-gray-50">
+              保存されたルールはありません。
+              <br />
+              CSVを解析した後に、ルールに名前を付けて保存できます。
+            </div>
+          )}
         </div>
       )}
 
