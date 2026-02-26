@@ -8,9 +8,6 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
   parsedData,
   onDataChange,
   onDeleteRow,
-  newPresetName,
-  onNewPresetNameChange,
-  onSavePreset,
   isSaving,
   isWaiting,
   waitTime,
@@ -20,31 +17,13 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className="bg-green-50 p-4 rounded border border-green-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h3 className="font-bold text-green-800 mb-1">
-            ✅ 解析完了 ({parsedData.length} 件)
-          </h3>
-          <p className="text-sm text-green-700">
-            不要な行は削除し、必要に応じて修正してください。
-          </p>
-        </div>
-
-        <div className="flex gap-2 bg-white p-2 rounded shadow-sm border border-green-200">
-          <Input
-            value={newPresetName}
-            onChange={(e) => onNewPresetNameChange(e.target.value)}
-            placeholder="例: PayPay明細"
-            className="w-40 text-sm"
-          />
-          <Button
-            variant="secondary"
-            onClick={onSavePreset}
-            className="text-sm px-3 whitespace-nowrap"
-          >
-            ルールをクラウド保存
-          </Button>
-        </div>
+      <div className="bg-green-50 p-4 rounded border border-green-200">
+        <h3 className="font-bold text-green-800 mb-1">
+          ✅ 解析完了 ({parsedData.length} 件)
+        </h3>
+        <p className="text-sm text-green-700">
+          不要な行は削除し、必要に応じて修正してください。
+        </p>
       </div>
 
       <div className="border border-gray-200 rounded overflow-hidden bg-white max-h-[60vh] overflow-y-auto">

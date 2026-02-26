@@ -2,14 +2,17 @@ import React from 'react'
 import { CsvAnalysisForm } from './CsvAnalysisForm'
 import { CsvEditorTable } from './CsvEditorTable'
 import { useCsvUploader } from '../hooks/useCsvUploader'
+import { CsvPresetSaveModal } from './CsvPresetSaveModal'
+import { CsvPresetDeleteModal } from './CsvPresetDeleteModal'
+import { CsvPresetRenameModal } from './CsvPresetRenameModal'
 
 export const CsvUploader: React.FC = () => {
   const {
     fileInputRef,
+    isLoadingPresets,
     csvText,
     isAnalyzing,
     parsedData,
-    isLoadingPresets,
     isSaving,
     isWaiting,
     waitTime,
@@ -17,13 +20,23 @@ export const CsvUploader: React.FC = () => {
     presets,
     selectedPresetId,
     newPresetName,
+    showPresetSaveModal,
+    renameTarget,
+    editPresetName,
+    deleteTarget,
     setSelectedPresetId,
     setNewPresetName,
+    setEditPresetName,
     handleFileChange,
     handleAnalyze,
     handleSavePreset,
-    handleRenamePreset,
-    handleDeletePreset,
+    handleSkipPresetSave,
+    openRenameModal,
+    closeRenameModal,
+    executeRenamePreset,
+    openDeleteModal,
+    closeDeleteModal,
+    executeDeletePreset,
     handleDataChange,
     handleDeleteRow,
     handleReset,
@@ -65,13 +78,13 @@ export const CsvUploader: React.FC = () => {
                   </span>
                   <div className="flex gap-2 shrink-0">
                     <button
-                      onClick={() => handleRenamePreset(p.id!)}
+                      onClick={() => openRenameModal(p.id!, p.name)}
                       className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors"
                     >
                       ✏️ 名前変更
                     </button>
                     <button
-                      onClick={() => handleDeletePreset(p.id!)}
+                      onClick={() => openDeleteModal(p.id!, p.name)}
                       className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors"
                     >
                       🗑️ 削除
@@ -106,9 +119,6 @@ export const CsvUploader: React.FC = () => {
           parsedData={parsedData}
           onDataChange={handleDataChange}
           onDeleteRow={handleDeleteRow}
-          newPresetName={newPresetName}
-          onNewPresetNameChange={setNewPresetName}
-          onSavePreset={handleSavePreset}
           isSaving={isSaving}
           isWaiting={isWaiting}
           waitTime={waitTime}
@@ -117,6 +127,30 @@ export const CsvUploader: React.FC = () => {
           onSaveClick={handleSaveClick}
         />
       )}
+
+      <CsvPresetSaveModal
+        isOpen={showPresetSaveModal}
+        presetName={newPresetName}
+        onNameChange={setNewPresetName}
+        onSkip={handleSkipPresetSave}
+        onSave={handleSavePreset}
+      />
+
+      <CsvPresetRenameModal
+        isOpen={!!renameTarget} // renameTargetがnullでなければtrue
+        currentName={renameTarget?.name || ''}
+        editName={editPresetName}
+        onNameChange={setEditPresetName}
+        onClose={closeRenameModal}
+        onSave={executeRenamePreset}
+      />
+
+      <CsvPresetDeleteModal
+        isOpen={!!deleteTarget}
+        targetName={deleteTarget?.name || ''}
+        onClose={closeDeleteModal}
+        onDelete={executeDeletePreset}
+      />
     </div>
   )
 }

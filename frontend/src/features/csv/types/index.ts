@@ -40,9 +40,6 @@ export interface CsvEditorTableProps {
     value: string | number
   ) => void
   onDeleteRow: (index: number) => void
-  newPresetName: string
-  onNewPresetNameChange: (val: string) => void
-  onSavePreset: () => void
   isSaving: boolean
   isWaiting: boolean
   waitTime: number
