@@ -73,7 +73,6 @@ async def search_receipts(
     sheets_service: SheetsService = Depends(get_user_sheets_service),
 ):
     try:
-        print(f"Received search query: {search_query}")
         data = sheets_service.get_all_data(
             data_type=search_query.data_type, period=search_query.period
         )
