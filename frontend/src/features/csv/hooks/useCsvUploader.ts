@@ -84,6 +84,13 @@ export const useCsvUploader = () => {
       const preset = presets.find((p) => p.id === selectedPresetId)
       const result = await analyzeCsv(csvText, preset?.mapping)
 
+      if (result.transactions.length === 0) {
+        alert(
+          'CSVから取引データが抽出できませんでした。\nプリセットが異なっている可能性があります。'
+        )
+        return
+      }
+
       setParsedData(result.transactions)
       setCurrentMapping(result.mapping)
     } catch (error) {
