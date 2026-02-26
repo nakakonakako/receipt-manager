@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { supabase } from '@/lib/supabase'
 
 const extractSpreadsheetId = (input: string): string | null => {
   const cleanInput = input.trim()
@@ -28,7 +29,7 @@ export const SettingsModel = ({
 }: SettingsModelProps) => {
   const [tempId, setTempId] = useState(() => buildSpreadsheetUrl(currentId))
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!tempId) {
       alert('URLを入力してください。')
       return
@@ -42,7 +43,23 @@ export const SettingsModel = ({
       return
     }
 
-    localStorage.setItem('spreadsheetId', extractedId)
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) {
+      alert('ユーザー情報が取得できませんでした。再度ログインしてください。')
+      return
+    }
+
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert({ user_id: user.id, spreadsheet_id: extractedId })
+
+    if (error) {
+      alert('設定の保存に失敗しました。')
+      return
+    }
+
     onSave(extractedId)
   }
 

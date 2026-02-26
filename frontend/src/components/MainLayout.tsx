@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { RegisterPage } from '@/components/RegisterPage'
 import { ChatInterface } from '@/features/search/components/ChatInterface'
 import { SettingsModel } from './SettingsModel'
+import { supabase } from '@/lib/supabase'
 
 export const MainLayout = () => {
   const [activeTab, setActiveTab] = useState<'register' | 'chat'>('register')
@@ -9,6 +10,28 @@ export const MainLayout = () => {
     return localStorage.getItem('spreadsheetId') || ''
   })
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isLoadingSettings, setIsLoadingSettings] = useState(true)
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        const { data } = await supabase
+          .from('user_settings')
+          .select('spreadsheet_id')
+          .eq('user_id', user.id)
+          .single()
+
+        if (data?.spreadsheet_id) {
+          setSpreadsheetId(data.spreadsheet_id)
+        }
+      }
+      setIsLoadingSettings(false)
+    }
+    fetchSettings()
+  }, [])
 
   const handleSaveSettings = (newId: string) => {
     setSpreadsheetId(newId)
@@ -23,7 +46,9 @@ export const MainLayout = () => {
             AIレシート家計簿 🧾
           </h1>
           <div className="flex items-center gap-3">
-            {spreadsheetId ? (
+            {isLoadingSettings ? (
+              <div className="w-20 h-7 bg-gray-200 animate-pulse rounded-full"></div>
+            ) : spreadsheetId ? (
               <span className="text-xs font-bold text-green-700 bg-green-100 px-3 py-1.5 rounded-full border border-green-200">
                 ✅ 連携済み
               </span>

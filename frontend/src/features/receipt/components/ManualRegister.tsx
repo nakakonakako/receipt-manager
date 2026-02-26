@@ -26,7 +26,7 @@ export const ManualRegister: React.FC = () => {
   }
 
   const handleSave = async (data: Receipt) => {
-    const headers = getHeaders()
+    const headers = await getHeaders()
     if (!headers) return
 
     try {

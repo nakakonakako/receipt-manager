@@ -62,7 +62,7 @@ export const ChatInterface: React.FC = () => {
   }, [messages])
 
   const handleSend = async () => {
-    const headers = getHeaders()
+    const headers = await getHeaders()
     if (!headers || !query.trim() || !session?.user?.id) return
 
     const currentQuery = query

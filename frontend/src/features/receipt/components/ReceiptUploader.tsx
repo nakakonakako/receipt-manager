@@ -88,7 +88,7 @@ export const ReceiptUploader: React.FC = () => {
   }
 
   const handleSaveCurrent = async (data: Receipt) => {
-    const headers = getHeaders()
+    const headers = await getHeaders()
     if (!headers) return
 
     if (!editingState) return
