@@ -43,13 +43,15 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
         {csvText}
       </pre>
 
-      <Button onClick={onAnalyze} disabled={isAnalyzing} variant="primary">
-        {isAnalyzing
-          ? 'パース処理を実行中...'
-          : selectedPresetId
-            ? `「${selectedName}」の設定を使ってパースする`
-            : 'AIで自動解析してパースする'}
-      </Button>
+      <div className="flex justify-end">
+        <Button onClick={onAnalyze} disabled={isAnalyzing} variant="primary">
+          {isAnalyzing
+            ? 'パース処理を実行中...'
+            : selectedPresetId
+              ? `「${selectedName}」の設定を使ってパースする`
+              : 'AIで自動解析してパースする'}
+        </Button>
+      </div>
     </div>
   )
 }
