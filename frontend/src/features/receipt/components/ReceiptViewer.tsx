@@ -23,7 +23,7 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       const delta = e.deltaY > 0 ? 0.9 : 1.1
 
       setTransform((prev) => {
-        const newScale = Math.min(Math.max(0.1, prev.scale * delta), 5)
+        const newScale = Math.min(Math.max(0.5, prev.scale * delta), 5)
         const ratio = newScale / prev.scale
 
         const newX = mouseX - ratio * (mouseX - prev.x)
