@@ -45,15 +45,17 @@ export const CsvUploader: React.FC = () => {
 
   return (
     <div className="p-4 space-y-6 max-w-4xl mx-auto">
-      <div className="border-2 border-dashed border-gray-300 rounded p-6 text-center bg-white">
-        <input
-          type="file"
-          accept=".csv"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="w-full"
-        />
-      </div>
+      {!csvText && (
+        <div className="border-2 border-dashed border-gray-300 rounded p-6 text-center bg-white">
+          <input
+            type="file"
+            accept=".csv"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            className="w-full"
+          />
+        </div>
+      )}
 
       {!csvText && (
         <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm mt-6 min-h-[120px]">
@@ -111,6 +113,7 @@ export const CsvUploader: React.FC = () => {
           onSelectPreset={setSelectedPresetId}
           isAnalyzing={isAnalyzing}
           onAnalyze={handleAnalyze}
+          onReset={handleReset}
         />
       )}
 

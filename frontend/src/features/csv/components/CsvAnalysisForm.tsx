@@ -9,6 +9,7 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
   onSelectPreset,
   isAnalyzing,
   onAnalyze,
+  onReset,
 }) => {
   const selectedName = presets.find((p) => p.id === selectedPresetId)?.name
 
@@ -43,7 +44,10 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
         {csvText}
       </pre>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={onReset} disabled={isAnalyzing}>
+          ファイルを選び直す
+        </Button>
         <Button onClick={onAnalyze} disabled={isAnalyzing} variant="primary">
           {isAnalyzing
             ? 'パース処理を実行中...'

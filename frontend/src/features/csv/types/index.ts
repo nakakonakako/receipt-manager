@@ -30,6 +30,7 @@ export interface CsvAnalysisFormProps {
   onSelectPreset: (id: string) => void
   isAnalyzing: boolean
   onAnalyze: () => void
+  onReset: () => void
 }
 
 export interface CsvEditorTableProps {
