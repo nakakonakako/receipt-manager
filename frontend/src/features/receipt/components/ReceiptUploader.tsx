@@ -55,6 +55,16 @@ export const ReceiptUploader: React.FC = () => {
     try {
       const data = await analyzeReceipt(t.files)
 
+      if (!data || !data.receipts || data.receipts.length === 0) {
+        alert(
+          'レシートの解析に失敗しました。画像が鮮明か、レシート全体が写っているか確認してください。'
+        )
+        setTasks((prev) =>
+          prev.map((t) => (t.id === taskId ? { ...t, status: 'error' } : t))
+        )
+        return
+      }
+
       setTasks((prev) =>
         prev.map((t) =>
           t.id === taskId
@@ -258,15 +268,16 @@ export const ReceiptUploader: React.FC = () => {
             </div>
 
             <div className="ml-2 shrink-0">
-              {task.status === 'idle' && (
-                <button
-                  onClick={() =>
-                    setTasks((prev) => prev.filter((t) => t.id !== task.id))
-                  }
-                >
-                  削除
-                </button>
-              )}
+              {task.status === 'idle' ||
+                (task.status === 'error' && (
+                  <button
+                    onClick={() =>
+                      setTasks((prev) => prev.filter((t) => t.id !== task.id))
+                    }
+                  >
+                    削除
+                  </button>
+                ))}
 
               {task.status === 'success' && (
                 <button
