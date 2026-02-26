@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field
 
 class ReceiptItem(BaseModel):
     item_name: str = Field(description="Name of the the product")
-    price: int = Field(description="Price of the product including 8% tax")
+    price: int = Field(
+        description="Price of the product exactly as printed on the receipt. DO NOT calculate or add tax manually."
+    )
 
 
 class ReceiptData(BaseModel):

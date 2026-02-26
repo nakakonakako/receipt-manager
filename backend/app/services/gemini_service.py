@@ -30,6 +30,10 @@ class GeminiService:
         Analyze the receipt image(s) and extract data according to the schema.
         If multiple images are provided, they are parts of a single long receipt. 
         Please combine the items appropriately without duplicating them.
+
+        IMPORTANT RULES:
+        1. Extract the price of each item EXACTLY as printed on the receipt. DO NOT calculate or add tax manually.
+        2. DO NOT include subtotal (小計), tax (外税/内税/消費税), or total (合計) rows in the `items` list. Only include actual purchased products.
         """
 
         contents = [
