@@ -26,8 +26,8 @@ export interface CsvPreset {
 export interface CsvAnalysisFormProps {
   csvText: string
   presets: CsvPreset[]
-  selectedPreset: string
-  onSelectPreset: (val: string) => void
+  selectedPresetId: string
+  onSelectPreset: (id: string) => void
   isAnalyzing: boolean
   onAnalyze: () => void
 }

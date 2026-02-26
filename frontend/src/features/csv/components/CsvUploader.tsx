@@ -25,7 +25,7 @@ export const CsvUploader: React.FC = () => {
   const [progress, setProgress] = useState({ current: 0, total: 0 })
 
   const [presets, setPresets] = useState<CsvPreset[]>([])
-  const [selectedPreset, setSelectedPreset] = useState<string>('')
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('')
   const [currentMapping, setCurrentMapping] = useState<CsvMapping | null>(null)
   const [newPresetName, setNewPresetName] = useState<string>('')
 
@@ -75,7 +75,7 @@ export const CsvUploader: React.FC = () => {
     setIsAnalyzing(true)
 
     try {
-      const preset = presets.find((p) => p.name === selectedPreset)
+      const preset = presets.find((p) => p.name === selectedPresetId)
       const result = await analyzeCsv(csvText, preset?.mapping)
 
       setParsedData(result.transactions)
@@ -120,6 +120,47 @@ export const CsvUploader: React.FC = () => {
       setNewPresetName('')
       alert(`プリセット「${newPresetName}」を保存しました！`)
     }
+  }
+
+  const handleRenamePreset = async (id: string) => {
+    const preset = presets.find((p) => p.id === id)
+    if (!preset) return
+
+    const newName = window.prompt(
+      '新しいプリセット名を入力してください',
+      preset.name
+    )
+
+    if (!newName || newName.trim() === '' || newName === preset.name) return
+
+    const { error } = await supabase
+      .from('csv_presets')
+      .update({ name: newName.trim() })
+      .eq('id', id)
+
+    if (error) {
+      alert('プリセットの名前変更中にエラーが発生しました')
+      return
+    }
+
+    setPresets((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, name: newName.trim() } : p))
+    )
+  }
+
+  const handleDeletePreset = async (id: string) => {
+    if (!window.confirm('このプリセットを削除してもよろしいですか？')) return
+
+    const { error } = await supabase.from('csv_presets').delete().eq('id', id)
+
+    if (error) {
+      alert('プリセットの削除中にエラーが発生しました')
+      return
+    }
+
+    setPresets((prev) => prev.filter((p) => p.id !== id))
+
+    if (selectedPresetId === id) setSelectedPresetId('')
   }
 
   const handleDataChange = (
@@ -218,12 +259,46 @@ export const CsvUploader: React.FC = () => {
         />
       </div>
 
+      {!csvText && presets.length > 0 && (
+        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm mt-6">
+          <h3 className="font-bold text-gray-700 mb-3">
+            ⚙️ 保存済みの抽出ルール管理
+          </h3>
+          <div className="space-y-2">
+            {presets.map((p) => (
+              <div
+                key={p.id}
+                className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
+              >
+                <span className="font-bold text-sm text-gray-700">
+                  ☁️ {p.name}
+                </span>
+                <div className="flex gap-2 shrink-0">
+                  <button
+                    onClick={() => handleRenamePreset(p.id!)}
+                    className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                  >
+                    ✏️ 名前変更
+                  </button>
+                  <button
+                    onClick={() => handleDeletePreset(p.id!)}
+                    className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    🗑️ 削除
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {csvText && parsedData.length === 0 && (
         <CsvAnalysisForm
           csvText={csvText}
           presets={presets}
-          selectedPreset={selectedPreset}
-          onSelectPreset={setSelectedPreset}
+          selectedPresetId={selectedPresetId}
+          onSelectPreset={setSelectedPresetId}
           isAnalyzing={isAnalyzing}
           onAnalyze={handleAnalyze}
         />
