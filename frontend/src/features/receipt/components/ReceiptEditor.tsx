@@ -22,10 +22,9 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const totalAmount = items.reduce(
-    (sum, item) => sum + Number(item.price || 0),
-    0
-  )
+  const itemsSum = items.reduce((sum, item) => sum + Number(item.price || 0), 0)
+  const finalTotal = initialData.total_amount || 0
+  const adjustmentAmount = finalTotal > 0 ? finalTotal - itemsSum : 0
 
   const handleItemChange = (
     index: number,
@@ -71,11 +70,18 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       price: item.price === '' ? 0 : item.price,
     }))
 
+    if (adjustmentAmount !== 0) {
+      newItems.push({
+        item_name: '自動調整額（消費税・割引等）',
+        price: adjustmentAmount,
+      })
+    }
+
     const savedData: Receipt = {
       purchase_date: date,
       store_name: store,
       items: newItems,
-      total_amount: initialData.total_amount || 0,
+      total_amount: finalTotal,
       payment_method: paymentMethod || '',
     }
 
@@ -144,7 +150,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
         <div className="flex justify-between items-end mb-3 border-b pb-2">
           <h3 className="font-bold text-gray-700">購入品目</h3>
           <div className="text-lg font-bold text-gray-800">
-            合計: ¥{totalAmount.toLocaleString()}
+            合計: ¥{finalTotal.toLocaleString()}
           </div>
         </div>
 
@@ -156,7 +162,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                   商品名 <span className="text-red-500">*</span>
                 </th>
                 <th className="p-3 text-xs font-bold text-gray-600 border-b w-32 text-right">
-                  金額 (税込)
+                  金額
                 </th>
                 <th className="p-3 text-xs font-bold text-gray-600 border-b w-16 text-center">
                   削除
@@ -197,6 +203,21 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                   </td>
                 </tr>
               ))}
+
+              {adjustmentAmount !== 0 && (
+                <tr className="bg-gray-50">
+                  <td className="p-2 text-sm font-bold text-gray-500 pl-4">
+                    🔒 消費税・自動調整額
+                  </td>
+                  <td
+                    className={`p-2 text-right font-bold pr-4 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-600'}`}
+                  >
+                    {adjustmentAmount > 0 ? '+' : ''}
+                    {adjustmentAmount.toLocaleString()}
+                  </td>
+                  <td className="p-2 text-center"></td>
+                </tr>
+              )}
             </tbody>
           </table>
 
