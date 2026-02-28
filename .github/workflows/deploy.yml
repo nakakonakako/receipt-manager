@@ -33,8 +33,7 @@ jobs:
       - name: Generate Frontend .env
         run: |
           echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> ./frontend/.env
-          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.PROD_SUPABASE_ANON_KEY }}" >> ./frontend/.env
-          # Nginxのリバースプロキシを経由するため、/api を指定します
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}" >> ./frontend/.env
           echo "VITE_API_URL=/api" >> ./frontend/.env
 
       - name: Build/Push Frontend
