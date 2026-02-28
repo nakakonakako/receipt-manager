@@ -30,6 +30,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Generate Frontend .env
+        run: |
+          echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> ./frontend/.env
+          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.PROD_SUPABASE_ANON_KEY }}" >> ./frontend/.env
+          # Nginxのリバースプロキシを経由するため、/api を指定します
+          echo "VITE_API_URL=/api" >> ./frontend/.env
+
       - name: Build/Push Frontend
         uses: docker/build-push-action@v5
         with:
@@ -70,6 +77,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/receipt-manager
+            echo "GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}" > .env
             docker compose -f docker-compose.production.yml pull
             docker compose -f docker-compose.production.yml up -d
             docker image prune -f
