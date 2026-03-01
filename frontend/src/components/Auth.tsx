@@ -11,11 +11,7 @@ export const Auth: React.FC = () => {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          scopes: 'https://www.googleapis.com/auth/spreadsheets',
-          redirectTo: 'http://localhost:5173/',
-          queryParams: {
-            prompt: 'consent',
-          },
+          redirectTo: `${window.location.origin}/`,
         },
       })
 
@@ -35,7 +31,7 @@ export const Auth: React.FC = () => {
           Receipt Manager
         </h2>
         <p className="text-sm text-gray-600 mb-6">
-          スプレッドシートにデータを保存するため、Googleアカウントでログインしてください。
+          レシートを記録・管理するためにログインしてください。
         </p>
         <Button
           onClick={handleGoogleLogin}
