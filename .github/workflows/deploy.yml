@@ -30,12 +30,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate Frontend .env
-        run: |
-          echo "VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}" >> ./frontend/.env
-          echo "VITE_SUPABASE_ANON_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}" >> ./frontend/.env
-          echo "VITE_API_URL=/api" >> ./frontend/.env
-
       - name: Build/Push Frontend
         uses: docker/build-push-action@v5
         with:
@@ -43,6 +37,10 @@ jobs:
           file: ./frontend/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-frontend:latest
+          build-args: |
+            VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}
+            VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
+            VITE_API_URL=/api
 
       - name: Build/Push Backend
         uses: docker/build-push-action@v5
