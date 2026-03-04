@@ -22,9 +22,9 @@ class SupabaseService:
         self.client.options.headers.update({"Authorization": f"Bearer {token}"})
 
         user_response = self.client.auth.get_user(token)
-        if not user_response or not user_response.data:
+        if not user_response or not user_response:
             raise ValueError("Invalid Supabase token provided.")
-        self.user_id = user_response.data.id
+        self.user_id = user_response.user.id
 
     def add_receipt_data(self, receipt: ReceiptData) -> dict:
         items_dict_list = [item.model_dump() for item in receipt.items]
