@@ -27,19 +27,43 @@ class SupabaseService:
         self.user_id = user_response.user.id
 
     def add_receipt_data(self, receipt: ReceiptData) -> dict:
-        items_dict_list = [item.model_dump() for item in receipt.items]
-
-        data = {
+        parent_data = {
             "user_id": self.user_id,
             "date": receipt.purchase_date,
             "store_name": receipt.store_name,
             "total_amount": receipt.total_amount,
             "payment_method": receipt.payment_method,
-            "items": items_dict_list,
         }
 
-        response = self.client.table("receipts").insert(data).execute()
-        return {"added_rows": len(response.data), "log_status": "saved to supabase"}
+        parent_response = self.client.table("receipts").insert(parent_data).execute()
+
+        if not parent_response.data:
+            raise Exception("親レシートの保存に失敗しました。")
+
+        receipt_id = parent_response.data[0]["id"]
+
+        items_count = 0
+        if receipt.items:
+            items_data = [
+                {
+                    "receipt_id": receipt_id,
+                    "user_id": self.user_id,
+                    "item_name": item.item_name,
+                    "price": item.price,
+                }
+                for item in receipt.items
+            ]
+
+            child_response = (
+                self.client.table("receipt_items").insert(items_data).execute()
+            )
+            items_count = len(child_response.data)
+
+        return {
+            "log_status": "saved to database",
+            "receipt_id": receipt_id,
+            "saved_items": items_count,
+        }
 
     def add_csv_data(self, transactions: list[ParsedCsvTransaction]) -> dict:
         data = [
@@ -61,11 +85,17 @@ class SupabaseService:
         all_data.append(",".join(headers))
 
         if data_type in ["all", "receipt"]:
-            res = self.client.table("receipts").select("*").order("date").execute()
+            res = (
+                self.client.table("receipts")
+                .select("*, receipt_items(*)")
+                .order("date")
+                .execute()
+            )
             for row in res.data:
                 date = row.get("date")
                 store = row.get("store_name")
-                items = row.get("items", [])
+                items = row.get("receipt_items", [])
+
                 if items:
                     for item in items:
                         all_data.append(
