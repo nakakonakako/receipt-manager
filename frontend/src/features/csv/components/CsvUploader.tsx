@@ -140,7 +140,7 @@ export const CsvUploader: React.FC = () => {
       />
 
       <CsvPresetRenameModal
-        isOpen={!!renameTarget} // renameTargetがnullでなければtrue
+        isOpen={!!renameTarget}
         currentName={renameTarget?.name || ''}
         editName={editPresetName}
         onNameChange={setEditPresetName}
