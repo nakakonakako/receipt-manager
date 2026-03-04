@@ -107,6 +107,4 @@ async def save_csv(
         result = supabase_service.add_csv_data(request.transactions)
         return {"message": "CSV data saved successfully.", "details": result}
     except Exception as e:
-        if "RATE_LIMIT_EXCEEDED" in str(e):
-            raise HTTPException(status_code=429, detail="API rate limit exceeded")
         raise HTTPException(status_code=500, detail=str(e))
