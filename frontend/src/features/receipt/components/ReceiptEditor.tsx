@@ -234,7 +234,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
               key={index}
               className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm relative transition-all"
             >
-              <div className="flex justify-between items-center mb-1.5 border-b border-gray-100 pb-1.5">
+              <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
                 <label className="block text-sm font-bold text-gray-500">
                   商品名 <span className="text-red-500">*</span>
                 </label>
@@ -242,31 +242,31 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                 <Button
                   variant="danger"
                   onClick={() => handleDeleteItem(index)}
-                  className="px-3 py-1 text-xs shadow-sm"
+                  className="px-4 py-2 text-sm font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-500 border border-red-200 hover:!bg-red-50"
                 >
                   ✕ 削除
                 </Button>
               </div>
 
-              <div className="mb-4">
+              <div className="mb-3">
                 <Input
                   value={item.item_name}
                   onChange={(e) =>
                     handleItemChange(index, 'item_name', e.target.value)
                   }
                   placeholder="商品名を入力"
-                  className="w-full text-base py-2.5 font-medium border-gray-200"
+                  className="w-full text-lg py-3 font-bold border-gray-300"
                 />
               </div>
 
-              <div className="flex justify-between items-end bg-gray-50 p-3 rounded-lg border border-gray-100">
-                <label className="text-sm font-bold text-gray-600 mb-1">
+              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200">
+                <label className="text-sm font-bold text-gray-600 pl-1">
                   金額
                 </label>
                 <NumberInput
                   value={item.price}
                   onChange={(value) => handleItemChange(index, 'price', value)}
-                  className="w-36 text-right text-lg py-2 font-bold border-gray-200"
+                  className="w-40 text-right text-2xl py-2 font-extrabold border-gray-300 bg-white shadow-sm"
                   placeholder="0"
                 />
               </div>
@@ -279,7 +279,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                 🔒 消費税・調整額
               </span>
               <span
-                className={`text-lg font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-700'}`}
+                className={`text-xl font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'}`}
               >
                 {adjustmentAmount > 0 ? '+' : ''}
                 {adjustmentAmount.toLocaleString()}

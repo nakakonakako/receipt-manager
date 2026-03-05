@@ -6,7 +6,7 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
   const [isDragging, setIsDragging] = useState(false)
 
   const dragStartRef = useRef({ x: 0, y: 0 })
-  const pinchRef = useRef({ distance: 0, scale: 1, centerX: 0, centerY: 0 })
+  const pinchRef = useRef({ distance: 1, scale: 1, x: 0, y: 0, cx: 0, cy: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -23,13 +23,11 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       setTransform((prev) => {
         const newScale = Math.min(Math.max(0.5, prev.scale * delta), 5)
         const ratio = newScale / prev.scale
-
         const newX = mouseX - ratio * (mouseX - prev.x)
         const newY = mouseY - ratio * (mouseY - prev.y)
         return { scale: newScale, x: newX, y: newY }
       })
     }
-
     container.addEventListener('wheel', handleNativeWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleNativeWheel)
   }, [])
@@ -72,8 +70,10 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       pinchRef.current = {
         distance: dist,
         scale: transform.scale,
-        centerX: cx,
-        centerY: cy,
+        x: transform.x,
+        y: transform.y,
+        cx,
+        cy,
       }
     }
   }
@@ -95,35 +95,42 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       const cx = (t1.clientX + t2.clientX) / 2
       const cy = (t1.clientY + t2.clientY) / 2
 
-      setTransform((prev) => {
-        const distDelta = dist / pinchRef.current.distance
-        const newScale = Math.min(Math.max(0.5, prev.scale * distDelta), 5)
-        const ratio = newScale / prev.scale
+      const initialDist = pinchRef.current.distance || 1
+      const scaleRatio = dist / initialDist
+      const newScale = Math.min(
+        Math.max(0.5, pinchRef.current.scale * scaleRatio),
+        5
+      )
 
-        const deltaX = cx - pinchRef.current.centerX
-        const deltaY = cy - pinchRef.current.centerY
+      const deltaX = cx - pinchRef.current.cx
+      const deltaY = cy - pinchRef.current.cy
 
-        const pannedX = prev.x + deltaX
-        const pannedY = prev.y + deltaY
+      const pannedX = pinchRef.current.x + deltaX
+      const pannedY = pinchRef.current.y + deltaY
 
-        const containerCx = cx - rect.left
-        const containerCy = cy - rect.top
-        const newX = containerCx - ratio * (containerCx - pannedX)
-        const newY = containerCy - ratio * (containerCy - pannedY)
+      const containerCx = pinchRef.current.cx - rect.left
+      const containerCy = pinchRef.current.cy - rect.top
 
-        return { scale: newScale, x: newX, y: newY }
-      })
+      const gestureRatio = newScale / pinchRef.current.scale
 
-      pinchRef.current = {
-        distance: dist,
-        scale: transform.scale,
-        centerX: cx,
-        centerY: cy,
-      }
+      const newX = containerCx - gestureRatio * (containerCx - pannedX)
+      const newY = containerCy - gestureRatio * (containerCy - pannedY)
+
+      setTransform({ scale: newScale, x: newX, y: newY })
     }
   }
 
-  const handleTouchEnd = () => setIsDragging(false)
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true)
+      dragStartRef.current = {
+        x: e.touches[0].clientX - transform.x,
+        y: e.touches[0].clientY - transform.y,
+      }
+    } else {
+      setIsDragging(false)
+    }
+  }
 
   return (
     <div className="w-full h-full bg-white sm:rounded-xl shadow-sm border-gray-200 flex flex-col relative z-10 overflow-hidden">
