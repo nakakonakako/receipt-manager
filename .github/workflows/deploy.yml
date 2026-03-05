@@ -74,7 +74,13 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             cd ~/receipt-manager
-            echo "GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}" > .env
+
+            cat <<EOF > .env
+            GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}
+            SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}
+            SUPABASE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
+            EOF
+
             docker compose -f docker-compose.production.yml pull
             docker compose -f docker-compose.production.yml up -d
             docker image prune -f
