@@ -118,3 +118,20 @@ class SupabaseService:
                 all_data.append(f"{date},{store},キャッシュレス決済,{price}")
 
         return "\n".join(all_data)
+
+    def get_all_transactions(self) -> dict:
+        receipts_res = (
+            self.client.table("receipts")
+            .select("*, receipt_items(*)")
+            .order("date", desc=True)
+            .execute()
+        )
+
+        csv_res = (
+            self.client.table("csv_transactions")
+            .select("*")
+            .order("date", desc=True)
+            .execute()
+        )
+
+        return {"receipts": receipts_res.data, "csv_transactions": csv_res.data}
