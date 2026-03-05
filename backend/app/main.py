@@ -119,3 +119,27 @@ async def save_csv(
         return {"message": "CSV data saved successfully.", "details": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/receipts/{receipt_id}")
+async def delete_receipt(
+    receipt_id: int,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        result = supabase_service.delete_receipt(receipt_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/csv_transactions/{transaction_id}")
+async def delete_csv_transaction(
+    transaction_id: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        result = supabase_service.delete_csv_transaction(transaction_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

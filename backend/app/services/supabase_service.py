@@ -79,6 +79,23 @@ class SupabaseService:
         response = self.client.table("csv_transactions").insert(data).execute()
         return {"total_added": len(response.data)}
 
+    def delete_receipt(self, receipt_id: int) -> dict:
+        response = self.client.table("receipts").delete().eq("id", receipt_id).execute()
+        return {"status": "success", "deleted_id": receipt_id, "details": response.data}
+
+    def delete_csv_transaction(self, transaction_id: int) -> dict:
+        response = (
+            self.client.table("csv_transactions")
+            .delete()
+            .eq("id", transaction_id)
+            .execute()
+        )
+        return {
+            "status": "success",
+            "deleted_id": transaction_id,
+            "details": response.data,
+        }
+
     def get_all_data(self, data_type: str = "all", period: str = "3months") -> dict:
         all_data = []
         headers = ["purchase_date", "store_name", "item_name", "price"]
