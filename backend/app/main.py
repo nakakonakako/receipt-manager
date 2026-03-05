@@ -123,7 +123,7 @@ async def save_csv(
 
 @app.delete("/receipts/{receipt_id}")
 async def delete_receipt(
-    receipt_id: int,
+    receipt_id: str,
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
