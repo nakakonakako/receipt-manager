@@ -1,26 +1,33 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
-import { fetchTransactions } from '../api/historyApi'
+import {
+  fetchTransactions,
+  deleteCsvTransaction,
+  deleteReceipt,
+} from '../api/historyApi'
 import type { HistoryReceipt, HistoryCsvTransaction } from '../types'
 
 export const HistoryPage: React.FC = () => {
   const { getHeaders } = useApiConfig()
-  const [activeTab, setActiveTab] = useState<'receipts' | 'csv'>('receipts')
 
+  const [activeTab, setActiveTab] = useState<'receipts' | 'csv'>('receipts')
   const [receipts, setReceipts] = useState<HistoryReceipt[]>([])
   const [csvData, setCsvData] = useState<HistoryCsvTransaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
-
   const [expandedReceiptId, setExpandedReceiptId] = useState<string | null>(
     null
   )
-
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date()
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
   })
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [deleteTarget, setDeleteTarget] = useState<{
+    type: 'receipt' | 'csv'
+    id: string
+  } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,6 +61,42 @@ export const HistoryPage: React.FC = () => {
     setCurrentMonth(
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     )
+  }
+
+  const requestDeleteReceipt = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setDeleteTarget({ type: 'receipt', id })
+  }
+
+  const requestDeleteCsv = (id: string) => {
+    setDeleteTarget({ type: 'csv', id })
+  }
+
+  const executeDelete = async () => {
+    if (!deleteTarget) return
+    setIsDeleting(true)
+
+    const headers = await getHeaders()
+    if (!headers) {
+      setIsDeleting(false)
+      return
+    }
+
+    try {
+      if (deleteTarget.type === 'receipt') {
+        await deleteReceipt(deleteTarget.id, headers)
+        setReceipts((prev) => prev.filter((r) => r.id !== deleteTarget.id))
+      } else {
+        await deleteCsvTransaction(deleteTarget.id, headers)
+        setCsvData((prev) => prev.filter((c) => c.id !== deleteTarget.id))
+      }
+      setDeleteTarget(null)
+    } catch (error) {
+      console.error('削除に失敗しました:', error)
+      alert('削除に失敗しました。もう一度お試しください。')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const formattedCurrentMonth = `${currentMonth.split('-')[0]}年 ${parseInt(currentMonth.split('-')[1])}月`
@@ -214,6 +257,15 @@ export const HistoryPage: React.FC = () => {
                     <span className="font-bold text-blue-700">
                       ¥{receipt.total_amount.toLocaleString()}
                     </span>
+
+                    <button
+                      onClick={(e) => requestDeleteReceipt(receipt.id, e)}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                      title="削除"
+                    >
+                      🗑️
+                    </button>
+
                     <span className="text-gray-400 text-xs">
                       {expandedReceiptId === receipt.id ? '▲' : '▼'}
                     </span>
@@ -252,18 +304,73 @@ export const HistoryPage: React.FC = () => {
             filteredCsv.map((csv) => (
               <div
                 key={csv.id}
-                className="flex justify-between items-center p-3 border rounded-md bg-white"
+                className="flex items-center p-3 border rounded-md bg-white hover:bg-gray-50 transition-colors"
               >
-                <div>
-                  <span className="text-xs text-gray-500 mr-2">{csv.date}</span>
-                  <span className="font-bold text-gray-800">{csv.store}</span>
+                <div className="text-xs text-gray-400 w-24 shrink-0">
+                  {csv.date}
                 </div>
-                <span className="font-bold text-green-700">
-                  ¥{csv.price.toLocaleString()}
-                </span>
+
+                <div className="font-bold text-gray-800 flex-1 truncate pr-4">
+                  {csv.store}
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-bold text-green-700 w-20 text-right pr-2">
+                    ¥{csv.price.toLocaleString()}
+                  </span>
+
+                  <button
+                    onClick={() => requestDeleteCsv(csv.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    title="削除"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm px-4 transition-opacity">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">🗑️</span>
+              </div>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">
+                本当に削除しますか？
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                {deleteTarget.type === 'receipt'
+                  ? 'このレシートと、関連する商品の明細がすべて削除されます。この操作は取り消せません。'
+                  : 'このキャッシュレス履歴が削除されます。この操作は取り消せません。'}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={executeDelete}
+                  disabled={isDeleting}
+                  className="flex-1 py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  ) : (
+                    '削除する'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

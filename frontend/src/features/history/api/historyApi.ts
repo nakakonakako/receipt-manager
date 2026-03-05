@@ -9,3 +9,17 @@ export const fetchTransactions = async (
   })
   return response.data
 }
+
+export const deleteReceipt = async (
+  id: string,
+  headers: Record<string, string>
+): Promise<void> => {
+  await apiClient.delete(`/receipts/${id}`, { headers })
+}
+
+export const deleteCsvTransaction = async (
+  id: string,
+  headers: Record<string, string>
+): Promise<void> => {
+  await apiClient.delete(`/csv_transactions/${id}`, { headers })
+}
