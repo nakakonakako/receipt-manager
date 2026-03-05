@@ -63,18 +63,18 @@ export const useHistory = () => {
 
   const allMonths = useMemo(() => {
     const mSet = new Set<string>()
-    receipts.forEach((r) => mSet.add(r.date.substring(0, 7)))
-    csvData.forEach((c) => mSet.add(c.date.substring(0, 7)))
 
-    const sorted = Array.from(mSet).sort().reverse()
-
-    const thisMonth = new Date().toISOString().substring(0, 7)
-    if (!sorted.includes(thisMonth)) {
-      sorted.push(thisMonth)
-      sorted.sort().reverse()
+    if (activeTab === 'receipts') {
+      receipts.forEach((r) => mSet.add(r.date.substring(0, 7)))
+    } else {
+      csvData.forEach((c) => mSet.add(c.date.substring(0, 7)))
     }
-    return sorted
-  }, [receipts, csvData])
+
+    mSet.add(currentMonth)
+    mSet.add(new Date().toISOString().substring(0, 7))
+
+    return Array.from(mSet).sort().reverse()
+  }, [receipts, csvData, activeTab, currentMonth])
 
   const currentIndex = allMonths.indexOf(currentMonth)
 
