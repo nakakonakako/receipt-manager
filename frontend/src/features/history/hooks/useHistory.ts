@@ -70,11 +70,18 @@ export const useHistory = () => {
       csvData.forEach((c) => mSet.add(c.date.substring(0, 7)))
     }
 
-    mSet.add(currentMonth)
-    mSet.add(new Date().toISOString().substring(0, 7))
+    if (mSet.size === 0) {
+      mSet.add(new Date().toISOString().substring(0, 7))
+    }
 
     return Array.from(mSet).sort().reverse()
-  }, [receipts, csvData, activeTab, currentMonth])
+  }, [receipts, csvData, activeTab])
+
+  useEffect(() => {
+    if (allMonths.length > 0 && !allMonths.includes(currentMonth)) {
+      setCurrentMonth(allMonths[0])
+    }
+  }, [allMonths, currentMonth])
 
   const currentIndex = allMonths.indexOf(currentMonth)
 
