@@ -6,6 +6,7 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
   const [isDragging, setIsDragging] = useState(false)
 
   const dragStartRef = useRef({ x: 0, y: 0 })
+  const pinchRef = useRef({ distance: 0, scale: 1 })
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -60,6 +61,50 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
     setIsDragging(false)
   }
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      setIsDragging(true)
+      dragStartRef.current = {
+        x: e.touches[0].clientX - transform.x,
+        y: e.touches[0].clientY - transform.y,
+      }
+    } else if (e.touches.length === 2) {
+      setIsDragging(false)
+      const touch1 = e.touches[0]
+      const touch2 = e.touches[1]
+      const dict = Math.hypot(
+        touch1.clientX - touch2.clientX,
+        touch1.clientY - touch2.clientY
+      )
+      pinchRef.current = { distance: dict, scale: transform.scale }
+    }
+  }
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && isDragging) {
+      setTransform((prev) => ({
+        ...prev,
+        x: e.touches[0].clientX - dragStartRef.current.x,
+        y: e.touches[0].clientY - dragStartRef.current.y,
+      }))
+    } else if (e.touches.length === 2) {
+      const touch1 = e.touches[0]
+      const touch2 = e.touches[1]
+      const dict = Math.hypot(
+        touch1.clientX - touch2.clientX,
+        touch1.clientY - touch2.clientY
+      )
+      const delta = dict / pinchRef.current.distance
+      const newScale = Math.min(
+        Math.max(0.5, pinchRef.current.scale * delta),
+        5
+      )
+      setTransform((prev) => ({ ...prev, scale: newScale }))
+    }
+  }
+
+  const handleTouchEnd = () => setIsDragging(false)
+
   return (
     <div className="w-full lg:w-1/2 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[40vh] lg:h-full shrink-0">
       <div className="flex justify-between items-center p-3 border-b bg-gray-50">
@@ -73,11 +118,14 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
 
       <div
         ref={containerRef}
-        className={`relative flex-1 overflow-hidden bg-gray-100 cursor-${isDragging ? 'grabbing' : 'grab'}`}
+        className={`relative flex-1 overflow-hidden bg-gray-100 touch-none cursor-${isDragging ? 'grabbing' : 'grab'}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
       >
         <div
           style={{

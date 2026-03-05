@@ -154,7 +154,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           </div>
         </div>
 
-        <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-3">
+        <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-3">
           <table className="w-full text-left border-collapse">
             <thead className="bg-gray-50">
               <tr>
@@ -228,8 +228,76 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
         </div>
 
+        <div className="block md:hidden space-y-3 mb-4">
+          {items.map((item, index) => (
+            <div
+              key={index}
+              className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative transition-all"
+            >
+              <Button
+                variant="danger"
+                onClick={() => handleDeleteItem(index)}
+                className="absolute top-3 right-3 px-3 py-1.5 shadow-sm text-xs"
+              >
+                ✕ 削除
+              </Button>
+
+              <div className="mb-3 pr-20">
+                {' '}
+                <label className="block text-xs font-bold text-gray-500 mb-1">
+                  商品名 <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={item.item_name}
+                  onChange={(e) =>
+                    handleItemChange(index, 'item_name', e.target.value)
+                  }
+                  placeholder="商品名を入力"
+                  className="w-full text-base py-2.5"
+                />
+              </div>
+
+              <div className="flex justify-between items-end border-t border-gray-100 pt-3">
+                <label className="text-xs font-bold text-gray-500 mb-2">
+                  金額
+                </label>
+                <NumberInput
+                  value={item.price}
+                  onChange={(value) => handleItemChange(index, 'price', value)}
+                  className="w-32 text-right text-base py-2 font-bold"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+          ))}
+
+          {adjustmentAmount !== 0 && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
+              <span className="text-sm font-bold text-gray-500">
+                🔒 消費税・調整額
+              </span>
+              <span
+                className={`text-lg font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-600'}`}
+              >
+                {adjustmentAmount > 0 ? '+' : ''}
+                {adjustmentAmount.toLocaleString()}
+              </span>
+            </div>
+          )}
+
+          {items.length === 0 && (
+            <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm font-bold">
+              購入品目がありません。
+            </div>
+          )}
+        </div>
+
         <div className="flex justify-start">
-          <Button variant="icon" onClick={handleAddItem} className="py-2">
+          <Button
+            variant="icon"
+            onClick={handleAddItem}
+            className="py-2.5 px-4 shadow-sm"
+          >
             ＋ 商品を追加する
           </Button>
         </div>
