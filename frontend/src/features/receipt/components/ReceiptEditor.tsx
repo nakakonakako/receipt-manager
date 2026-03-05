@@ -149,7 +149,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
               onChange={(val) =>
                 setTotalAmount(val === '' || val === '-' ? 0 : Number(val))
               }
-              className="w-32 text-right font-bold text-lg bg-gray-50 focus:bg-white"
+              className="w-32 text-right font-bold text-lg !py-1 !px-2 h-9 bg-gray-50 focus:bg-white border-gray-300 transition-colors shadow-sm"
             />
           </div>
         </div>

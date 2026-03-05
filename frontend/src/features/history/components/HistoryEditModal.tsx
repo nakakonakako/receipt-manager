@@ -112,24 +112,6 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
                 }}
               />
             </div>
-
-            {receiptTarget && (
-              <div className="md:col-span-2 flex flex-col">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  合計金額
-                </label>
-                <NumberInput
-                  value={receiptTarget.total_amount}
-                  onChange={(val) =>
-                    setEditTarget({
-                      ...receiptTarget,
-                      total_amount: val === '' || val === '-' ? 0 : Number(val),
-                    })
-                  }
-                  className="w-full h-[42px]"
-                />
-              </div>
-            )}
           </div>
 
           {receiptTarget &&
@@ -146,9 +128,23 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
               return (
                 <div>
                   <div className="flex justify-between items-end mb-3 border-b pb-2">
-                    <h3 className="font-bold text-gray-700">購入品目</h3>
-                    <div className="text-lg font-bold text-gray-800">
-                      合計: ¥{finalTotal.toLocaleString()}
+                    <h3 className="font-bold text-gray-700 mb-1">購入品目</h3>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-bold text-gray-700">
+                        合計金額:
+                      </span>
+                      <NumberInput
+                        value={receiptTarget.total_amount}
+                        onChange={(val) =>
+                          setEditTarget({
+                            ...receiptTarget,
+                            total_amount:
+                              val === '' || val === '-' ? 0 : Number(val),
+                          })
+                        }
+                        className="w-32 text-right font-bold text-lg !py-1 !px-2 h-9 bg-gray-50 focus:bg-white border-gray-300 transition-colors shadow-sm"
+                      />
                     </div>
                   </div>
 
