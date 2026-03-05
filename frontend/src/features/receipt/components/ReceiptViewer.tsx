@@ -6,7 +6,7 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
   const [isDragging, setIsDragging] = useState(false)
 
   const dragStartRef = useRef({ x: 0, y: 0 })
-  const pinchRef = useRef({ distance: 0, scale: 1 })
+  const pinchRef = useRef({ distance: 0, scale: 1, centerX: 0, centerY: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -15,7 +15,6 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
 
     const handleNativeWheel = (e: WheelEvent) => {
       e.preventDefault()
-
       const rect = container.getBoundingClientRect()
       const mouseX = e.clientX - rect.left
       const mouseY = e.clientY - rect.top
@@ -27,7 +26,6 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
 
         const newX = mouseX - ratio * (mouseX - prev.x)
         const newY = mouseY - ratio * (mouseY - prev.y)
-
         return { scale: newScale, x: newX, y: newY }
       })
     }
@@ -66,13 +64,17 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       }
     } else if (e.touches.length === 2) {
       setIsDragging(false)
-      const touch1 = e.touches[0]
-      const touch2 = e.touches[1]
-      const dist = Math.hypot(
-        touch1.clientX - touch2.clientX,
-        touch1.clientY - touch2.clientY
-      )
-      pinchRef.current = { distance: dist, scale: transform.scale }
+      const t1 = e.touches[0]
+      const t2 = e.touches[1]
+      const cx = (t1.clientX + t2.clientX) / 2
+      const cy = (t1.clientY + t2.clientY) / 2
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+      pinchRef.current = {
+        distance: dist,
+        scale: transform.scale,
+        centerX: cx,
+        centerY: cy,
+      }
     }
   }
 
@@ -84,37 +86,48 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
         y: e.touches[0].clientY - dragStartRef.current.y,
       }))
     } else if (e.touches.length === 2) {
-      const touch1 = e.touches[0]
-      const touch2 = e.touches[1]
-      const dist = Math.hypot(
-        touch1.clientX - touch2.clientX,
-        touch1.clientY - touch2.clientY
-      )
-
-      const delta = dist / pinchRef.current.distance
-      const newScale = Math.min(
-        Math.max(0.5, pinchRef.current.scale * delta),
-        5
-      )
-
       const rect = containerRef.current?.getBoundingClientRect()
       if (!rect) return
-      const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left
-      const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top
-      const ratio = newScale / pinchRef.current.scale
 
-      const newX = centerX - ratio * (centerX - transform.x)
-      const newY = centerY - ratio * (centerY - transform.y)
+      const t1 = e.touches[0]
+      const t2 = e.touches[1]
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY)
+      const cx = (t1.clientX + t2.clientX) / 2
+      const cy = (t1.clientY + t2.clientY) / 2
 
-      setTransform((prev) => ({ ...prev, scale: newScale, x: newX, y: newY }))
+      setTransform((prev) => {
+        const distDelta = dist / pinchRef.current.distance
+        const newScale = Math.min(Math.max(0.5, prev.scale * distDelta), 5)
+        const ratio = newScale / prev.scale
+
+        const deltaX = cx - pinchRef.current.centerX
+        const deltaY = cy - pinchRef.current.centerY
+
+        const pannedX = prev.x + deltaX
+        const pannedY = prev.y + deltaY
+
+        const containerCx = cx - rect.left
+        const containerCy = cy - rect.top
+        const newX = containerCx - ratio * (containerCx - pannedX)
+        const newY = containerCy - ratio * (containerCy - pannedY)
+
+        return { scale: newScale, x: newX, y: newY }
+      })
+
+      pinchRef.current = {
+        distance: dist,
+        scale: transform.scale,
+        centerX: cx,
+        centerY: cy,
+      }
     }
   }
 
   const handleTouchEnd = () => setIsDragging(false)
 
   return (
-    <div className="w-full lg:w-1/2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[50vh] lg:h-full shrink-0 relative z-10 overflow-hidden">
-      <div className="flex justify-between items-center p-3 border-b bg-gray-50 relative z-20">
+    <div className="w-full h-full bg-white sm:rounded-xl shadow-sm border-gray-200 flex flex-col relative z-10 overflow-hidden">
+      <div className="flex justify-between items-center p-3 border-b bg-gray-50 relative z-20 shrink-0">
         <span className="text-sm font-bold text-gray-700">
           📸 画像プレビュー
         </span>
