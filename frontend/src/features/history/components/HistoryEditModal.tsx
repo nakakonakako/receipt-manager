@@ -196,7 +196,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
                                     })
                                   }}
                                   placeholder="商品名を入力"
-                                  className="w-full border-transparent hover:border-gray-300 focus:border-blue-500"
+                                  className="w-full"
                                 />
                               </td>
                               <td className="p-2">
@@ -216,7 +216,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
                                       receipt_items: newItems,
                                     })
                                   }}
-                                  className="w-full text-right border-transparent hover:border-gray-300 focus:border-blue-500"
+                                  className="w-full text-right"
                                   placeholder="0"
                                 />
                               </td>
