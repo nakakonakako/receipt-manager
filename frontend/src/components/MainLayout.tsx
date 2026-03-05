@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { RegisterPage } from '@/components/RegisterPage'
 import { ChatInterface } from '@/features/search/components/ChatInterface'
+import { HistoryPage } from '@/features/history/components/HistoryPage'
 
 export const MainLayout = () => {
-  const [activeTab, setActiveTab] = useState<'register' | 'chat'>('register')
+  const [activeTab, setActiveTab] = useState<'register' | 'chat' | 'history'>(
+    'register'
+  )
 
   return (
     <div className="min-h-screen bg-gray-100 py-8 px-4 relative">
@@ -23,7 +26,17 @@ export const MainLayout = () => {
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            📸 データ登録
+            📸 登録
+          </button>
+          <button
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 py-2 text-center rounded-md font-bold transition-colors ${
+              activeTab === 'history'
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            📊 履歴・管理
           </button>
           <button
             onClick={() => setActiveTab('chat')}
@@ -33,12 +46,14 @@ export const MainLayout = () => {
                 : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
-            💬 AIに質問
+            💬 AIチャット
           </button>
         </div>
 
         <div className="transition-opacity duration-300">
-          {activeTab === 'register' ? <RegisterPage /> : <ChatInterface />}
+          {activeTab === 'register' && <RegisterPage />}
+          {activeTab === 'history' && <HistoryPage />}
+          {activeTab === 'chat' && <ChatInterface />}
         </div>
       </div>
     </div>
