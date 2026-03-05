@@ -17,10 +17,8 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       e.preventDefault()
 
       const rect = container.getBoundingClientRect()
-
       const mouseX = e.clientX - rect.left
       const mouseY = e.clientY - rect.top
-
       const delta = e.deltaY > 0 ? 0.9 : 1.1
 
       setTransform((prev) => {
@@ -57,9 +55,7 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
     }))
   }
 
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
+  const handleMouseUp = () => setIsDragging(false)
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
@@ -72,11 +68,11 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       setIsDragging(false)
       const touch1 = e.touches[0]
       const touch2 = e.touches[1]
-      const dict = Math.hypot(
+      const dist = Math.hypot(
         touch1.clientX - touch2.clientX,
         touch1.clientY - touch2.clientY
       )
-      pinchRef.current = { distance: dict, scale: transform.scale }
+      pinchRef.current = { distance: dist, scale: transform.scale }
     }
   }
 
@@ -90,24 +86,35 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
     } else if (e.touches.length === 2) {
       const touch1 = e.touches[0]
       const touch2 = e.touches[1]
-      const dict = Math.hypot(
+      const dist = Math.hypot(
         touch1.clientX - touch2.clientX,
         touch1.clientY - touch2.clientY
       )
-      const delta = dict / pinchRef.current.distance
+
+      const delta = dist / pinchRef.current.distance
       const newScale = Math.min(
         Math.max(0.5, pinchRef.current.scale * delta),
         5
       )
-      setTransform((prev) => ({ ...prev, scale: newScale }))
+
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left
+      const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top
+      const ratio = newScale / pinchRef.current.scale
+
+      const newX = centerX - ratio * (centerX - transform.x)
+      const newY = centerY - ratio * (centerY - transform.y)
+
+      setTransform((prev) => ({ ...prev, scale: newScale, x: newX, y: newY }))
     }
   }
 
   const handleTouchEnd = () => setIsDragging(false)
 
   return (
-    <div className="w-full lg:w-1/2 bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col h-[40vh] lg:h-full shrink-0">
-      <div className="flex justify-between items-center p-3 border-b bg-gray-50">
+    <div className="w-full lg:w-1/2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[50vh] lg:h-full shrink-0 relative z-10 overflow-hidden">
+      <div className="flex justify-between items-center p-3 border-b bg-gray-50 relative z-20">
         <span className="text-sm font-bold text-gray-700">
           📸 画像プレビュー
         </span>

@@ -228,43 +228,45 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
         </div>
 
-        <div className="block md:hidden space-y-3 mb-4">
+        <div className="block md:hidden space-y-4 mb-5">
           {items.map((item, index) => (
             <div
               key={index}
-              className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative transition-all"
+              className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm relative transition-all"
             >
-              <Button
-                variant="danger"
-                onClick={() => handleDeleteItem(index)}
-                className="absolute top-3 right-3 px-3 py-1.5 shadow-sm text-xs"
-              >
-                ✕ 削除
-              </Button>
-
-              <div className="mb-3 pr-20">
-                {' '}
-                <label className="block text-xs font-bold text-gray-500 mb-1">
+              <div className="flex justify-between items-center mb-1.5 border-b border-gray-100 pb-1.5">
+                <label className="block text-sm font-bold text-gray-500">
                   商品名 <span className="text-red-500">*</span>
                 </label>
+
+                <Button
+                  variant="danger"
+                  onClick={() => handleDeleteItem(index)}
+                  className="px-3 py-1 text-xs shadow-sm"
+                >
+                  ✕ 削除
+                </Button>
+              </div>
+
+              <div className="mb-4">
                 <Input
                   value={item.item_name}
                   onChange={(e) =>
                     handleItemChange(index, 'item_name', e.target.value)
                   }
                   placeholder="商品名を入力"
-                  className="w-full text-base py-2.5"
+                  className="w-full text-base py-2.5 font-medium border-gray-200"
                 />
               </div>
 
-              <div className="flex justify-between items-end border-t border-gray-100 pt-3">
-                <label className="text-xs font-bold text-gray-500 mb-2">
+              <div className="flex justify-between items-end bg-gray-50 p-3 rounded-lg border border-gray-100">
+                <label className="text-sm font-bold text-gray-600 mb-1">
                   金額
                 </label>
                 <NumberInput
                   value={item.price}
                   onChange={(value) => handleItemChange(index, 'price', value)}
-                  className="w-32 text-right text-base py-2 font-bold"
+                  className="w-36 text-right text-lg py-2 font-bold border-gray-200"
                   placeholder="0"
                 />
               </div>
@@ -272,12 +274,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           ))}
 
           {adjustmentAmount !== 0 && (
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
-              <span className="text-sm font-bold text-gray-500">
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex justify-between items-center shadow-inner">
+              <span className="text-sm font-bold text-blue-700">
                 🔒 消費税・調整額
               </span>
               <span
-                className={`text-lg font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-600'}`}
+                className={`text-lg font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-700'}`}
               >
                 {adjustmentAmount > 0 ? '+' : ''}
                 {adjustmentAmount.toLocaleString()}
@@ -286,7 +288,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
 
           {items.length === 0 && (
-            <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm font-bold">
+            <div className="text-center py-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold">
               購入品目がありません。
             </div>
           )}
