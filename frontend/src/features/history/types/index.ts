@@ -24,3 +24,11 @@ export interface TransactionsResponse {
   receipts: HistoryReceipt[]
   csv_transactions: HistoryCsvTransaction[]
 }
+export interface HistoryEditModalProps {
+  editTarget: HistoryReceipt | HistoryCsvTransaction
+  editType: 'receipt' | 'csv'
+  isSaving: boolean
+  setEditTarget: (target: HistoryReceipt | HistoryCsvTransaction | null) => void
+  onClose: () => void
+  onSave: () => void
+}

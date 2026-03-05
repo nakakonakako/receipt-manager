@@ -6,16 +6,8 @@ import type {
   HistoryReceipt,
   HistoryCsvTransaction,
   HistoryReceiptItem,
+  HistoryEditModalProps,
 } from '../types'
-
-interface HistoryEditModalProps {
-  editTarget: HistoryReceipt | HistoryCsvTransaction
-  editType: 'receipt' | 'csv'
-  isSaving: boolean
-  setEditTarget: (target: HistoryReceipt | HistoryCsvTransaction | null) => void
-  onClose: () => void
-  onSave: () => void
-}
 
 export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
   editTarget,
