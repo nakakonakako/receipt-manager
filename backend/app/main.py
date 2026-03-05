@@ -121,6 +121,32 @@ async def save_csv(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.put("/receipts/{receipt_id}")
+async def update_receipt(
+    receipt_id: str,
+    payload: dict,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        result = supabase_service.update_receipt(receipt_id, payload)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/csv_transactions/{transaction_id}")
+async def update_csv_transaction(
+    transaction_id: str,
+    payload: dict,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        result = supabase_service.update_csv_transaction(transaction_id, payload)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.delete("/receipts/{receipt_id}")
 async def delete_receipt(
     receipt_id: str,

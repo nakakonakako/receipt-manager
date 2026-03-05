@@ -79,6 +79,45 @@ class SupabaseService:
         response = self.client.table("csv_transactions").insert(data).execute()
         return {"total_added": len(response.data)}
 
+    def update_receipt(self, receipt_id: str, receipt_data: dict) -> dict:
+        parent_data = {
+            "date": receipt_data.get("date"),
+            "store_name": receipt_data.get("store_name"),
+            "total_amount": receipt_data.get("total_amount"),
+            "payment_method": receipt_data.get("payment_method", "unknown"),
+        }
+        self.client.table("receipts").update(parent_data).eq("id", receipt_id).execute()
+
+        self.client.table("receipt_items").delete().eq(
+            "receipt_id", receipt_id
+        ).execute()
+
+        items = receipt_data.get("receipt_items", [])
+        if items:
+            items_data = [
+                {
+                    "receipt_id": receipt_id,
+                    "user_id": self.user_id,
+                    "item_name": item.get("item_name"),
+                    "price": item.get("price"),
+                }
+                for item in items
+            ]
+            self.clinet.table("receipt_items").insert(items_data).execute()
+
+        return {"status": "success", "updated_id": receipt_id}
+
+    def update_csv_transaction(self, transaction_id: str, csv_data: dict) -> dict:
+        update_data = {
+            "date": csv_data.get("date"),
+            "store": csv_data.get("store"),
+            "price": csv_data.get("price"),
+        }
+        self.client.table("csv_transactions").update(update_data).eq(
+            "id", transaction_id
+        ).execute()
+        return {"status": "success", "updated_id": transaction_id}
+
     def delete_receipt(self, receipt_id: int) -> dict:
         response = self.client.table("receipts").delete().eq("id", receipt_id).execute()
         return {"status": "success", "deleted_id": receipt_id, "details": response.data}
