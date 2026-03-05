@@ -228,45 +228,45 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
         </div>
 
-        <div className="block md:hidden space-y-4 mb-5">
+        <div className="block md:hidden space-y-2.5 mb-4">
           {items.map((item, index) => (
             <div
               key={index}
-              className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm relative transition-all"
+              className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm relative transition-all"
             >
-              <div className="flex justify-between items-center mb-3 border-b border-gray-100 pb-3">
-                <label className="block text-sm font-bold text-gray-500">
+              <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
+                <label className="block text-sm font-bold text-gray-700">
                   商品名 <span className="text-red-500">*</span>
                 </label>
 
                 <Button
                   variant="danger"
                   onClick={() => handleDeleteItem(index)}
-                  className="px-4 py-2 text-sm font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-500 border border-red-200 hover:!bg-red-50"
+                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-500 border border-red-200 hover:!bg-red-50"
                 >
                   ✕ 削除
                 </Button>
               </div>
 
-              <div className="mb-3">
+              <div className="mb-2.5">
                 <Input
                   value={item.item_name}
                   onChange={(e) =>
                     handleItemChange(index, 'item_name', e.target.value)
                   }
-                  placeholder="商品名を入力"
-                  className="w-full text-lg py-3 font-bold border-gray-300"
+                  placeholder="商品名"
+                  className="w-full text-base py-1.5 border-gray-300"
                 />
               </div>
 
-              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-200">
-                <label className="text-sm font-bold text-gray-600 pl-1">
+              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
+                <label className="text-sm font-bold text-gray-700 pl-1">
                   金額
                 </label>
                 <NumberInput
                   value={item.price}
                   onChange={(value) => handleItemChange(index, 'price', value)}
-                  className="w-40 text-right text-2xl py-2 font-extrabold border-gray-300 bg-white shadow-sm"
+                  className="w-32 text-right text-base py-1.5 font-bold border-gray-300 bg-white shadow-sm"
                   placeholder="0"
                 />
               </div>
@@ -274,12 +274,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           ))}
 
           {adjustmentAmount !== 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex justify-between items-center shadow-inner">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex justify-between items-center shadow-inner">
               <span className="text-sm font-bold text-blue-700">
                 🔒 消費税・調整額
               </span>
               <span
-                className={`text-xl font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'}`}
+                className={`text-base font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'}`}
               >
                 {adjustmentAmount > 0 ? '+' : ''}
                 {adjustmentAmount.toLocaleString()}
@@ -288,7 +288,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
 
           {items.length === 0 && (
-            <div className="text-center py-10 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold">
+            <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold">
               購入品目がありません。
             </div>
           )}
