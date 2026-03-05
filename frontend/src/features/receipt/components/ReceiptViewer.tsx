@@ -9,6 +9,25 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
   const pinchRef = useRef({ distance: 1, scale: 1, x: 0, y: 0, cx: 0, cy: 0 })
   const containerRef = useRef<HTMLDivElement>(null)
 
+  const getConstrainedTransform = (x: number, y: number, scale: number) => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return { x, y, scale }
+
+    const paddingX = rect.width * 0.5
+    const paddingY = rect.height * 0.5
+
+    const minX = -rect.width * scale + paddingX
+    const maxX = paddingX
+    const minY = -rect.height * scale + paddingY
+    const maxY = paddingY
+
+    return {
+      scale,
+      x: Math.min(Math.max(x, minX), maxX),
+      y: Math.min(Math.max(y, minY), maxY),
+    }
+  }
+
   useEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -25,7 +44,8 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
         const ratio = newScale / prev.scale
         const newX = mouseX - ratio * (mouseX - prev.x)
         const newY = mouseY - ratio * (mouseY - prev.y)
-        return { scale: newScale, x: newX, y: newY }
+
+        return getConstrainedTransform(newX, newY, newScale)
       })
     }
     container.addEventListener('wheel', handleNativeWheel, { passive: false })
@@ -44,11 +64,12 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return
     e.preventDefault()
-    setTransform((prev) => ({
-      ...prev,
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y,
-    }))
+    setTransform((prev) => {
+      const newX = e.clientX - dragStartRef.current.x
+      const newY = e.clientY - dragStartRef.current.y
+
+      return getConstrainedTransform(newX, newY, prev.scale)
+    })
   }
 
   const handleMouseUp = () => setIsDragging(false)
@@ -80,11 +101,12 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 1 && isDragging) {
-      setTransform((prev) => ({
-        ...prev,
-        x: e.touches[0].clientX - dragStartRef.current.x,
-        y: e.touches[0].clientY - dragStartRef.current.y,
-      }))
+      setTransform((prev) => {
+        const newX = e.touches[0].clientX - dragStartRef.current.x
+        const newY = e.touches[0].clientY - dragStartRef.current.y
+
+        return getConstrainedTransform(newX, newY, prev.scale)
+      })
     } else if (e.touches.length === 2) {
       const rect = containerRef.current?.getBoundingClientRect()
       if (!rect) return
@@ -116,7 +138,7 @@ export const ReceiptViewer: React.FC<ReceiptViewerProps> = ({ urls }) => {
       const newX = containerCx - gestureRatio * (containerCx - pannedX)
       const newY = containerCy - gestureRatio * (containerCy - pannedY)
 
-      setTransform({ scale: newScale, x: newX, y: newY })
+      setTransform(getConstrainedTransform(newX, newY, newScale))
     }
   }
 
