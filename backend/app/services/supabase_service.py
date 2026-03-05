@@ -103,7 +103,7 @@ class SupabaseService:
                 }
                 for item in items
             ]
-            self.clinet.table("receipt_items").insert(items_data).execute()
+            self.client.table("receipt_items").insert(items_data).execute()
 
         return {"status": "success", "updated_id": receipt_id}
 
