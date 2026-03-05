@@ -21,10 +21,10 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
     initialData.payment_method || 'unknown'
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [totalAmount, setTotalAmount] = useState(initialData.total_amount || 0)
 
   const itemsSum = items.reduce((sum, item) => sum + Number(item.price || 0), 0)
-  const finalTotal = initialData.total_amount || 0
-  const adjustmentAmount = finalTotal > 0 ? finalTotal - itemsSum : 0
+  const adjustmentAmount = totalAmount > 0 ? totalAmount - itemsSum : 0
 
   const handleItemChange = (
     index: number,
@@ -70,18 +70,11 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       price: item.price === '' ? 0 : item.price,
     }))
 
-    if (adjustmentAmount !== 0) {
-      newItems.push({
-        item_name: '自動調整額（消費税・割引等）',
-        price: adjustmentAmount,
-      })
-    }
-
     const savedData: Receipt = {
       purchase_date: date,
       store_name: store,
       items: newItems,
-      total_amount: finalTotal,
+      total_amount: totalAmount,
       payment_method: paymentMethod || '',
     }
 
@@ -149,8 +142,15 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       <div>
         <div className="flex justify-between items-end mb-3 border-b pb-2">
           <h3 className="font-bold text-gray-700">購入品目</h3>
-          <div className="text-lg font-bold text-gray-800">
-            合計: ¥{finalTotal.toLocaleString()}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-gray-700">合計金額:</span>
+            <NumberInput
+              value={totalAmount}
+              onChange={(val) =>
+                setTotalAmount(val === '' || val === '-' ? 0 : Number(val))
+              }
+              className="w-32 text-right font-bold text-lg bg-gray-50 focus:bg-white"
+            />
           </div>
         </div>
 
