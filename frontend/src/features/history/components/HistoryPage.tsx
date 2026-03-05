@@ -10,7 +10,10 @@ export const HistoryPage: React.FC = () => {
     isLoading,
     expandedReceiptId,
     toggleAccordion,
-    formattedCurrentMonth,
+    currentMonth,
+    setCurrentMonth,
+    allMonths,
+    currentIndex,
     handlePrevMonth,
     handleNextMonth,
     searchQuery,
@@ -85,14 +88,34 @@ export const HistoryPage: React.FC = () => {
       <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg mb-6">
         <button
           onClick={handlePrevMonth}
-          className="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 font-bold"
+          disabled={currentIndex >= allMonths.length - 1}
+          className="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           ◀️
         </button>
+
         <div className="text-center">
-          <h2 className="text-xl font-extrabold text-gray-800">
-            {formattedCurrentMonth}
-          </h2>
+          <div className="relative inline-block group">
+            <select
+              value={currentMonth}
+              onChange={(e) => setCurrentMonth(e.target.value)}
+              className="text-xl font-extrabold text-gray-800 bg-transparent cursor-pointer hover:bg-white rounded px-8 py-1 outline-none appearance-none text-center transition-colors"
+            >
+              {allMonths.map((m) => {
+                const [y, mo] = m.split('-')
+                return (
+                  <option
+                    key={m}
+                    value={m}
+                  >{`${y}年 ${parseInt(mo)}月`}</option>
+                )
+              })}
+            </select>
+            <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-gray-600">
+              ▼
+            </span>
+          </div>
+
           <p className="text-sm font-bold text-gray-600 mt-1">
             合計:{' '}
             <span
@@ -106,9 +129,11 @@ export const HistoryPage: React.FC = () => {
             </span>
           </p>
         </div>
+
         <button
           onClick={handleNextMonth}
-          className="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 font-bold"
+          disabled={currentIndex <= 0}
+          className="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
         >
           ▶️
         </button>

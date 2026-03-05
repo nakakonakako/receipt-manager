@@ -61,19 +61,32 @@ export const useHistory = () => {
     loadData()
   }, [])
 
+  const allMonths = useMemo(() => {
+    const mSet = new Set<string>()
+    receipts.forEach((r) => mSet.add(r.date.substring(0, 7)))
+    csvData.forEach((c) => mSet.add(c.date.substring(0, 7)))
+
+    const sorted = Array.from(mSet).sort().reverse()
+
+    const thisMonth = new Date().toISOString().substring(0, 7)
+    if (!sorted.includes(thisMonth)) {
+      sorted.push(thisMonth)
+      sorted.sort().reverse()
+    }
+    return sorted
+  }, [receipts, csvData])
+
+  const currentIndex = allMonths.indexOf(currentMonth)
+
   const handlePrevMonth = () => {
-    const [year, month] = currentMonth.split('-').map(Number)
-    const d = new Date(year, month - 2)
-    setCurrentMonth(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    )
+    if (currentIndex < allMonths.length - 1) {
+      setCurrentMonth(allMonths[currentIndex + 1])
+    }
   }
   const handleNextMonth = () => {
-    const [year, month] = currentMonth.split('-').map(Number)
-    const d = new Date(year, month)
-    setCurrentMonth(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-    )
+    if (currentIndex > 0) {
+      setCurrentMonth(allMonths[currentIndex - 1])
+    }
   }
 
   const requestDeleteReceipt = (id: string, e: React.MouseEvent) => {
@@ -214,6 +227,9 @@ export const useHistory = () => {
     expandedReceiptId,
     toggleAccordion,
     currentMonth,
+    setCurrentMonth,
+    allMonths,
+    currentIndex,
     formattedCurrentMonth,
     handlePrevMonth,
     handleNextMonth,
