@@ -23,6 +23,7 @@ export const useHistory = () => {
   const [expandedReceiptId, setExpandedReceiptId] = useState<string | null>(
     null
   )
+  const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false)
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const d = new Date()
@@ -261,5 +262,7 @@ export const useHistory = () => {
     openEditCsv,
     executeEdit,
     isSaving,
+    isMonthDropdownOpen,
+    setIsMonthDropdownOpen,
   }
 }

@@ -14,6 +14,7 @@ export const HistoryPage: React.FC = () => {
     setCurrentMonth,
     allMonths,
     currentIndex,
+    formattedCurrentMonth,
     handlePrevMonth,
     handleNextMonth,
     searchQuery,
@@ -37,6 +38,8 @@ export const HistoryPage: React.FC = () => {
     openEditCsv,
     executeEdit,
     isSaving,
+    isMonthDropdownOpen,
+    setIsMonthDropdownOpen,
   } = useHistory()
 
   if (isLoading) {
@@ -85,38 +88,73 @@ export const HistoryPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex items-center justify-between bg-blue-50 p-4 rounded-lg mb-6">
+      <div className="flex items-center justify-between bg-blue-50 p-4 rounded-xl mb-6 shadow-inner relative z-20">
         <button
           onClick={handlePrevMonth}
           disabled={currentIndex >= allMonths.length - 1}
-          className="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:shadow-md font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           ◀️
         </button>
 
-        <div className="text-center">
-          <div className="relative inline-block group">
-            <select
-              value={currentMonth}
-              onChange={(e) => setCurrentMonth(e.target.value)}
-              className="text-xl font-extrabold text-gray-800 bg-transparent cursor-pointer hover:bg-white rounded px-8 py-1 outline-none appearance-none text-center transition-colors"
+        <div className="text-center relative">
+          <div className="relative inline-block">
+            <button
+              onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)}
+              className={`text-xl font-extrabold text-gray-800 bg-white border border-gray-200 px-4 py-2 transition-all flex items-center justify-between w-[220px] relative z-50 ${
+                isMonthDropdownOpen
+                  ? 'rounded-t-2xl border-b-transparent shadow-none'
+                  : 'rounded-full shadow-sm hover:border-blue-300'
+              }`}
             >
-              {allMonths.map((m) => {
-                const [y, mo] = m.split('-')
-                return (
-                  <option
-                    key={m}
-                    value={m}
-                  >{`${y}年 ${parseInt(mo)}月`}</option>
-                )
-              })}
-            </select>
-            <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-gray-600">
-              ▼
-            </span>
+              <span className="w-5"></span>
+              <span className="flex-1 text-center">
+                {formattedCurrentMonth}
+              </span>
+              <span
+                className={`text-gray-400 text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
+              >
+                ▼
+              </span>
+            </button>
+
+            {isMonthDropdownOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-30"
+                  onClick={() => setIsMonthDropdownOpen(false)}
+                ></div>
+
+                <div className="absolute top-full left-0 w-full bg-white border border-gray-200 border-t-0 rounded-b-2xl shadow-xl z-40 overflow-hidden -mt-[1px]">
+                  <ul className="max-h-60 overflow-y-auto pb-2 pt-1">
+                    {allMonths.map((m) => {
+                      const [y, mo] = m.split('-')
+                      const isSelected = m === currentMonth
+                      return (
+                        <li key={m} className="px-2 py-0.5">
+                          <button
+                            onClick={() => {
+                              setCurrentMonth(m)
+                              setIsMonthDropdownOpen(false)
+                            }}
+                            className={`w-full text-center px-4 py-2 rounded-lg text-lg transition-colors ${
+                              isSelected
+                                ? 'bg-blue-100 text-blue-700 font-extrabold'
+                                : 'text-gray-700 hover:bg-gray-100 font-bold'
+                            }`}
+                          >
+                            {`${y}年 ${parseInt(mo)}月`}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              </>
+            )}
           </div>
 
-          <p className="text-sm font-bold text-gray-600 mt-1">
+          <p className="text-sm font-bold text-gray-600 mt-2">
             合計:{' '}
             <span
               className={`text-lg ${activeTab === 'receipts' ? 'text-blue-700' : 'text-green-700'}`}
@@ -133,7 +171,7 @@ export const HistoryPage: React.FC = () => {
         <button
           onClick={handleNextMonth}
           disabled={currentIndex <= 0}
-          className="px-3 py-1 bg-white border border-gray-300 rounded hover:bg-gray-100 font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+          className="px-4 py-2 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 hover:shadow-md font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-all"
         >
           ▶️
         </button>
