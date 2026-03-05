@@ -1,5 +1,9 @@
 import { apiClient } from '@/lib/apiClient'
-import type { TransactionsResponse } from '../types'
+import type {
+  TransactionsResponse,
+  HistoryReceipt,
+  HistoryCsvTransaction,
+} from '../types'
 
 export const fetchTransactions = async (
   headers: Record<string, string>
@@ -8,6 +12,22 @@ export const fetchTransactions = async (
     headers,
   })
   return response.data
+}
+
+export const updateReceipt = async (
+  id: string,
+  data: HistoryReceipt,
+  headers: Record<string, string>
+): Promise<void> => {
+  await apiClient.put(`/receipts/${id}`, data, { headers })
+}
+
+export const updateCsvTransaction = async (
+  id: string,
+  data: HistoryCsvTransaction,
+  headers: Record<string, string>
+): Promise<void> => {
+  await apiClient.put(`/csv_transactions/${id}`, data, { headers })
 }
 
 export const deleteReceipt = async (
