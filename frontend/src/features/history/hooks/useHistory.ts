@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import {
   fetchTransactions,
+  fetchAvailableMonths,
   deleteCsvTransaction,
   deleteReceipt,
   updateReceipt,
@@ -12,6 +13,7 @@ import type {
   HistoryCsvTransaction,
   HistoryReceiptItem,
 } from '../types'
+import { toast } from 'sonner'
 
 export const useHistory = () => {
   const { getHeaders } = useApiConfig()
@@ -20,15 +22,19 @@ export const useHistory = () => {
   const [receipts, setReceipts] = useState<HistoryReceipt[]>([])
   const [csvData, setCsvData] = useState<HistoryCsvTransaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isFetchingMonth, setIsFetchingMonth] = useState(false)
   const [expandedReceiptId, setExpandedReceiptId] = useState<string | null>(
     null
   )
   const [isMonthDropdownOpen, setIsMonthDropdownOpen] = useState(false)
 
-  const [currentMonth, setCurrentMonth] = useState(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
+  const [receiptMonths, setReceiptMonths] = useState<string[]>([])
+  const [csvMonths, setCsvMonths] = useState<string[]>([])
+  const [currentReceiptMonth, setCurrentReceiptMonth] = useState('')
+  const [currentCsvMonth, setCurrentCsvMonth] = useState('')
+
+  const [loadedMonths, setLoadedMonths] = useState<Set<string>>(new Set())
+
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
 
@@ -37,7 +43,6 @@ export const useHistory = () => {
     id: string
   } | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
   const [editTarget, setEditTarget] = useState<
     HistoryReceipt | HistoryCsvTransaction | null
   >(null)
@@ -45,56 +50,102 @@ export const useHistory = () => {
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    const loadData = async () => {
+    const initLoad = async () => {
       setIsLoading(true)
       const headers = await getHeaders()
       if (headers) {
         try {
-          const data = await fetchTransactions(headers)
+          const monthsData = await fetchAvailableMonths(headers)
+          setReceiptMonths(monthsData.receipts)
+          setCsvMonths(monthsData.csv)
+
+          const d = new Date()
+          const fallbackMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+
+          const latestReceiptMonth =
+            monthsData.receipts.length > 0
+              ? monthsData.receipts[0]
+              : fallbackMonth
+          const latestCsvMonth =
+            monthsData.csv.length > 0 ? monthsData.csv[0] : fallbackMonth
+
+          setCurrentReceiptMonth(latestReceiptMonth)
+          setCurrentCsvMonth(latestCsvMonth)
+
+          const initialMonthToLoad =
+            activeTab === 'receipts' ? latestReceiptMonth : latestCsvMonth
+          const data = await fetchTransactions(initialMonthToLoad, headers)
           setReceipts(data.receipts || [])
           setCsvData(data.csv_transactions || [])
+
+          setLoadedMonths(new Set([initialMonthToLoad]))
         } catch (error) {
           console.error('データの取得に失敗しました:', error)
+          toast.error('データの取得に失敗しました。')
         }
       }
       setIsLoading(false)
     }
-    loadData()
+    initLoad()
   }, [])
 
-  const allMonths = useMemo(() => {
-    const mSet = new Set<string>()
-
-    if (activeTab === 'receipts') {
-      receipts.forEach((r) => mSet.add(r.date.substring(0, 7)))
-    } else {
-      csvData.forEach((c) => mSet.add(c.date.substring(0, 7)))
-    }
-
-    if (mSet.size === 0) {
-      mSet.add(new Date().toISOString().substring(0, 7))
-    }
-
-    return Array.from(mSet).sort().reverse()
-  }, [receipts, csvData, activeTab])
+  const currentMonth =
+    activeTab === 'receipts' ? currentReceiptMonth : currentCsvMonth
+  const allMonths = activeTab === 'receipts' ? receiptMonths : csvMonths
+  const setCurrentMonth =
+    activeTab === 'receipts' ? setCurrentReceiptMonth : setCurrentCsvMonth
 
   useEffect(() => {
-    if (allMonths.length > 0 && !allMonths.includes(currentMonth)) {
-      setCurrentMonth(allMonths[0])
+    const loadMonthData = async () => {
+      if (!currentMonth || loadedMonths.has(currentMonth) || isLoading) return
+
+      setIsFetchingMonth(true)
+      const id = toast.loading(
+        `${currentMonth.split('-')[1]}月のデータを読み込み中...`
+      )
+      const headers = await getHeaders()
+      if (headers) {
+        try {
+          const data = await fetchTransactions(currentMonth, headers)
+
+          setReceipts((prev) => {
+            const existingIds = new Set(prev.map((r) => r.id))
+            const newReceipts = (data.receipts || []).filter(
+              (r) => !existingIds.has(r.id)
+            )
+            return [...prev, ...newReceipts]
+          })
+          setCsvData((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id))
+            const newCsv = (data.csv_transactions || []).filter(
+              (c) => !existingIds.has(c.id)
+            )
+            return [...prev, ...newCsv]
+          })
+
+          setLoadedMonths((prev) => new Set(prev).add(currentMonth))
+          toast.success('読み込み完了！', { id })
+        } catch (error) {
+          console.error('データの取得に失敗しました:', error)
+          toast.error('データの取得に失敗しました。', { id })
+        } finally {
+          setIsFetchingMonth(false)
+        }
+      } else {
+        toast.dismiss(id)
+        setIsFetchingMonth(false)
+      }
     }
-  }, [allMonths, currentMonth])
+    loadMonthData()
+  }, [currentMonth])
 
   const currentIndex = allMonths.indexOf(currentMonth)
-
   const handlePrevMonth = () => {
-    if (currentIndex < allMonths.length - 1) {
+    if (currentIndex < allMonths.length - 1)
       setCurrentMonth(allMonths[currentIndex + 1])
-    }
   }
   const handleNextMonth = () => {
-    if (currentIndex > 0) {
-      setCurrentMonth(allMonths[currentIndex - 1])
-    }
+    if (currentIndex > 0) setCurrentMonth(allMonths[currentIndex - 1])
   }
 
   const requestDeleteReceipt = (id: string, e: React.MouseEvent) => {
@@ -106,9 +157,11 @@ export const useHistory = () => {
   const executeDelete = async () => {
     if (!deleteTarget) return
     setIsDeleting(true)
+    const id = toast.loading('削除しています...')
     const headers = await getHeaders()
     if (!headers) {
       setIsDeleting(false)
+      toast.dismiss(id)
       return
     }
 
@@ -121,9 +174,10 @@ export const useHistory = () => {
         setCsvData((prev) => prev.filter((c) => c.id !== deleteTarget.id))
       }
       setDeleteTarget(null)
+      toast.success('削除が完了しました！', { id })
     } catch (error) {
       console.error('削除に失敗しました:', error)
-      alert('削除に失敗しました。もう一度お試しください。')
+      toast.error('削除に失敗しました。もう一度お試しください。', { id })
     } finally {
       setIsDeleting(false)
     }
@@ -132,7 +186,6 @@ export const useHistory = () => {
   const openEditReceipt = (receipt: HistoryReceipt, e: React.MouseEvent) => {
     e.stopPropagation()
     const copied: HistoryReceipt = JSON.parse(JSON.stringify(receipt))
-
     copied.receipt_items = copied.receipt_items.filter(
       (item: HistoryReceiptItem) =>
         !item.item_name.includes('自動調整額') &&
@@ -150,9 +203,11 @@ export const useHistory = () => {
   const executeEdit = async () => {
     if (!editTarget || !editType) return
     setIsSaving(true)
+    const id = toast.loading('保存しています...')
     const headers = await getHeaders()
     if (!headers) {
       setIsSaving(false)
+      toast.dismiss(id)
       return
     }
 
@@ -168,6 +223,10 @@ export const useHistory = () => {
             r.id === editTarget.id ? (editTarget as HistoryReceipt) : r
           )
         )
+
+        const newMonth = editTarget.date.substring(0, 7)
+        if (!receiptMonths.includes(newMonth))
+          setReceiptMonths((prev) => [...prev, newMonth].sort().reverse())
       } else {
         await updateCsvTransaction(
           editTarget.id,
@@ -179,18 +238,26 @@ export const useHistory = () => {
             c.id === editTarget.id ? (editTarget as HistoryCsvTransaction) : c
           )
         )
+
+        const newMonth = editTarget.date.substring(0, 7)
+        if (!csvMonths.includes(newMonth))
+          setCsvMonths((prev) => [...prev, newMonth].sort().reverse())
       }
+
       setEditTarget(null)
       setEditType(null)
+      toast.success('更新が完了しました！', { id })
     } catch (error) {
       console.error('更新に失敗しました:', error)
-      alert('更新に失敗しました。もう一度お試しください。')
+      toast.error('更新に失敗しました。もう一度お試しください。', { id })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const formattedCurrentMonth = `${currentMonth.split('-')[0]}年 ${parseInt(currentMonth.split('-')[1])}月`
+  const formattedCurrentMonth = currentMonth
+    ? `${currentMonth.split('-')[0]}年 ${parseInt(currentMonth.split('-')[1])}月`
+    : ''
 
   const { filteredReceipts, receiptTotal } = useMemo(() => {
     let filtered = receipts.filter((r) => r.date.startsWith(currentMonth))
@@ -224,9 +291,8 @@ export const useHistory = () => {
     return { filteredCsv: filtered, csvTotal: total }
   }, [csvData, currentMonth, searchQuery, sortOrder])
 
-  const toggleAccordion = (id: string) => {
+  const toggleAccordion = (id: string) =>
     setExpandedReceiptId((prev) => (prev === id ? null : id))
-  }
 
   return {
     activeTab,
@@ -264,5 +330,6 @@ export const useHistory = () => {
     isSaving,
     isMonthDropdownOpen,
     setIsMonthDropdownOpen,
+    isFetchingMonth,
   }
 }

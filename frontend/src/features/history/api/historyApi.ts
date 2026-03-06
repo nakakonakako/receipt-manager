@@ -5,12 +5,28 @@ import type {
   HistoryCsvTransaction,
 } from '../types'
 
+export const fetchAvailableMonths = async (
+  headers: Record<string, string>
+): Promise<{ receipts: string[]; csv: string[] }> => {
+  const response = await apiClient.get<{ receipts: string[]; csv: string[] }>(
+    '/available_months',
+    {
+      headers,
+    }
+  )
+  return response.data
+}
+
 export const fetchTransactions = async (
+  month: string,
   headers: Record<string, string>
 ): Promise<TransactionsResponse> => {
-  const response = await apiClient.get<TransactionsResponse>('/transactions', {
-    headers,
-  })
+  const response = await apiClient.get<TransactionsResponse>(
+    `/transactions?month=${month}`,
+    {
+      headers,
+    }
+  )
   return response.data
 }
 
