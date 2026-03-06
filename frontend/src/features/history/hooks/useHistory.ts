@@ -100,9 +100,6 @@ export const useHistory = () => {
       if (!currentMonth || loadedMonths.has(currentMonth) || isLoading) return
 
       setIsFetchingMonth(true)
-      const id = toast.loading(
-        `${currentMonth.split('-')[1]}月のデータを読み込み中...`
-      )
       const headers = await getHeaders()
       if (headers) {
         try {
@@ -124,15 +121,13 @@ export const useHistory = () => {
           })
 
           setLoadedMonths((prev) => new Set(prev).add(currentMonth))
-          toast.success('読み込み完了！', { id })
         } catch (error) {
           console.error('データの取得に失敗しました:', error)
-          toast.error('データの取得に失敗しました。', { id })
+          toast.error('データの取得に失敗しました。')
         } finally {
           setIsFetchingMonth(false)
         }
       } else {
-        toast.dismiss(id)
         setIsFetchingMonth(false)
       }
     }
