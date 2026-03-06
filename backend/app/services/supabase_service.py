@@ -1,3 +1,5 @@
+import calendar
+import datetime
 import os
 
 from app.schemas.csv import ParsedCsvTransaction
@@ -175,19 +177,58 @@ class SupabaseService:
 
         return "\n".join(all_data)
 
-    def get_all_transactions(self) -> dict:
-        receipts_res = (
+    def get_available_months(self) -> dict:
+        receipts_res = self.client.table("receipts").select("date").execute()
+        csv_res = self.client.table("csv_transactions").select("date").execute()
+
+        receipt_months = set()
+        for row in receipts_res.data:
+            if row.get("date"):
+                receipt_months.add(row["date"][:7])
+
+        csv_months = set()
+        for row in csv_res.data:
+            if row.get("date"):
+                csv_months.add(row["date"][:7])
+
+        current_month = datetime.date.today().strftime("%Y-%m")
+        if not receipt_months:
+            receipt_months.add(current_month)
+        if not csv_months:
+            csv_months.add(current_month)
+
+        return {
+            "receipts": sorted(list(receipt_months), reverse=True),
+            "csv": sorted(list(csv_months), reverse=True),
+        }
+
+    def get_transactions_by_month(self, month: str = None) -> dict:
+        receipts_query = (
             self.client.table("receipts")
             .select("*, receipt_items(*)")
             .order("date", desc=True)
-            .execute()
         )
 
-        csv_res = (
-            self.client.table("csv_transactions")
-            .select("*")
-            .order("date", desc=True)
-            .execute()
+        csv_query = (
+            self.client.table("csv_transactions").select("*").order("date", desc=True)
         )
+
+        if month:
+            try:
+                y, m = map(int, month.split("-"))
+                last_day = calendar.monthrange(y, m)[1]
+
+                start_date = f"{month}-01"
+                end_date = f"{month}-{last_day:02d}"
+
+                receipts_query = receipts_query.gte("date", start_date).lte(
+                    "date", end_date
+                )
+                csv_query = csv_query.gte("date", start_date).lte("date", end_date)
+            except ValueError:
+                pass
+
+        receipts_res = receipts_query.execute()
+        csv_res = csv_query.execute()
 
         return {"receipts": receipts_res.data, "csv_transactions": csv_res.data}

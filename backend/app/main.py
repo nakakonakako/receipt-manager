@@ -81,12 +81,23 @@ async def search_receipts(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/transactions")
-async def get_transactions(
+@app.get("/available_months")
+async def get_available_months(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
-        data = supabase_service.get_all_transactions()
+        return supabase_service.get_available_months()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/transactions")
+async def get_transactions(
+    month: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        data = supabase_service.get_transactions_by_month(month)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
