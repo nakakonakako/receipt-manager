@@ -9,52 +9,44 @@ export const MainLayout = () => {
   )
 
   return (
-    <div className="min-h-screen bg-gray-100 py-8 px-4 relative">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">
-            AIレシート家計簿 🧾
-          </h1>
-        </div>
+    <div className="flex-1 w-full max-w-4xl mx-auto p-3 sm:p-6">
+      <div className="flex bg-gray-200/60 p-1.5 rounded-xl mb-4 sm:mb-6 shadow-inner">
+        <button
+          onClick={() => setActiveTab('register')}
+          className={`flex-1 py-2.5 text-xs sm:text-sm font-extrabold rounded-lg transition-all duration-300 flex justify-center items-center gap-1.5 sm:gap-2 ${
+            activeTab === 'register'
+              ? 'bg-white text-blue-700 shadow-sm scale-100'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300/50 scale-95'
+          }`}
+        >
+          <span className="text-base sm:text-lg">📸</span> 登録
+        </button>
+        <button
+          onClick={() => setActiveTab('history')}
+          className={`flex-1 py-2.5 text-xs sm:text-sm font-extrabold rounded-lg transition-all duration-300 flex justify-center items-center gap-1.5 sm:gap-2 ${
+            activeTab === 'history'
+              ? 'bg-white text-blue-700 shadow-sm scale-100'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300/50 scale-95'
+          }`}
+        >
+          <span className="text-base sm:text-lg">📊</span> 履歴・管理
+        </button>
+        <button
+          onClick={() => setActiveTab('chat')}
+          className={`flex-1 py-2.5 text-xs sm:text-sm font-extrabold rounded-lg transition-all duration-300 flex justify-center items-center gap-1.5 sm:gap-2 ${
+            activeTab === 'chat'
+              ? 'bg-white text-blue-700 shadow-sm scale-100'
+              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-300/50 scale-95'
+          }`}
+        >
+          <span className="text-base sm:text-lg">💬</span> AIチャット
+        </button>
+      </div>
 
-        <div className="flex mb-6 bg-white rounded-lg shadow p-1">
-          <button
-            onClick={() => setActiveTab('register')}
-            className={`flex-1 py-2 text-center rounded-md font-bold transition-colors ${
-              activeTab === 'register'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            📸 登録
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`flex-1 py-2 text-center rounded-md font-bold transition-colors ${
-              activeTab === 'history'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            📊 履歴・管理
-          </button>
-          <button
-            onClick={() => setActiveTab('chat')}
-            className={`flex-1 py-2 text-center rounded-md font-bold transition-colors ${
-              activeTab === 'chat'
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-500 hover:bg-gray-50'
-            }`}
-          >
-            💬 AIチャット
-          </button>
-        </div>
-
-        <div className="transition-opacity duration-300">
-          {activeTab === 'register' && <RegisterPage />}
-          {activeTab === 'history' && <HistoryPage />}
-          {activeTab === 'chat' && <ChatInterface />}
-        </div>
+      <div className="transition-opacity duration-300 w-full">
+        {activeTab === 'register' && <RegisterPage />}
+        {activeTab === 'history' && <HistoryPage />}
+        {activeTab === 'chat' && <ChatInterface />}
       </div>
     </div>
   )
