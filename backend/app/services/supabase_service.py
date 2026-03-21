@@ -232,3 +232,27 @@ class SupabaseService:
         csv_res = csv_query.execute()
 
         return {"receipts": receipts_res.data, "csv_transactions": csv_res.data}
+
+    def get_learned_categories(self, item_names: list[str]) -> dict:
+        if not item_names:
+            return {}
+
+        response = (
+            self.client.table("receipt_items")
+            .select("item_name, main_category, sub_category, is_comparable")
+            .in_("item_name", item_names)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        learned_data = {}
+        for row in response.data:
+            name = row["item_name"]
+            if name not in learned_data:
+                learned_data[name] = {
+                    "main_category": row.get("main_category"),
+                    "sub_category": row.get("sub_category"),
+                    "is_comparable": row.get("is_comparable"),
+                }
+
+        return learned_data
