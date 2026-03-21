@@ -2,6 +2,10 @@ export interface HistoryReceiptItem {
   id: string
   item_name: string
   price: number
+  main_category?: string
+  sub_category?: string
+  search_tags?: string[]
+  is_comparable?: boolean
 }
 
 export interface HistoryReceipt {
