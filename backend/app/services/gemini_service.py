@@ -30,10 +30,6 @@ class GeminiService:
         Analyze the receipt image(s) and extract data according to the schema.
         If multiple images are provided, they are parts of a single long receipt. 
         Please combine the items appropriately without duplicating them.
-
-        IMPORTANT RULES:
-        1. Extract the price of each item EXACTLY as printed on the receipt. DO NOT calculate or add tax manually.
-        2. DO NOT include subtotal (小計), tax (外税/内税/消費税), or total (合計) rows in the `items` list. Only include actual purchased products.
         """
 
         contents = [
@@ -57,23 +53,23 @@ class GeminiService:
         today = datetime.date.today().strftime("%Y-%m-%d")
 
         prompt = f"""
-        あなたは専属の家計簿アシスタントです。
-        以下のレシートデータ（CSV形式）をもとに、ユーザーの質問に答えてください。
+        You are a dedicated personal household account book assistant.
+        Please answer the user's question based strictly on the following receipt data (CSV format).
 
-        # 制約事項
-        - 今日は {today} です。
-        - 提供されたデータのみを根拠に回答してください。
-        - データにないことは「分かりません」と答えてください。
-        - 語尾は「～ですね」「～ですよ」など、親しみやすい丁寧語を使ってください。
-        - 回答の際、文章の強調にMarkdownの**を絶対に使用しないでください。強調したい単語がある場合は、必ずHTMLの<b>タグを使用してください。
+        # Constraints
+        - Today is {today}.
+        - Base your answers ONLY on the provided data.
+        - If the information is not present in the data, strictly answer with "分かりません" (I don't know).
+        - Respond in a friendly and polite Japanese tone. Use conversational endings such as "～ですね" or "～ですよ".
+        - NEVER use Markdown `**` for emphasis in your response. If you want to emphasize a specific word, you MUST use the HTML `<b>` tag instead.
 
-        # レシートデータ
-        フォーマット: 購入日, 商品名, 店舗名, 金額
+        # Receipt Data
+        Format: Purchase Date, Item Name, Store Name, Amount
         ---
         {context_data}
         ---
 
-        # ユーザーの質問
+        # User's Question
         {question}
         """
 
