@@ -43,6 +43,24 @@ async def analyze_receipt(files: list[UploadFile] = File(...)):
         image_bytes_list = [await file.read() for file in files]
         result = gemini_service.analyze_receipt(image_bytes_list)
 
+        item_names = []
+        for receipt in result.get("receipts", []):
+            for item in receipt.get("items", []):
+                item_names.append(item["item_name"])
+
+        if item_names:
+            learned_data = gemini_service.get_learned_categories(item_names)
+
+            for receipt in result.get("receipts", []):
+                for item in receipt.get("items", []):
+                    name = item["item_name"]
+                    if name in learned_data:
+                        pref = learned_data[name]
+                        if pref.get("main_category") is not None:
+                            item["main_category"] = pref["main_category"]
+                        if pref.get("sub_category") is not None:
+                            item["sub_category"] = pref["sub_category"]
+
         return result
 
     except Exception as e:
