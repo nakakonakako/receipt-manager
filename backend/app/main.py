@@ -38,7 +38,10 @@ async def get_supabase_service(
 
 
 @app.post("/analyze")
-async def analyze_receipt(files: list[UploadFile] = File(...)):
+async def analyze_receipt(
+    files: list[UploadFile] = File(...),
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
     try:
         image_bytes_list = [await file.read() for file in files]
         result = gemini_service.analyze_receipt(image_bytes_list)
@@ -49,7 +52,7 @@ async def analyze_receipt(files: list[UploadFile] = File(...)):
                 item_names.append(item["item_name"])
 
         if item_names:
-            learned_data = gemini_service.get_learned_categories(item_names)
+            learned_data = supabase_service.get_learned_categories(item_names)
 
             for receipt in result.get("receipts", []):
                 for item in receipt.get("items", []):
@@ -60,6 +63,8 @@ async def analyze_receipt(files: list[UploadFile] = File(...)):
                             item["main_category"] = pref["main_category"]
                         if pref.get("sub_category") is not None:
                             item["sub_category"] = pref["sub_category"]
+                        if pref.get("is_comparable") is not None:
+                            item["is_comparable"] = pref
 
         return result
 
