@@ -84,6 +84,9 @@ export const useReceiptUploader = () => {
   }
 
   const processTask = async (taskId: string) => {
+    const headers = await getHeaders()
+    if (!headers) return
+
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: 'analyzing' } : t))
     )
@@ -92,7 +95,7 @@ export const useReceiptUploader = () => {
     if (!t) return
 
     try {
-      const data = await analyzeReceipt(t.files)
+      const data = await analyzeReceipt(t.files, headers)
 
       if (!data || !data.receipts || data.receipts.length === 0) {
         alert(
