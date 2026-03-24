@@ -203,3 +203,15 @@ async def delete_csv_transaction(
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/memo/search")
+async def search_memo_items(
+    query: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        data = supabase_service.search_items_for_memo(query)
+        return {"items": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

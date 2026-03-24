@@ -256,3 +256,16 @@ class SupabaseService:
                 }
 
         return learned_data
+
+    def search_items_for_memo(self, query: str) -> list[dict]:
+        if not query:
+            return []
+
+        response = (
+            self.client.table("receipt_items")
+            .select("*, receipts(date, store_name)")
+            .ilike("item_name", f"%{query}%")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return response.data
