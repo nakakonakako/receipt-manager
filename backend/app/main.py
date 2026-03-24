@@ -64,7 +64,7 @@ async def analyze_receipt(
                         if pref.get("sub_category") is not None:
                             item["sub_category"] = pref["sub_category"]
                         if pref.get("is_comparable") is not None:
-                            item["is_comparable"] = pref
+                            item["is_comparable"] = pref["is_comparable"]
 
         return result
 
