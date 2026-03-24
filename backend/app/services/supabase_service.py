@@ -52,6 +52,10 @@ class SupabaseService:
                     "user_id": self.user_id,
                     "item_name": item.item_name,
                     "price": item.price,
+                    "main_category": getattr(item, "main_category", None),
+                    "sub_category": getattr(item, "sub_category", None),
+                    "search_tags": getattr(item, "search_tags", None),
+                    "is_comparable": getattr(item, "is_comparable", None),
                 }
                 for item in receipt.items
             ]
@@ -102,6 +106,10 @@ class SupabaseService:
                     "user_id": self.user_id,
                     "item_name": item.get("item_name"),
                     "price": item.get("price"),
+                    "main_category": item.get("main_category"),
+                    "sub_category": item.get("sub_category"),
+                    "search_tags": item.get("search_tags"),
+                    "is_comparable": item.get("is_comparable", False),
                 }
                 for item in items
             ]
