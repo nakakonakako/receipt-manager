@@ -1,6 +1,7 @@
 import calendar
 import datetime
 import os
+import unicodedata
 
 from app.schemas.csv import ParsedCsvTransaction
 from app.schemas.receipt import ReceiptData
@@ -269,11 +270,48 @@ class SupabaseService:
         if not query:
             return []
 
+        keywords = query.replace("　", " ").split()
+        if not keywords:
+            return []
+
+        search_groups = []
+        for kw in keywords:
+            normalized = unicodedata.normalize("NFKC", kw)
+            hira = "".join(
+                [
+                    chr(ord(c) - 96) if 12449 <= ord(c) <= 12534 else c
+                    for c in normalized
+                ]
+            )
+            kata = "".join(
+                [
+                    chr(ord(c) + 96) if 12353 <= ord(c) <= 12438 else c
+                    for c in normalized
+                ]
+            )
+            search_groups.append({normalized.lower(), hira.lower(), kata.lower()})
+
         response = (
             self.client.table("receipt_items")
             .select("*, receipts(date, store_name)")
-            .ilike("item_name", f"%{query}%")
             .order("created_at", desc=True)
             .execute()
         )
+
+        results = []
+        for item in response.data:
+            item_name = str(item.get("item_name", "")).lower()
+            tags = item.get("search_tags") or []
+            tags_str = " ".join(tags).lower()
+            target_text = f"{item_name} {tags_str}"
+
+            is_match = True
+            for group in search_groups:
+                if not any(sw in target_text for sw in group):
+                    is_match = False
+                    break
+
+            if is_match:
+                results.append(item)
+
         return response.data
