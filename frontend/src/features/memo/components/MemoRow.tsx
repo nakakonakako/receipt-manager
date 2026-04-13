@@ -100,33 +100,32 @@ export const MemoRow: React.FC<MemoRowProps> = ({ onRemove }) => {
 
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-4 relative">
-      <div className="absolute top-2 right-2">
-        <Button
-          variant="danger"
-          onClick={onRemove}
-          className="px-2 py-1 text-xs"
-        >
-          ✕ 削除
-        </Button>
-      </div>
-
-      <div className="flex gap-3 mb-4 pr-16">
+      <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 items-center">
         <Input
           type="text"
           placeholder="商品名を入力 (例: ねぎ 白)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-1 text-base py-1.5"
+          className="flex-1 min-w-0 text-base py-1.5"
         />
-        <Button
-          variant="primary"
-          onClick={handleSearch}
-          disabled={isLoading}
-          className="px-4 font-bold"
-        >
-          {isLoading ? '検索中...' : '検索'}
-        </Button>
+        <div className="flex gap-2 shrink-0 items-stretch sm:items-center">
+          <Button
+            variant="primary"
+            onClick={handleSearch}
+            disabled={isLoading}
+            className="px-4 font-bold"
+          >
+            {isLoading ? '検索中...' : '検索'}
+          </Button>
+          <Button
+            variant="danger"
+            onClick={onRemove}
+            className="px-2 py-1.5 text-xs font-bold"
+          >
+            ✕ 削除
+          </Button>
+        </div>
       </div>
 
       {hasSearched && results.length === 0 && !isLoading && (
@@ -219,7 +218,7 @@ export const MemoRow: React.FC<MemoRowProps> = ({ onRemove }) => {
                               | string
                               | readonly (number | string)[]
                               | undefined,
-                            name: string | number | undefined,
+                            _name: string | number | undefined,
                             props: { payload?: { [key: string]: unknown } }
                           ) => {
                             const numericValue =
