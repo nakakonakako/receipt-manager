@@ -46,6 +46,10 @@ async def analyze_receipt(
         image_bytes_list = [await file.read() for file in files]
         result = gemini_service.analyze_receipt(image_bytes_list)
 
+        for receipt in result.get("receipts", []):
+            for item in receipt.get("items", []):
+                item["is_comparable"] = True
+
         item_names = []
         for receipt in result.get("receipts", []):
             for item in receipt.get("items", []):
