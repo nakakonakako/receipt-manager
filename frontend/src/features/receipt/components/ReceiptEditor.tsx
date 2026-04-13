@@ -9,6 +9,28 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { NumberInput } from '@/components/ui/NumberInput'
 
+function normalizeEditingItem(item: ReceiptItem): EditingItem {
+  return {
+    ...item,
+    price: item.price,
+    main_category: item.main_category ?? 'その他',
+    sub_category: item.sub_category ?? 'その他',
+    search_tags: item.search_tags ?? [],
+    is_comparable: item.is_comparable ?? true,
+  }
+}
+
+function emptyLineItem(): EditingItem {
+  return {
+    item_name: '',
+    price: 0,
+    main_category: '食費',
+    sub_category: 'その他',
+    search_tags: [],
+    is_comparable: true,
+  }
+}
+
 export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   initialData,
   onSave,
@@ -16,7 +38,9 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
 }) => {
   const [date, setDate] = useState(initialData.purchase_date || '')
   const [store, setStore] = useState(initialData.store_name || '')
-  const [items, setItems] = useState<EditingItem[]>(initialData.items || [])
+  const [items, setItems] = useState<EditingItem[]>(() =>
+    (initialData.items || []).map(normalizeEditingItem)
+  )
   const [paymentMethod, setPaymentMethod] = useState(
     initialData.payment_method || 'unknown'
   )
@@ -28,15 +52,15 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
 
   const handleItemChange = (
     index: number,
-    field: keyof ReceiptItem,
+    field: 'item_name' | 'price',
     value: string | number
   ) => {
     const newItems = [...items]
     if (field === 'price') {
-      const newValue = value === '' ? '' : Number(value)
-      newItems[index] = { ...newItems[index], [field]: newValue }
+      const newValue = value === '' || value === '-' ? '' : Number(value)
+      newItems[index] = { ...newItems[index], price: newValue }
     } else {
-      newItems[index] = { ...newItems[index], [field]: value as string }
+      newItems[index] = { ...newItems[index], item_name: value as string }
     }
     setItems(newItems)
   }
@@ -47,7 +71,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   }
 
   const handleAddItem = () => {
-    setItems([...items, { item_name: '', price: 0 }])
+    setItems([...items, emptyLineItem()])
   }
 
   const handleSaveClick = async () => {
@@ -66,8 +90,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
     }
 
     const newItems: ReceiptItem[] = items.map((item) => ({
-      ...item,
+      item_name: item.item_name.trim(),
       price: item.price === '' ? 0 : item.price,
+      main_category: (item.main_category ?? 'その他').trim() || 'その他',
+      sub_category: (item.sub_category ?? 'その他').trim() || 'その他',
+      search_tags: (item.search_tags ?? []).filter((t) => t.trim().length > 0),
+      is_comparable: item.is_comparable ?? true,
     }))
 
     const savedData: Receipt = {
