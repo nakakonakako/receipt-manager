@@ -9,17 +9,23 @@ export const Input: React.FC<InputProps> = ({
   className = '',
   ...props
 }) => {
-  return (
-    <div className={className}>
-      {label && (
+  const inputClassName = [
+    'w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none transition-shadow',
+    className,
+  ]
+    .filter(Boolean)
+    .join(' ')
+
+  if (label) {
+    return (
+      <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">
           {label}
         </label>
-      )}
-      <input
-        className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
-        {...props}
-      />
-    </div>
-  )
+        <input className={inputClassName} {...props} />
+      </div>
+    )
+  }
+
+  return <input className={inputClassName} {...props} />
 }
