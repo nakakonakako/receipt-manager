@@ -110,7 +110,7 @@ class SupabaseService:
                     "main_category": item.get("main_category"),
                     "sub_category": item.get("sub_category"),
                     "search_tags": item.get("search_tags"),
-                    "is_comparable": item.get("is_comparable", False),
+                    "is_comparable": item.get("is_comparable", True),
                 }
                 for item in items
             ]
@@ -314,4 +314,4 @@ class SupabaseService:
             if is_match:
                 results.append(item)
 
-        return response.data
+        return results
