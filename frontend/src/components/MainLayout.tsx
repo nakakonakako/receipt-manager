@@ -5,10 +5,31 @@ import { HistoryPage } from '@/features/history/components/HistoryPage'
 import { SmartMemoPage } from '@/features/memo/components/SmartMemoPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 
+interface HistoryFocusTarget {
+  requestId: number
+  receiptId: string
+  receiptDate: string
+  itemName: string
+}
+
 export const MainLayout = () => {
   const [activeTab, setActiveTab] = useState<
     'register' | 'chat' | 'history' | 'memo' | 'dashboard'
   >('register')
+  const [historyFocusTarget, setHistoryFocusTarget] =
+    useState<HistoryFocusTarget | null>(null)
+
+  const handleOpenHistoryFromMemo = (payload: {
+    receiptId: string
+    receiptDate: string
+    itemName: string
+  }) => {
+    setHistoryFocusTarget({
+      requestId: Date.now(),
+      ...payload,
+    })
+    setActiveTab('history')
+  }
 
   return (
     <div className="flex-1 w-full max-w-4xl mx-auto p-3 sm:p-6">
@@ -67,9 +88,13 @@ export const MainLayout = () => {
 
       <div className="transition-opacity duration-300 w-full">
         {activeTab === 'register' && <RegisterPage />}
-        {activeTab === 'history' && <HistoryPage />}
+        {activeTab === 'history' && (
+          <HistoryPage focusTarget={historyFocusTarget} />
+        )}
         {activeTab === 'chat' && <ChatInterface />}
-        {activeTab === 'memo' && <SmartMemoPage />}
+        {activeTab === 'memo' && (
+          <SmartMemoPage onOpenHistory={handleOpenHistoryFromMemo} />
+        )}
         {activeTab === 'dashboard' && <DashboardPage />}
       </div>
     </div>
