@@ -294,6 +294,7 @@ export const useHistory = () => {
     setActiveTab,
     isLoading,
     expandedReceiptId,
+    setExpandedReceiptId,
     toggleAccordion,
     currentMonth,
     setCurrentMonth,
