@@ -24,7 +24,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl sm:max-w-3xl max-h-full flex flex-col overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[96vw] lg:max-w-6xl max-h-full flex flex-col overflow-hidden">
         <div className="px-5 py-4 border-b border-gray-100 bg-white flex justify-between items-center shrink-0">
           <h3 className="text-xl font-extrabold text-gray-800">
             {editType === 'receipt' ? '🧾 内容の確認・修正' : '💳 履歴を編集'}
