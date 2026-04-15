@@ -1,7 +1,8 @@
 import React from 'react'
 import { NumberInput } from '@/components/ui/NumberInput'
 import { Button } from '@/components/ui/Button'
-import { ReceiptItemEditorCard } from '@/features/receipt/components/ReceiptItemEditorCard'
+import { Input } from '@/components/ui/Input'
+import { MAIN_CATEGORIES } from '@/features/receipt/constants/categories'
 import {
   formatSearchTagsForInput,
   parseCommaSeparatedTags,
@@ -95,66 +96,155 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         </div>
       </div>
 
-      <div className="space-y-2.5 mb-4">
-        {receiptTarget.receipt_items.map((item, index) => (
-          <ReceiptItemEditorCard
-            key={item.id || `line-${index}`}
-            lineNumber={index + 1}
-            itemName={item.item_name}
-            price={item.price}
-            mainCategory={item.main_category ?? 'その他'}
-            subCategory={item.sub_category ?? ''}
-            onMainCategoryChange={(v) =>
-              handleItemChange(index, 'main_category', v)
-            }
-            onSubCategoryChange={(v) =>
-              handleItemChange(index, 'sub_category', v)
-            }
-            searchTagsDisplay={formatSearchTagsForInput(item.search_tags)}
-            isComparable={item.is_comparable ?? true}
-            onItemNameChange={(v: string) =>
-              handleItemChange(index, 'item_name', v)
-            }
-            onSearchTagsChange={(v: string) => handleSearchTagsChange(index, v)}
-            onPriceChange={(val: number | string) =>
-              handleItemChange(
-                index,
-                'price',
-                val === '' || val === '-' ? 0 : Number(val)
-              )
-            }
-            onComparableToggle={() =>
-              handleItemChange(
-                index,
-                'is_comparable',
-                !(item.is_comparable ?? true)
-              )
-            }
-            onDelete={() => handleDeleteItem(index)}
-            collapseMetaSectionByDefault
-          />
-        ))}
+      <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-4">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[220px]">
+                商品名 <span className="text-red-500">*</span>
+              </th>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b w-[120px] text-center">
+                相場グラフ
+              </th>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[120px]">
+                大分類
+              </th>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[110px]">
+                小分類
+              </th>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[220px]">
+                検索タグ
+              </th>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b w-[120px] text-right">
+                金額
+              </th>
+              <th className="p-3 text-xs font-bold text-gray-600 border-b w-[72px] text-center">
+                削除
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {receiptTarget.receipt_items.map((item, index) => (
+              <tr key={item.id || `line-${index}`} className="hover:bg-gray-50">
+                <td className="p-2">
+                  <Input
+                    value={item.item_name}
+                    onChange={(e) =>
+                      handleItemChange(index, 'item_name', e.target.value)
+                    }
+                    placeholder="商品名"
+                    className="w-full border-gray-200"
+                  />
+                </td>
+                <td className="p-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleItemChange(
+                        index,
+                        'is_comparable',
+                        !(item.is_comparable ?? true)
+                      )
+                    }
+                    className={`h-10 min-w-[92px] px-2 text-xs font-bold rounded-lg border ${
+                      (item.is_comparable ?? true)
+                        ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200/90'
+                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {(item.is_comparable ?? true) ? 'ON' : 'OFF'}
+                  </button>
+                </td>
+                <td className="p-2">
+                  <select
+                    value={item.main_category ?? 'その他'}
+                    onChange={(e) =>
+                      handleItemChange(index, 'main_category', e.target.value)
+                    }
+                    className="h-10 w-full px-2 border border-gray-200 rounded-lg text-sm bg-white"
+                  >
+                    {MAIN_CATEGORIES.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                <td className="p-2">
+                  <Input
+                    value={item.sub_category ?? ''}
+                    onChange={(e) =>
+                      handleItemChange(index, 'sub_category', e.target.value)
+                    }
+                    placeholder="小分類"
+                    className="w-full border-gray-200"
+                  />
+                </td>
+                <td className="p-2">
+                  <Input
+                    value={formatSearchTagsForInput(item.search_tags)}
+                    onChange={(e) =>
+                      handleSearchTagsChange(index, e.target.value)
+                    }
+                    placeholder="ねぎ, 青ねぎ"
+                    className="w-full border-gray-200"
+                  />
+                </td>
+                <td className="p-2">
+                  <NumberInput
+                    value={item.price}
+                    onChange={(val) =>
+                      handleItemChange(
+                        index,
+                        'price',
+                        val === '' || val === '-' ? 0 : Number(val)
+                      )
+                    }
+                    maxLength={7}
+                    className="w-full text-right font-bold tabular-nums border-gray-200"
+                    placeholder="0"
+                  />
+                </td>
+                <td className="p-2 text-center">
+                  <Button
+                    variant="danger"
+                    onClick={() => handleDeleteItem(index)}
+                    className="px-2.5 py-1 text-xs font-bold !bg-white !text-red-600 border border-red-200 hover:!bg-red-50"
+                  >
+                    ✕
+                  </Button>
+                </td>
+              </tr>
+            ))}
 
-        {adjustmentAmount !== 0 && (
-          <div className="flex flex-wrap justify-between items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm">
-            <span className="font-bold text-blue-800">
-              🔒 消費税・自動調整額
-            </span>
-            <span
-              className={`font-extrabold tabular-nums ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'}`}
-            >
-              {adjustmentAmount > 0 ? '+' : ''}
-              {adjustmentAmount.toLocaleString()} 円
-            </span>
+            {adjustmentAmount !== 0 && (
+              <tr className="bg-gray-50">
+                <td
+                  colSpan={5}
+                  className="p-2 text-sm font-bold text-gray-500 pl-4"
+                >
+                  🔒 消費税・自動調整額
+                </td>
+                <td
+                  className={`p-2 text-right font-bold pr-4 tabular-nums ${
+                    adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-700'
+                  }`}
+                >
+                  {adjustmentAmount > 0 ? '+' : ''}
+                  {adjustmentAmount.toLocaleString()} 円
+                </td>
+                <td className="p-2"></td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {receiptTarget.receipt_items.length === 0 && (
+          <div className="text-center py-6 text-gray-400 text-sm font-bold">
+            購入品目がありません。下のボタンから追加してください。
           </div>
         )}
       </div>
-
-      {receiptTarget.receipt_items.length === 0 && (
-        <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold mb-4">
-          購入品目がありません。
-        </div>
-      )}
 
       <div className="flex justify-start">
         <Button
