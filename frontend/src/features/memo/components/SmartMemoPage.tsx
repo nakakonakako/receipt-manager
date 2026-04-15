@@ -2,7 +2,17 @@ import React, { useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { MemoRow } from './MemoRow'
 
-export const SmartMemoPage: React.FC = () => {
+interface SmartMemoPageProps {
+  onOpenHistory: (payload: {
+    receiptId: string
+    receiptDate: string
+    itemName: string
+  }) => void
+}
+
+export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
+  onOpenHistory,
+}) => {
   const [rowIds, setRowIds] = useState<number[]>(() => [Date.now()])
 
   const handleAddRow = () => {
@@ -34,7 +44,11 @@ export const SmartMemoPage: React.FC = () => {
         )}
 
         {rowIds.map((id) => (
-          <MemoRow key={id} onRemove={() => handleRemoveRow(id)} />
+          <MemoRow
+            key={id}
+            onRemove={() => handleRemoveRow(id)}
+            onOpenHistory={onOpenHistory}
+          />
         ))}
       </div>
     </div>
