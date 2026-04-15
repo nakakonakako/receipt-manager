@@ -27,7 +27,6 @@ export interface ReceiptItemEditorCardProps {
 }
 
 export const ReceiptItemEditorCard: React.FC<ReceiptItemEditorCardProps> = ({
-  lineNumber,
   itemName,
   price,
   searchTagsDisplay,
@@ -51,19 +50,6 @@ export const ReceiptItemEditorCard: React.FC<ReceiptItemEditorCardProps> = ({
 
   return (
     <div className="border border-gray-200 rounded-xl p-3 sm:p-4 bg-gray-50/40 shadow-sm">
-      <div className="flex justify-between items-center gap-2 mb-2 pb-2 border-b border-gray-200">
-        <span className="text-xs font-extrabold text-gray-500 tracking-wide">
-          品目 {lineNumber}
-        </span>
-        <Button
-          variant="danger"
-          onClick={onDelete}
-          className="px-2.5 py-1 text-xs font-bold shrink-0 !bg-white !text-red-600 border border-red-200 hover:!bg-red-50"
-        >
-          削除
-        </Button>
-      </div>
-
       <div className="space-y-2.5">
         {/* ラベル行の高さを揃え、入力行は h-10 で金額・商品名・相場を同一ベースラインに */}
         <div className="flex flex-wrap items-stretch gap-x-3 gap-y-2">
@@ -192,6 +178,15 @@ export const ReceiptItemEditorCard: React.FC<ReceiptItemEditorCardProps> = ({
             />
           </div>
         )}
+      </div>
+      <div className="mt-3 pt-2 border-t border-gray-200 flex justify-end">
+        <Button
+          variant="danger"
+          onClick={onDelete}
+          className="px-2.5 py-1 text-xs font-bold shrink-0 !bg-white !text-red-600 border border-red-200 hover:!bg-red-50"
+        >
+          削除
+        </Button>
       </div>
     </div>
   )
