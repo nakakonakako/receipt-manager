@@ -1,4 +1,5 @@
 from app.schemas.csv import CsvAnalysisRequest, CsvParseResponse, CsvSaveRequest
+from app.schemas.memo import MemoRowUpsertRequest
 from app.schemas.receipt import ReceiptData, SearchQuery
 from app.services.csv_service import CsvService
 from app.services.gemini_service import GeminiService
@@ -217,5 +218,57 @@ async def search_memo_items(
     try:
         data = supabase_service.search_items_for_memo(query)
         return {"items": data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/memo/rows")
+async def get_memo_rows(
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        rows = supabase_service.get_memo_rows()
+        return {"rows": rows}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/memo/rows")
+async def create_memo_row(
+    payload: MemoRowUpsertRequest,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        row = supabase_service.create_memo_row(
+            query=payload.query, sort_order=payload.sort_order
+        )
+        return {"row": row}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/memo/rows/{row_id}")
+async def update_memo_row(
+    row_id: str,
+    payload: MemoRowUpsertRequest,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        row = supabase_service.update_memo_row(
+            row_id=row_id, query=payload.query, sort_order=payload.sort_order
+        )
+        return {"row": row}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/memo/rows/{row_id}")
+async def delete_memo_row(
+    row_id: str,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
+    try:
+        result = supabase_service.delete_memo_row(row_id)
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
