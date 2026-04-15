@@ -131,6 +131,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
               )
             }
             onDelete={() => handleDeleteItem(index)}
+            collapseMetaSectionByDefault
           />
         ))}
 
