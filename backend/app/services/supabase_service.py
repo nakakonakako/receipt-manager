@@ -315,3 +315,52 @@ class SupabaseService:
                 results.append(item)
 
         return results
+
+    def get_memo_rows(self) -> list[dict]:
+        response = (
+            self.client.table("memo_rows")
+            .select("*")
+            .eq("user_id", self.user_id)
+            .order("sort_order")
+            .order("created_at")
+            .execute()
+        )
+        return response.data or []
+
+    def create_memo_row(self, query: str, sort_order: int) -> dict:
+        response = (
+            self.client.table("memo_rows")
+            .insert(
+                {
+                    "user_id": self.user_id,
+                    "query": query,
+                    "sort_order": sort_order,
+                }
+            )
+            .execute()
+        )
+        if not response.data:
+            raise Exception("メモ行の作成に失敗しました。")
+        return response.data[0]
+
+    def update_memo_row(self, row_id: str, query: str, sort_order: int) -> dict:
+        response = (
+            self.client.table("memo_rows")
+            .update({"query": query, "sort_order": sort_order})
+            .eq("id", row_id)
+            .eq("user_id", self.user_id)
+            .execute()
+        )
+        if not response.data:
+            raise Exception("メモ行の更新に失敗しました。")
+        return response.data[0]
+
+    def delete_memo_row(self, row_id: str) -> dict:
+        response = (
+            self.client.table("memo_rows")
+            .delete()
+            .eq("id", row_id)
+            .eq("user_id", self.user_id)
+            .execute()
+        )
+        return {"deleted_id": row_id, "details": response.data or []}
