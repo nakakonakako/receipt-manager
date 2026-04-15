@@ -16,9 +16,17 @@ import {
 
 interface MemoRowProps {
   onRemove: () => void
+  onOpenHistory: (payload: {
+    receiptId: string
+    receiptDate: string
+    itemName: string
+  }) => void
 }
 
-export const MemoRow: React.FC<MemoRowProps> = ({ onRemove }) => {
+export const MemoRow: React.FC<MemoRowProps> = ({
+  onRemove,
+  onOpenHistory,
+}) => {
   const { getHeaders } = useApiConfig()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MemoSearchResultItem[]>([])
@@ -279,8 +287,23 @@ export const MemoRow: React.FC<MemoRowProps> = ({ onRemove }) => {
                             {item.item_name}
                           </span>
                         </div>
-                        <div className="text-base font-extrabold text-gray-800 text-right">
-                          ¥{item.price.toLocaleString()}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              onOpenHistory({
+                                receiptId: item.receipt_id,
+                                receiptDate: item.receipts.date,
+                                itemName: item.item_name,
+                              })
+                            }
+                            className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors"
+                          >
+                            履歴へ
+                          </button>
+                          <div className="text-base font-extrabold text-gray-800 text-right">
+                            ¥{item.price.toLocaleString()}
+                          </div>
                         </div>
                       </li>
                     ))}
