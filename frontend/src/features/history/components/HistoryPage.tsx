@@ -1,14 +1,26 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useHistory } from '../hooks/useHistory'
 import { HistoryEditModal } from './HistoryEditModal'
 
-export const HistoryPage: React.FC = () => {
+interface HistoryFocusTarget {
+  requestId: number
+  receiptId: string
+  receiptDate: string
+  itemName: string
+}
+
+interface HistoryPageProps {
+  focusTarget: HistoryFocusTarget | null
+}
+
+export const HistoryPage: React.FC<HistoryPageProps> = ({ focusTarget }) => {
   const {
     activeTab,
     setActiveTab,
     isLoading,
     expandedReceiptId,
+    setExpandedReceiptId,
     toggleAccordion,
     currentMonth,
     setCurrentMonth,
@@ -42,6 +54,20 @@ export const HistoryPage: React.FC = () => {
     setIsMonthDropdownOpen,
     isFetchingMonth,
   } = useHistory()
+
+  useEffect(() => {
+    if (!focusTarget) return
+    setActiveTab('receipts')
+    setCurrentMonth(focusTarget.receiptDate.slice(0, 7))
+    setSearchQuery(focusTarget.itemName)
+    setExpandedReceiptId(focusTarget.receiptId)
+  }, [
+    focusTarget,
+    setActiveTab,
+    setCurrentMonth,
+    setExpandedReceiptId,
+    setSearchQuery,
+  ])
 
   if (isLoading) {
     return (
