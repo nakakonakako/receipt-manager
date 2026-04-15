@@ -12,3 +12,9 @@ export interface MemoSearchResultItem {
     store_name: string
   }
 }
+
+export interface MemoRowRecord {
+  id: string
+  query: string
+  sort_order: number
+}
