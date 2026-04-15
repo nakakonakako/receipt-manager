@@ -22,6 +22,8 @@ export interface ReceiptItemEditorCardProps {
   subCategory?: string
   onMainCategoryChange?: (value: string) => void
   onSubCategoryChange?: (value: string) => void
+  /** true のとき、分類・タグセクションを初期状態で閉じる */
+  collapseMetaSectionByDefault?: boolean
 }
 
 export const ReceiptItemEditorCard: React.FC<ReceiptItemEditorCardProps> = ({
@@ -39,9 +41,13 @@ export const ReceiptItemEditorCard: React.FC<ReceiptItemEditorCardProps> = ({
   subCategory,
   onMainCategoryChange,
   onSubCategoryChange,
+  collapseMetaSectionByDefault = false,
 }) => {
   const categoryEditable =
     onMainCategoryChange !== undefined && onSubCategoryChange !== undefined
+  const [isMetaSectionOpen, setIsMetaSectionOpen] = React.useState(
+    !collapseMetaSectionByDefault
+  )
 
   return (
     <div className="border border-gray-200 rounded-xl p-3 sm:p-4 bg-gray-50/40 shadow-sm">
@@ -112,48 +118,63 @@ export const ReceiptItemEditorCard: React.FC<ReceiptItemEditorCardProps> = ({
           </div>
         </div>
         {categoryEditable ? (
-          <div className="flex flex-wrap items-stretch gap-x-2 gap-y-2">
-            <div className="w-32 shrink-0 flex flex-col">
-              <label className="text-xs font-bold text-gray-600 h-8 shrink-0 flex items-end mb-1">
-                大分類
-              </label>
-              <select
-                value={mainCategory ?? 'その他'}
-                onChange={(e) => onMainCategoryChange(e.target.value)}
-                className="h-10 box-border w-full px-1.5 border border-gray-300 rounded-lg text-xs bg-white"
-              >
-                {MAIN_CATEGORIES.map((cat) => (
-                  <option key={cat} value={cat}>
-                    {cat}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="w-24 sm:w-28 shrink-0 flex flex-col">
-              <label className="text-xs font-bold text-gray-600 h-8 shrink-0 flex items-end mb-1">
-                小分類
-              </label>
-              <Input
-                value={subCategory ?? ''}
-                onChange={(e) => onSubCategoryChange(e.target.value)}
-                placeholder="野菜"
-                className="h-10 box-border w-full text-xs border-gray-300 bg-white !py-0 px-2"
-              />
-            </div>
-            <div className="min-w-0 flex-1 basis-[12rem] flex flex-col">
-              <label className="text-xs font-bold text-gray-600 min-h-8 flex flex-wrap items-end gap-x-1 mb-1">
-                検索タグ
-                <span className="font-normal text-gray-400 text-[10px] sm:text-xs">
-                  （カンマ区切り）
-                </span>
-              </label>
-              <Input
-                value={searchTagsDisplay}
-                onChange={(e) => onSearchTagsChange(e.target.value)}
-                placeholder="ねぎ, 青ねぎ"
-                className="h-10 box-border w-full text-sm border-gray-300 bg-white !py-0 px-2"
-              />
-            </div>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setIsMetaSectionOpen((prev) => !prev)}
+              className="w-full flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50 transition"
+            >
+              <span>大分類・小分類・検索タグ</span>
+              <span className="text-xs text-gray-500">
+                {isMetaSectionOpen ? '▲ 閉じる' : '▼ 開く'}
+              </span>
+            </button>
+
+            {isMetaSectionOpen && (
+              <div className="flex flex-wrap items-stretch gap-x-2 gap-y-2">
+                <div className="w-32 shrink-0 flex flex-col">
+                  <label className="text-xs font-bold text-gray-600 h-8 shrink-0 flex items-end mb-1">
+                    大分類
+                  </label>
+                  <select
+                    value={mainCategory ?? 'その他'}
+                    onChange={(e) => onMainCategoryChange(e.target.value)}
+                    className="h-10 box-border w-full px-1.5 border border-gray-300 rounded-lg text-xs bg-white"
+                  >
+                    {MAIN_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-24 sm:w-28 shrink-0 flex flex-col">
+                  <label className="text-xs font-bold text-gray-600 h-8 shrink-0 flex items-end mb-1">
+                    小分類
+                  </label>
+                  <Input
+                    value={subCategory ?? ''}
+                    onChange={(e) => onSubCategoryChange(e.target.value)}
+                    placeholder="野菜"
+                    className="h-10 box-border w-full text-xs border-gray-300 bg-white !py-0 px-2"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 basis-[12rem] flex flex-col">
+                  <label className="text-xs font-bold text-gray-600 min-h-8 flex flex-wrap items-end gap-x-1 mb-1">
+                    検索タグ
+                    <span className="font-normal text-gray-400 text-[10px] sm:text-xs">
+                      （カンマ区切り）
+                    </span>
+                  </label>
+                  <Input
+                    value={searchTagsDisplay}
+                    onChange={(e) => onSearchTagsChange(e.target.value)}
+                    placeholder="ねぎ, 青ねぎ"
+                    className="h-10 box-border w-full text-sm border-gray-300 bg-white !py-0 px-2"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div>
