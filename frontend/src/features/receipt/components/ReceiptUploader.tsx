@@ -215,7 +215,7 @@ export const ReceiptUploader: React.FC = () => {
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-lg font-extrabold flex items-center justify-center gap-2 shadow-sm transition-colors"
               >
                 <span>📸</span>
-                続けて撮影（{cameraFiles.length + 1}枚目）
+                続けて撮影
               </button>
 
               <button
@@ -223,7 +223,7 @@ export const ReceiptUploader: React.FC = () => {
                 className="w-full py-3.5 bg-white border-2 border-gray-200 hover:bg-gray-50 text-gray-800 rounded-xl text-lg font-bold flex items-center justify-center gap-2 transition-colors"
               >
                 <span>📥</span>
-                撮影を終了（タスク一覧へ）
+                撮影を終了
               </button>
             </div>
           </div>
