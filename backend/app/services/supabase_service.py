@@ -146,18 +146,39 @@ class SupabaseService:
             "details": response.data,
         }
 
+    def _get_period_start_date(self, period: str) -> str | None:
+        today = datetime.date.today()
+
+        if period == "1month":
+            return today.replace(day=1).isoformat()
+
+        if period == "3months":
+            # 今月を含む直近3ヶ月（2ヶ月前の月初〜）を対象にする
+            month = today.month - 2
+            year = today.year
+            while month <= 0:
+                month += 12
+                year -= 1
+            return datetime.date(year, month, 1).isoformat()
+
+        return None
+
     def get_all_data(self, data_type: str = "all", period: str = "3months") -> dict:
         all_data = []
         headers = ["purchase_date", "store_name", "item_name", "price"]
         all_data.append(",".join(headers))
 
+        start_date = self._get_period_start_date(period)
+
         if data_type in ["all", "receipt"]:
-            res = (
+            receipts_query = (
                 self.client.table("receipts")
                 .select("*, receipt_items(*)")
                 .order("date")
-                .execute()
             )
+            if start_date:
+                receipts_query = receipts_query.gte("date", start_date)
+            res = receipts_query.execute()
             for row in res.data:
                 date = row.get("date")
                 store = row.get("store_name")
@@ -172,12 +193,10 @@ class SupabaseService:
                     all_data.append(f"{date},{store},合計,{row.get('total_amount')}")
 
         if data_type in ["all", "log"]:
-            res = (
-                self.client.table("csv_transactions")
-                .select("*")
-                .order("date")
-                .execute()
-            )
+            csv_query = self.client.table("csv_transactions").select("*").order("date")
+            if start_date:
+                csv_query = csv_query.gte("date", start_date)
+            res = csv_query.execute()
             for row in res.data:
                 date = row.get("date")
                 store = row.get("store")
