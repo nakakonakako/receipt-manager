@@ -275,6 +275,12 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
     }
   }, [])
 
+  useEffect(() => {
+    if (!activeRow || activeRow.hasSearched || activeRow.isLoading) return
+    if (!activeRow.query.trim()) return
+    void runSearch(activeRow.id, activeRow.query)
+  }, [activeRow])
+
   const filteredResults =
     activeRow?.results.filter(
       (item) => !activeRow.excludedItemNames.includes(item.item_name)
