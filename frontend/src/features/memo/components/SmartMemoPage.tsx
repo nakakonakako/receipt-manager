@@ -18,6 +18,8 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type DotItemDotProps,
+  type TooltipContentProps,
 } from 'recharts'
 
 interface SmartMemoPageProps {
@@ -36,6 +38,30 @@ type MemoRowState = {
   excludedItemNames: string[]
   isLoading: boolean
   hasSearched: boolean
+}
+
+type ChartPoint = {
+  id: string
+  date: string
+  price: number
+  store: string
+  name: string
+  isTransition: boolean
+}
+
+const CompactPriceTooltip = ({
+  active,
+  payload,
+}: TooltipContentProps): React.ReactElement | null => {
+  if (!active || !payload || payload.length === 0) return null
+  const rawValue = payload[0]?.value
+  const numeric =
+    typeof rawValue === 'number' ? rawValue : Number(rawValue ?? 0)
+  return (
+    <div className="rounded-md bg-gray-900/90 px-2.5 py-1 text-xs font-bold text-white shadow-md">
+      ¥{numeric.toLocaleString()}
+    </div>
+  )
 }
 
 const toRowState = (row: MemoRowRecord): MemoRowState => ({
@@ -67,6 +93,51 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
     () => rows.find((row) => row.id === activeRowId) ?? null,
     [rows, activeRowId]
   )
+
+  const [highlightedItemId, setHighlightedItemId] = useState<string | null>(
+    null
+  )
+  const historyItemRefs = useRef<Record<string, HTMLLIElement | null>>({})
+
+  useEffect(() => {
+    setHighlightedItemId(null)
+  }, [activeRowId])
+
+  const handleSelectChartPoint = (itemId: string) => {
+    setHighlightedItemId(itemId)
+    historyItemRefs.current[itemId]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+    })
+  }
+
+  const renderChartDot = (props: DotItemDotProps): React.ReactElement => {
+    const { cx, cy, index } = props
+    const point = props.payload as ChartPoint
+    const key = `dot-${point?.id ?? index}`
+
+    if (cx == null || cy == null) {
+      return <g key={key} />
+    }
+
+    // 値段が変動した点（と起点）だけを目立たせる。選択中はさらに強調する。
+    if (!point?.isTransition) {
+      return <circle key={key} cx={cx} cy={cy} r={2.5} fill="#93C5FD" />
+    }
+
+    const isSelected = highlightedItemId === point.id
+    return (
+      <circle
+        key={key}
+        cx={cx}
+        cy={cy}
+        r={isSelected ? 7 : 5}
+        fill={isSelected ? '#1E3A8A' : '#1D4ED8'}
+        stroke="#fff"
+        strokeWidth={2}
+      />
+    )
+  }
 
   const scheduleSaveRow = (rowId: string, query: string, sortOrder: number) => {
     if (saveDebounceTimersRef.current[rowId]) {
@@ -289,11 +360,13 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
     ? Array.from(new Set(activeRow.results.map((item) => item.item_name)))
     : []
   const isComparable = filteredResults.some((item) => item.is_comparable)
-  const chartData = filteredResults.map((item) => ({
+  const chartData: ChartPoint[] = filteredResults.map((item, index, arr) => ({
+    id: item.id,
     date: item.receipts.date,
     price: item.price,
     store: item.receipts.store_name,
     name: item.item_name,
+    isTransition: index === 0 || item.price !== arr[index - 1].price,
   }))
   const minPrice =
     filteredResults.length > 0
@@ -455,10 +528,27 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                               </div>
                             </div>
 
-                            <div className="h-[220px] bg-white p-3 rounded-lg shadow-sm border border-gray-100">
+                            <div className="h-[220px] bg-white p-3 rounded-lg shadow-sm border border-gray-100 [&_*:focus]:outline-none [&_*:focus-visible]:outline-none">
                               <ResponsiveContainer width="100%" height="100%">
                                 <LineChart
                                   data={chartData}
+                                  onClick={(state) => {
+                                    const rawIndex = state.activeTooltipIndex
+                                    if (rawIndex == null) return
+                                    const index =
+                                      typeof rawIndex === 'number'
+                                        ? rawIndex
+                                        : Number(rawIndex)
+                                    if (
+                                      !Number.isInteger(index) ||
+                                      index < 0 ||
+                                      index >= chartData.length
+                                    )
+                                      return
+                                    const point = chartData[index]
+                                    if (!point) return
+                                    handleSelectChartPoint(point.id)
+                                  }}
                                   margin={{
                                     top: 10,
                                     right: 10,
@@ -481,55 +571,15 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                                     tickMargin={8}
                                   />
                                   <Tooltip
-                                    contentStyle={{
-                                      borderRadius: '8px',
-                                      border: 'none',
-                                      boxShadow:
-                                        '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                                    }}
-                                    labelStyle={{
-                                      fontWeight: 'bold',
-                                      color: '#374151',
-                                      marginBottom: '4px',
-                                    }}
-                                    formatter={(
-                                      value:
-                                        | number
-                                        | string
-                                        | readonly (number | string)[]
-                                        | undefined,
-                                      _name: string | number | undefined,
-                                      props: {
-                                        payload?: { [key: string]: unknown }
-                                      }
-                                    ) => {
-                                      const numericValue =
-                                        typeof value === 'number'
-                                          ? value
-                                          : Number(value || 0)
-                                      const storeName = props.payload?.store
-                                        ? String(props.payload.store)
-                                        : ''
-                                      const itemName = props.payload?.name
-                                        ? String(props.payload.name)
-                                        : ''
-                                      return [
-                                        `¥${numericValue.toLocaleString()} (${storeName} / ${itemName})`,
-                                        '価格',
-                                      ]
-                                    }}
+                                    content={CompactPriceTooltip}
+                                    cursor={{ stroke: '#93C5FD' }}
                                   />
                                   <Line
                                     type="monotone"
                                     dataKey="price"
                                     stroke="#1D4ED8"
                                     strokeWidth={3}
-                                    dot={{
-                                      r: 4,
-                                      fill: '#1D4ED8',
-                                      strokeWidth: 2,
-                                      stroke: '#fff',
-                                    }}
+                                    dot={renderChartDot}
                                     activeDot={{ r: 6 }}
                                   />
                                 </LineChart>
@@ -551,7 +601,14 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                               .map((item) => (
                                 <li
                                   key={item.id}
-                                  className="p-3 hover:bg-gray-50 transition-colors flex justify-between items-center gap-2"
+                                  ref={(el) => {
+                                    historyItemRefs.current[item.id] = el
+                                  }}
+                                  className={`p-3 transition-colors flex justify-between items-center gap-2 ${
+                                    highlightedItemId === item.id
+                                      ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
+                                      : 'hover:bg-gray-50'
+                                  }`}
                                 >
                                   <div className="flex flex-col">
                                     <span className="text-[10px] font-bold text-gray-500">
