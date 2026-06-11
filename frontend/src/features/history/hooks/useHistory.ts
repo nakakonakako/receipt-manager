@@ -260,7 +260,11 @@ export const useHistory = () => {
       filtered = filtered.filter(
         (r) =>
           r.store_name.includes(searchQuery) ||
-          r.receipt_items.some((item) => item.item_name.includes(searchQuery))
+          r.receipt_items.some(
+            (item) =>
+              item.item_name.includes(searchQuery) ||
+              (item.search_tags ?? []).some((tag) => tag.includes(searchQuery))
+          )
       )
     }
     filtered.sort((a, b) =>

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { NumberInput } from '@/components/ui/NumberInput'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
@@ -18,6 +18,13 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
   receiptTarget,
   setEditTarget,
 }) => {
+  const [openDetailIndexes, setOpenDetailIndexes] = useState<
+    Record<number, boolean>
+  >({})
+
+  const toggleDetails = (index: number) =>
+    setOpenDetailIndexes((prev) => ({ ...prev, [index]: !prev[index] }))
+
   const itemsSum = receiptTarget.receipt_items.reduce(
     (sum, item) => sum + Number(item.price || 0),
     0
@@ -73,8 +80,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         <div>
           <h3 className="font-extrabold text-gray-700">購入品目</h3>
           <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-            大／小分類・検索タグ・相場（商品名の右の
-            ON/OFF）を修正できます。相場は既定オンです。
+            大／小分類・検索タグ・相場（ON/OFF）を修正できます。相場は既定オンです。
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -96,7 +102,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         </div>
       </div>
 
-      <div className="overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-4">
+      <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-4">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50">
             <tr>
@@ -242,6 +248,166 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         {receiptTarget.receipt_items.length === 0 && (
           <div className="text-center py-6 text-gray-400 text-sm font-bold">
             購入品目がありません。下のボタンから追加してください。
+          </div>
+        )}
+      </div>
+
+      <div className="block md:hidden space-y-2.5 mb-4">
+        {receiptTarget.receipt_items.map((item, index) => {
+          const isComparable = item.is_comparable ?? true
+          const isDetailOpen = openDetailIndexes[index] ?? false
+          return (
+            <div
+              key={item.id || `m-line-${index}`}
+              className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm"
+            >
+              <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
+                <label className="block text-sm font-bold text-gray-700">
+                  商品名 <span className="text-red-500">*</span>
+                </label>
+                <Button
+                  variant="danger"
+                  onClick={() => handleDeleteItem(index)}
+                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-500 border border-red-200 hover:!bg-red-50"
+                >
+                  ✕ 削除
+                </Button>
+              </div>
+
+              <div className="mb-2.5">
+                <Input
+                  value={item.item_name}
+                  onChange={(e) =>
+                    handleItemChange(index, 'item_name', e.target.value)
+                  }
+                  placeholder="商品名"
+                  className="w-full text-base py-1.5 border-gray-300"
+                />
+              </div>
+
+              <div className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleItemChange(index, 'is_comparable', !isComparable)
+                  }
+                  className={`shrink-0 min-w-[72px] px-3 rounded-lg border flex flex-col items-center justify-center leading-none ${
+                    isComparable
+                      ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200/90'
+                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className="text-[10px] mb-0.5">相場</span>
+                  <span className="text-sm font-bold">
+                    {isComparable ? 'ON' : 'OFF'}
+                  </span>
+                </button>
+                <div className="flex-1 flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
+                  <label className="text-sm font-bold text-gray-700 pl-1">
+                    金額
+                  </label>
+                  <NumberInput
+                    value={item.price}
+                    onChange={(val) =>
+                      handleItemChange(
+                        index,
+                        'price',
+                        val === '' || val === '-' ? 0 : Number(val)
+                      )
+                    }
+                    maxLength={7}
+                    className="w-28 text-right text-base py-1.5 font-bold tabular-nums border-gray-300 bg-white shadow-sm"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => toggleDetails(index)}
+                className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-100"
+              >
+                分類・検索タグを{isDetailOpen ? '閉じる' : '編集'}
+                <span
+                  className={`transition-transform duration-200 ${
+                    isDetailOpen ? 'rotate-180' : ''
+                  }`}
+                >
+                  ▼
+                </span>
+              </button>
+
+              {isDetailOpen && (
+                <div className="mt-2 space-y-2.5 border-t border-gray-100 pt-2.5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                      大分類
+                    </label>
+                    <select
+                      value={item.main_category ?? 'その他'}
+                      onChange={(e) =>
+                        handleItemChange(index, 'main_category', e.target.value)
+                      }
+                      className="h-10 w-full px-2 border border-gray-200 rounded-lg text-sm bg-white"
+                    >
+                      {MAIN_CATEGORIES.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                      小分類
+                    </label>
+                    <Input
+                      value={item.sub_category ?? ''}
+                      onChange={(e) =>
+                        handleItemChange(index, 'sub_category', e.target.value)
+                      }
+                      placeholder="小分類"
+                      className="w-full border-gray-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                      検索タグ
+                    </label>
+                    <Input
+                      value={formatSearchTagsForInput(item.search_tags)}
+                      onChange={(e) =>
+                        handleSearchTagsChange(index, e.target.value)
+                      }
+                      placeholder="ねぎ, 青ねぎ"
+                      className="w-full border-gray-200"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {adjustmentAmount !== 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex justify-between items-center shadow-inner">
+            <span className="text-sm font-bold text-blue-700">
+              🔒 消費税・調整額
+            </span>
+            <span
+              className={`text-base font-bold pr-1 tabular-nums ${
+                adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'
+              }`}
+            >
+              {adjustmentAmount > 0 ? '+' : ''}
+              {adjustmentAmount.toLocaleString()}
+            </span>
+          </div>
+        )}
+
+        {receiptTarget.receipt_items.length === 0 && (
+          <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold">
+            購入品目がありません。
           </div>
         )}
       </div>
