@@ -12,9 +12,13 @@ interface HistoryFocusTarget {
 
 interface HistoryPageProps {
   focusTarget: HistoryFocusTarget | null
+  onFocusHandled?: () => void
 }
 
-export const HistoryPage: React.FC<HistoryPageProps> = ({ focusTarget }) => {
+export const HistoryPage: React.FC<HistoryPageProps> = ({
+  focusTarget,
+  onFocusHandled,
+}) => {
   const {
     activeTab,
     setActiveTab,
@@ -61,8 +65,10 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({ focusTarget }) => {
     setCurrentMonth(focusTarget.receiptDate.slice(0, 7))
     setSearchQuery(focusTarget.itemName)
     setExpandedReceiptId(focusTarget.receiptId)
+    onFocusHandled?.()
   }, [
     focusTarget,
+    onFocusHandled,
     setActiveTab,
     setCurrentMonth,
     setExpandedReceiptId,

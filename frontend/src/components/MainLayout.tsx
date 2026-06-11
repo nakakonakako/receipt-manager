@@ -91,7 +91,10 @@ export const MainLayout = () => {
       <div className="transition-opacity duration-300 w-full">
         {activeTab === 'register' && <RegisterPage />}
         {activeTab === 'history' && (
-          <HistoryPage focusTarget={historyFocusTarget} />
+          <HistoryPage
+            focusTarget={historyFocusTarget}
+            onFocusHandled={() => setHistoryFocusTarget(null)}
+          />
         )}
         {activeTab === 'chat' && <ChatInterface />}
         {activeTab === 'memo' && (
