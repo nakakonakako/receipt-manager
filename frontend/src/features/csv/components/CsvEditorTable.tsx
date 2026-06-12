@@ -28,10 +28,16 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
         <table className="w-full table-fixed text-sm text-left text-gray-500">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10">
             <tr>
-              <th className="px-2 py-3 w-[27%] whitespace-nowrap">日付</th>
-              <th className="px-2 py-3 w-[40%] whitespace-nowrap">店名</th>
-              <th className="px-2 py-3 w-[22%] whitespace-nowrap">金額</th>
-              <th className="px-1 py-3 w-[11%] text-center whitespace-nowrap">
+              <th className="pl-2 pr-3 md:px-2 py-3 w-[36%] md:w-[27%] whitespace-nowrap">
+                日付
+              </th>
+              <th className="pl-3 pr-2 md:px-2 py-3 w-[31%] md:w-[40%] whitespace-nowrap">
+                店名
+              </th>
+              <th className="px-2 py-3 w-[20%] md:w-[22%] whitespace-nowrap">
+                金額
+              </th>
+              <th className="px-1 py-3 w-[13%] md:w-[11%] text-center whitespace-nowrap">
                 削除
               </th>
             </tr>
@@ -39,15 +45,15 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
           <tbody>
             {parsedData.map((row, i) => (
               <tr key={i} className="bg-white border-b hover:bg-gray-50">
-                <td className="px-2 py-2">
+                <td className="pl-2 pr-3 md:px-2 py-2 overflow-hidden">
                   <Input
                     type="date"
                     value={row.date}
                     onChange={(e) => onDataChange(i, 'date', e.target.value)}
-                    className={`w-full min-w-0 px-1.5 ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
+                    className={`w-full min-w-0 max-w-full px-1 text-xs md:text-sm md:px-1.5 ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
                   />
                 </td>
-                <td className="px-2 py-2">
+                <td className="pl-3 pr-2 md:px-2 py-2">
                   <Input
                     value={row.store}
                     onChange={(e) => onDataChange(i, 'store', e.target.value)}
