@@ -80,7 +80,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         <div>
           <h3 className="font-extrabold text-gray-700">購入品目</h3>
           <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-            大／小分類・検索タグ・相場（ON/OFF）を修正できます。相場は既定オンです。
+            大/小分類・検索タグ・相場(ON/OFF)を修正できます。
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
