@@ -55,14 +55,19 @@ export const CsvPresetSaveModal: React.FC<CsvPresetSaveModalProps> = ({
           <CsvIconPicker value={presetIcon} onChange={onIconChange} />
         </div>
 
-        <div className="flex justify-end gap-3 mt-4">
-          <Button variant="secondary" onClick={onSkip}>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 mt-4">
+          <Button
+            variant="secondary"
+            onClick={onSkip}
+            className="w-full sm:w-auto"
+          >
             今回は保存しない
           </Button>
           <Button
             variant="primary"
             onClick={onSave}
             disabled={!presetName.trim()}
+            className="w-full sm:w-auto"
           >
             ルールを保存して完了
           </Button>

@@ -22,6 +22,8 @@ export interface CsvPreset {
   name: string
   mapping: CsvMapping
   icon?: string
+  last_used_at?: string | null
+  created_at?: string
 }
 
 export interface CsvAnalysisFormProps {

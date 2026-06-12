@@ -7,6 +7,7 @@ import { CsvPresetDeleteModal } from './CsvPresetDeleteModal'
 import { CsvPresetRenameModal } from './CsvPresetRenameModal'
 import { CsvPresetIconModal } from './CsvPresetIconModal'
 import { resolvePresetIcon } from '../utils/emoji'
+import { formatPresetLastUsedLabel } from '../utils/date'
 
 export const CsvUploader: React.FC = () => {
   const {
@@ -94,9 +95,14 @@ export const CsvUploader: React.FC = () => {
                     >
                       {resolvePresetIcon(p.icon)}
                     </button>
-                    <span className="font-bold text-sm text-gray-700 truncate">
-                      {p.name}
-                    </span>
+                    <div className="min-w-0">
+                      <span className="font-bold text-sm text-gray-700 truncate block">
+                        {p.name}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {formatPresetLastUsedLabel(p.last_used_at)}
+                      </span>
+                    </div>
                   </div>
                   <div className="flex gap-2 shrink-0">
                     <button

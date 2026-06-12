@@ -49,6 +49,24 @@ export const useCsvUploader = () => {
 
   const { getHeaders } = useApiConfig()
 
+  const touchPresetLastUsed = async (presetId: string) => {
+    const now = new Date().toISOString()
+
+    const { error } = await supabase
+      .from('csv_presets')
+      .update({ last_used_at: now })
+      .eq('id', presetId)
+
+    if (error) {
+      console.error('Failed to update preset last_used_at:', error)
+      return
+    }
+
+    setPresets((prev) =>
+      prev.map((p) => (p.id === presetId ? { ...p, last_used_at: now } : p))
+    )
+  }
+
   useEffect(() => {
     const fetchPresets = async () => {
       setIsLoadingPresets(true)
@@ -65,6 +83,7 @@ export const useCsvUploader = () => {
         .from('csv_presets')
         .select('*')
         .eq('user_id', user.id)
+        .order('last_used_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: true })
 
       if (data && !error) setPresets(data)
@@ -111,6 +130,10 @@ export const useCsvUploader = () => {
 
       setParsedData(result.transactions)
       setCurrentMapping(result.mapping)
+
+      if (selectedPresetId) {
+        await touchPresetLastUsed(selectedPresetId)
+      }
     } catch (error) {
       console.error('Error analyzing CSV:', error)
       alert('CSVの解析中にエラーが発生しました')
@@ -135,11 +158,13 @@ export const useCsvUploader = () => {
       return
     }
 
+    const now = new Date().toISOString()
     const newPreset = {
       user_id: user.id,
       name: newPresetName,
       mapping: currentMapping,
       icon: resolvePresetIcon(newPresetIcon),
+      last_used_at: now,
     }
 
     const { data, error } = await supabase
