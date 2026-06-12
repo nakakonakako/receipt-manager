@@ -393,7 +393,7 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)_minmax(0,1fr)] gap-4 flex-1 min-h-0">
         <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-3 sm:p-4 min-h-[280px]">
           <h3 className="text-sm font-bold text-gray-700 mb-3">メモ一覧</h3>
           <div className="space-y-2.5 max-h-[65vh] overflow-y-auto pr-1">
@@ -506,142 +506,90 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                     </div>
 
                     {filteredResults.length > 0 ? (
-                      <div className="space-y-4">
-                        {isComparable && (
-                          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                              <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
-                                <div className="text-xs font-bold text-gray-500 mb-1">
-                                  最安値
-                                </div>
-                                <div className="text-xl font-extrabold text-blue-700">
-                                  ¥{minPrice.toLocaleString()}
-                                </div>
+                      isComparable ? (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                            <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+                              <div className="text-xs font-bold text-gray-500 mb-1">
+                                最安値
                               </div>
-                              <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
-                                <div className="text-xs font-bold text-gray-500 mb-1">
-                                  平均価格
-                                </div>
-                                <div className="text-xl font-extrabold text-gray-800">
-                                  ¥{avgPrice.toLocaleString()}
-                                </div>
+                              <div className="text-xl font-extrabold text-blue-700">
+                                ¥{minPrice.toLocaleString()}
                               </div>
                             </div>
-
-                            <div className="h-[220px] bg-white p-3 rounded-lg shadow-sm border border-gray-100 [&_*:focus]:outline-none [&_*:focus-visible]:outline-none">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <LineChart
-                                  data={chartData}
-                                  onClick={(state) => {
-                                    const rawIndex = state.activeTooltipIndex
-                                    if (rawIndex == null) return
-                                    const index =
-                                      typeof rawIndex === 'number'
-                                        ? rawIndex
-                                        : Number(rawIndex)
-                                    if (
-                                      !Number.isInteger(index) ||
-                                      index < 0 ||
-                                      index >= chartData.length
-                                    )
-                                      return
-                                    const point = chartData[index]
-                                    if (!point) return
-                                    handleSelectChartPoint(point.id)
-                                  }}
-                                  margin={{
-                                    top: 10,
-                                    right: 10,
-                                    left: -20,
-                                    bottom: 0,
-                                  }}
-                                >
-                                  <CartesianGrid
-                                    strokeDasharray="3 3"
-                                    vertical={false}
-                                    stroke="#E5E7EB"
-                                  />
-                                  <XAxis
-                                    dataKey="date"
-                                    tick={{ fontSize: 10, fill: '#6B7280' }}
-                                    tickMargin={8}
-                                  />
-                                  <YAxis
-                                    tick={{ fontSize: 10, fill: '#6B7280' }}
-                                    tickMargin={8}
-                                  />
-                                  <Tooltip
-                                    content={CompactPriceTooltip}
-                                    cursor={{ stroke: '#93C5FD' }}
-                                  />
-                                  <Line
-                                    type="monotone"
-                                    dataKey="price"
-                                    stroke="#1D4ED8"
-                                    strokeWidth={3}
-                                    dot={renderChartDot}
-                                    activeDot={{ r: 6 }}
-                                  />
-                                </LineChart>
-                              </ResponsiveContainer>
+                            <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+                              <div className="text-xs font-bold text-gray-500 mb-1">
+                                平均価格
+                              </div>
+                              <div className="text-xl font-extrabold text-gray-800">
+                                ¥{avgPrice.toLocaleString()}
+                              </div>
                             </div>
                           </div>
-                        )}
 
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-                          <div className="bg-gray-50 px-3 py-2 border-b border-gray-200">
-                            <h3 className="font-extrabold text-gray-700 text-sm">
-                              対象の購入履歴
-                            </h3>
+                          <div className="h-[220px] lg:h-[280px] bg-white p-3 rounded-lg shadow-sm border border-gray-100 [&_*:focus]:outline-none [&_*:focus-visible]:outline-none">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart
+                                data={chartData}
+                                onClick={(state) => {
+                                  const rawIndex = state.activeTooltipIndex
+                                  if (rawIndex == null) return
+                                  const index =
+                                    typeof rawIndex === 'number'
+                                      ? rawIndex
+                                      : Number(rawIndex)
+                                  if (
+                                    !Number.isInteger(index) ||
+                                    index < 0 ||
+                                    index >= chartData.length
+                                  )
+                                    return
+                                  const point = chartData[index]
+                                  if (!point) return
+                                  handleSelectChartPoint(point.id)
+                                }}
+                                margin={{
+                                  top: 10,
+                                  right: 10,
+                                  left: -20,
+                                  bottom: 0,
+                                }}
+                              >
+                                <CartesianGrid
+                                  strokeDasharray="3 3"
+                                  vertical={false}
+                                  stroke="#E5E7EB"
+                                />
+                                <XAxis
+                                  dataKey="date"
+                                  tick={{ fontSize: 10, fill: '#6B7280' }}
+                                  tickMargin={8}
+                                />
+                                <YAxis
+                                  tick={{ fontSize: 10, fill: '#6B7280' }}
+                                  tickMargin={8}
+                                />
+                                <Tooltip
+                                  content={CompactPriceTooltip}
+                                  cursor={{ stroke: '#93C5FD' }}
+                                />
+                                <Line
+                                  type="monotone"
+                                  dataKey="price"
+                                  stroke="#1D4ED8"
+                                  strokeWidth={3}
+                                  dot={renderChartDot}
+                                  activeDot={{ r: 6 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
                           </div>
-                          <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                            {filteredResults
-                              .slice()
-                              .reverse()
-                              .map((item) => (
-                                <li
-                                  key={item.id}
-                                  ref={(el) => {
-                                    historyItemRefs.current[item.id] = el
-                                  }}
-                                  className={`p-3 transition-colors flex justify-between items-center gap-2 ${
-                                    highlightedItemId === item.id
-                                      ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
-                                      : 'hover:bg-gray-50'
-                                  }`}
-                                >
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-gray-500">
-                                      {item.receipts.date} |{' '}
-                                      {item.receipts.store_name}
-                                    </span>
-                                    <span className="text-sm font-extrabold text-gray-800">
-                                      {item.item_name}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-3 shrink-0">
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        onOpenHistory({
-                                          receiptId: item.receipt_id,
-                                          receiptDate: item.receipts.date,
-                                          itemName: item.item_name,
-                                        })
-                                      }
-                                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors"
-                                    >
-                                      履歴へ
-                                    </button>
-                                    <div className="text-base font-extrabold text-gray-800 text-right">
-                                      ¥{item.price.toLocaleString()}
-                                    </div>
-                                  </div>
-                                </li>
-                              ))}
-                          </ul>
                         </div>
-                      </div>
+                      ) : (
+                        <div className="text-center py-6 text-gray-500 font-bold border border-dashed rounded-lg border-gray-200 bg-gray-50 text-sm">
+                          価格比較グラフは表示できません。
+                        </div>
+                      )
                     ) : (
                       <div className="text-center py-6 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
                         表示する商品が選択されていません。
@@ -651,6 +599,85 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                 )}
             </div>
           )}
+        </section>
+
+        <section className="bg-white border border-gray-200 rounded-xl shadow-sm min-h-[280px] flex flex-col overflow-hidden">
+          <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 shrink-0">
+            <h3 className="font-extrabold text-gray-700 text-sm">
+              対象の購入履歴
+            </h3>
+          </div>
+
+          {!activeRow && (
+            <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-xl border-gray-300 bg-gray-50 m-4">
+              左側からメモを選択してください。
+            </div>
+          )}
+
+          {activeRow &&
+            activeRow.hasSearched &&
+            activeRow.results.length === 0 &&
+            !activeRow.isLoading && (
+              <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
+                過去の購入履歴が見つかりませんでした。
+              </div>
+            )}
+
+          {activeRow &&
+            activeRow.hasSearched &&
+            activeRow.results.length > 0 &&
+            !activeRow.isLoading &&
+            (filteredResults.length > 0 ? (
+              <ul className="divide-y divide-gray-100 flex-1 overflow-y-auto max-h-64 lg:max-h-none">
+                {filteredResults
+                  .slice()
+                  .reverse()
+                  .map((item) => (
+                    <li
+                      key={item.id}
+                      ref={(el) => {
+                        historyItemRefs.current[item.id] = el
+                      }}
+                      className={`p-3 transition-colors flex justify-between items-center gap-2 ${
+                        highlightedItemId === item.id
+                          ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] font-bold text-gray-500 truncate">
+                          {item.receipts.date} | {item.receipts.store_name}
+                        </span>
+                        <span className="text-sm font-extrabold text-gray-800 truncate">
+                          {item.item_name}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onOpenHistory({
+                              receiptId: item.receipt_id,
+                              receiptDate: item.receipts.date,
+                              itemName: item.item_name,
+                            })
+                          }
+                          className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors"
+                        >
+                          履歴へ
+                        </button>
+                        <div className="text-base font-extrabold text-gray-800 text-right">
+                          ¥{item.price.toLocaleString()}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+              </ul>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
+                表示する商品が選択されていません。
+              </div>
+            ))}
         </section>
       </div>
     </div>
