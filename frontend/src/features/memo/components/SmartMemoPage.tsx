@@ -105,6 +105,21 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
   const memoListScrollRef = useRef<HTMLDivElement>(null)
   const memoRowRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const pendingScrollRowIdRef = useRef<string | null>(null)
+  const [isDesktopLayout, setIsDesktopLayout] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(min-width: 1024px)').matches
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mediaQuery = window.matchMedia('(min-width: 1024px)')
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsDesktopLayout(event.matches)
+    }
+    setIsDesktopLayout(mediaQuery.matches)
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
 
   useEffect(() => {
     setHighlightedItemId(null)
@@ -398,7 +413,9 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
   const uniqueItemNames = activeRow
     ? Array.from(new Set(activeRow.results.map((item) => item.item_name)))
     : []
-  const isComparable = filteredResults.some((item) => item.is_comparable)
+  const isComparable = filteredResults.some(
+    (item) => item.is_comparable ?? true
+  )
   const chartData: ChartPoint[] = filteredResults.map((item, index, arr) => ({
     id: item.id,
     date: item.receipts.date,
@@ -477,272 +494,507 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
               </div>
             )}
             {rows.map((row, index) => (
-              <div
-                key={row.id}
-                ref={(el) => {
-                  memoRowRefs.current[row.id] = el
-                }}
-                onClick={() => setActiveRowId(row.id)}
-                className={`w-full text-left border rounded-xl p-3 lg:p-4 transition cursor-pointer ${
-                  activeRowId === row.id
-                    ? 'border-blue-300 bg-blue-50/70'
-                    : 'border-gray-200 bg-white hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="text-xs lg:text-sm font-bold text-gray-600">
-                    メモ {index + 1}
-                  </span>
-                  <Button
-                    variant="danger"
+              <React.Fragment key={row.id}>
+                <div
+                  ref={(el) => {
+                    memoRowRefs.current[row.id] = el
+                  }}
+                  onClick={() =>
+                    setActiveRowId((prev) =>
+                      isDesktopLayout ? row.id : prev === row.id ? null : row.id
+                    )
+                  }
+                  className={`w-full text-left border rounded-xl p-3 lg:p-4 transition cursor-pointer ${
+                    activeRowId === row.id
+                      ? 'border-blue-300 bg-blue-50/70'
+                      : 'border-gray-200 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <span className="text-xs lg:text-sm font-bold text-gray-600">
+                      メモ {index + 1}
+                    </span>
+                    <Button
+                      variant="danger"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void handleRemoveRow(row.id)
+                      }}
+                      className="px-2 py-1 text-[11px] lg:text-xs font-bold"
+                    >
+                      削除
+                    </Button>
+                  </div>
+                  <Input
+                    type="text"
+                    placeholder="商品名を入力 (例: ねぎ 白)"
+                    value={row.query}
+                    onChange={(e) => handleQueryChange(row.id, e.target.value)}
                     onClick={(e) => {
                       e.stopPropagation()
-                      void handleRemoveRow(row.id)
+                      if (isDesktopLayout) {
+                        setActiveRowId(row.id)
+                      }
                     }}
-                    className="px-2 py-1 text-[11px] lg:text-xs font-bold"
-                  >
-                    削除
-                  </Button>
+                    onFocus={() => {
+                      if (isDesktopLayout) {
+                        setActiveRowId(row.id)
+                      }
+                    }}
+                    className="w-full text-sm lg:text-base py-1.5 lg:py-2"
+                  />
+                  <div className="mt-2 text-xs lg:text-sm text-gray-500 font-medium">
+                    {row.isLoading
+                      ? '検索中...'
+                      : row.hasSearched
+                        ? `${row.results.length} 件`
+                        : 'キーワード待ち'}
+                  </div>
                 </div>
-                <Input
-                  type="text"
-                  placeholder="商品名を入力 (例: ねぎ 白)"
-                  value={row.query}
-                  onChange={(e) => handleQueryChange(row.id, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="w-full text-sm lg:text-base py-1.5 lg:py-2"
-                />
-                <div className="mt-2 text-xs lg:text-sm text-gray-500 font-medium">
-                  {row.isLoading
-                    ? '検索中...'
-                    : row.hasSearched
-                      ? `${row.results.length} 件`
-                      : 'キーワード待ち'}
-                </div>
-              </div>
+
+                {!isDesktopLayout && activeRowId === row.id && activeRow && (
+                  <div className="mt-3 space-y-3">
+                    <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-4">
+                      <div>
+                        <h3 className="text-lg font-extrabold text-gray-800">
+                          メモ詳細
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-1">
+                          入力のたびに自動で検索し、内容を自動保存します。
+                        </p>
+                      </div>
+
+                      {activeRow.hasSearched &&
+                        activeRow.results.length === 0 &&
+                        !activeRow.isLoading && (
+                          <div className="text-center py-6 mt-4 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
+                            過去の購入履歴が見つかりませんでした。
+                          </div>
+                        )}
+
+                      {activeRow.hasSearched &&
+                        activeRow.results.length > 0 &&
+                        !activeRow.isLoading && (
+                          <div className="space-y-4 mt-4">
+                            <div className="flex flex-wrap gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                              <span className="text-xs font-bold text-gray-500 w-full mb-1">
+                                表示する商品を選択:
+                              </span>
+                              {uniqueItemNames.map((name) => {
+                                const isExcluded =
+                                  activeRow.excludedItemNames.includes(name)
+                                return (
+                                  <button
+                                    key={name}
+                                    onClick={() =>
+                                      toggleExclude(activeRow.id, name)
+                                    }
+                                    className={`px-3 py-1 text-xs font-bold rounded-full transition-colors border ${
+                                      isExcluded
+                                        ? 'bg-white text-gray-400 border-gray-300 hover:bg-gray-100'
+                                        : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'
+                                    }`}
+                                  >
+                                    {isExcluded ? '＋' : '✓'} {name}
+                                  </button>
+                                )
+                              })}
+                            </div>
+
+                            {filteredResults.length > 0 ? (
+                              isComparable ? (
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+                                  <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+                                      <div className="text-xs font-bold text-gray-500 mb-1">
+                                        最安値
+                                      </div>
+                                      <div className="text-xl font-extrabold text-blue-700">
+                                        ¥{minPrice.toLocaleString()}
+                                      </div>
+                                    </div>
+                                    <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+                                      <div className="text-xs font-bold text-gray-500 mb-1">
+                                        平均価格
+                                      </div>
+                                      <div className="text-xl font-extrabold text-gray-800">
+                                        ¥{avgPrice.toLocaleString()}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    className="h-[220px] bg-white p-3 rounded-lg shadow-sm border border-gray-100 [&_*:focus]:outline-none [&_*:focus-visible]:outline-none"
+                                    onMouseLeave={() =>
+                                      setHighlightedItemId(null)
+                                    }
+                                  >
+                                    <ResponsiveContainer
+                                      width="100%"
+                                      height="100%"
+                                    >
+                                      <LineChart
+                                        data={chartData}
+                                        onMouseMove={(state) =>
+                                          handleChartInteraction(state, false)
+                                        }
+                                        onClick={(state) =>
+                                          handleChartInteraction(state, true)
+                                        }
+                                        margin={{
+                                          top: 10,
+                                          right: 10,
+                                          left: -20,
+                                          bottom: 0,
+                                        }}
+                                      >
+                                        <CartesianGrid
+                                          strokeDasharray="3 3"
+                                          vertical={false}
+                                          stroke="#E5E7EB"
+                                        />
+                                        <XAxis
+                                          dataKey="date"
+                                          tick={{
+                                            fontSize: 12,
+                                            fill: '#6B7280',
+                                          }}
+                                          tickMargin={8}
+                                        />
+                                        <YAxis
+                                          tick={{
+                                            fontSize: 12,
+                                            fill: '#6B7280',
+                                          }}
+                                          tickMargin={8}
+                                        />
+                                        <Tooltip
+                                          content={CompactPriceTooltip}
+                                          cursor={{ stroke: '#93C5FD' }}
+                                        />
+                                        <Line
+                                          type="monotone"
+                                          dataKey="price"
+                                          stroke="#1D4ED8"
+                                          strokeWidth={3}
+                                          dot={renderChartDot}
+                                          activeDot={{ r: 6 }}
+                                        />
+                                      </LineChart>
+                                    </ResponsiveContainer>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="text-center py-6 text-gray-500 font-bold border border-dashed rounded-lg border-gray-200 bg-gray-50 text-sm">
+                                  価格比較グラフは表示できません。
+                                </div>
+                              )
+                            ) : (
+                              <div className="text-center py-6 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
+                                表示する商品が選択されていません。
+                              </div>
+                            )}
+                          </div>
+                        )}
+                    </section>
+
+                    <section className="bg-white border border-gray-200 rounded-xl shadow-sm min-h-[280px] flex flex-col overflow-hidden">
+                      <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 shrink-0">
+                        <h3 className="font-extrabold text-gray-700 text-sm">
+                          対象の購入履歴
+                        </h3>
+                      </div>
+
+                      {activeRow.hasSearched &&
+                        activeRow.results.length === 0 &&
+                        !activeRow.isLoading && (
+                          <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
+                            過去の購入履歴が見つかりませんでした。
+                          </div>
+                        )}
+
+                      {activeRow.hasSearched &&
+                        activeRow.results.length > 0 &&
+                        !activeRow.isLoading &&
+                        (filteredResults.length > 0 ? (
+                          <ul className="divide-y divide-gray-100 flex-1 overflow-y-auto max-h-64">
+                            {filteredResults
+                              .slice()
+                              .reverse()
+                              .map((item) => (
+                                <li
+                                  key={item.id}
+                                  ref={(el) => {
+                                    historyItemRefs.current[item.id] = el
+                                  }}
+                                  className={`p-3 transition-colors flex justify-between items-center gap-2 ${
+                                    highlightedItemId === item.id
+                                      ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
+                                      : 'hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <div className="flex flex-col min-w-0">
+                                    <span className="text-xs font-bold text-gray-500 truncate">
+                                      {item.receipts.date} |{' '}
+                                      {item.receipts.store_name}
+                                    </span>
+                                    <span className="text-sm font-extrabold text-gray-800 truncate">
+                                      {item.item_name}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        onOpenHistory({
+                                          receiptId: item.receipt_id,
+                                          receiptDate: item.receipts.date,
+                                          itemName: item.item_name,
+                                        })
+                                      }
+                                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-md hover:bg-blue-100 transition-colors"
+                                    >
+                                      履歴へ
+                                    </button>
+                                    <div className="text-base font-extrabold text-gray-800 text-right">
+                                      ¥{item.price.toLocaleString()}
+                                    </div>
+                                  </div>
+                                </li>
+                              ))}
+                          </ul>
+                        ) : (
+                          <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
+                            表示する商品が選択されていません。
+                          </div>
+                        ))}
+                    </section>
+                  </div>
+                )}
+              </React.Fragment>
             ))}
           </div>
         </section>
 
-        <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5 lg:p-6 min-h-[280px]">
-          {!activeRow && (
-            <div className="h-full flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-xl border-gray-300 bg-gray-50 text-sm lg:text-base">
-              左側からメモを選択してください。
-            </div>
-          )}
+        {isDesktopLayout && (
+          <>
+            <section className="bg-white border border-gray-200 rounded-xl shadow-sm p-4 sm:p-5 lg:p-6 min-h-[280px]">
+              {!activeRow && (
+                <div className="h-full flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-xl border-gray-300 bg-gray-50 text-sm lg:text-base">
+                  左側からメモを選択してください。
+                </div>
+              )}
 
-          {activeRow && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-lg lg:text-xl font-extrabold text-gray-800">
-                  メモ詳細
+              {activeRow && (
+                <div className="space-y-4">
+                  <div>
+                    <h3 className="text-lg lg:text-xl font-extrabold text-gray-800">
+                      メモ詳細
+                    </h3>
+                    <p className="text-xs lg:text-sm text-gray-500 mt-1">
+                      入力のたびに自動で検索し、内容を自動保存します。
+                    </p>
+                  </div>
+
+                  {activeRow.hasSearched &&
+                    activeRow.results.length === 0 &&
+                    !activeRow.isLoading && (
+                      <div className="text-center py-6 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
+                        過去の購入履歴が見つかりませんでした。
+                      </div>
+                    )}
+
+                  {activeRow.hasSearched &&
+                    activeRow.results.length > 0 &&
+                    !activeRow.isLoading && (
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                          <span className="text-xs lg:text-sm font-bold text-gray-500 w-full mb-1">
+                            表示する商品を選択:
+                          </span>
+                          {uniqueItemNames.map((name) => {
+                            const isExcluded =
+                              activeRow.excludedItemNames.includes(name)
+                            return (
+                              <button
+                                key={name}
+                                onClick={() =>
+                                  toggleExclude(activeRow.id, name)
+                                }
+                                className={`px-3 py-1 text-xs lg:text-sm font-bold rounded-full transition-colors border ${
+                                  isExcluded
+                                    ? 'bg-white text-gray-400 border-gray-300 hover:bg-gray-100'
+                                    : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'
+                                }`}
+                              >
+                                {isExcluded ? '＋' : '✓'} {name}
+                              </button>
+                            )
+                          })}
+                        </div>
+
+                        {filteredResults.length > 0 ? (
+                          isComparable ? (
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
+                              <div className="grid grid-cols-2 gap-4 mb-4">
+                                <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+                                  <div className="text-xs lg:text-sm font-bold text-gray-500 mb-1">
+                                    最安値
+                                  </div>
+                                  <div className="text-xl lg:text-2xl font-extrabold text-blue-700">
+                                    ¥{minPrice.toLocaleString()}
+                                  </div>
+                                </div>
+                                <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
+                                  <div className="text-xs lg:text-sm font-bold text-gray-500 mb-1">
+                                    平均価格
+                                  </div>
+                                  <div className="text-xl lg:text-2xl font-extrabold text-gray-800">
+                                    ¥{avgPrice.toLocaleString()}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div
+                                className="h-[220px] lg:h-[300px] bg-white p-3 rounded-lg shadow-sm border border-gray-100 [&_*:focus]:outline-none [&_*:focus-visible]:outline-none"
+                                onMouseLeave={() => setHighlightedItemId(null)}
+                              >
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <LineChart
+                                    data={chartData}
+                                    onMouseMove={(state) =>
+                                      handleChartInteraction(state, false)
+                                    }
+                                    onClick={(state) =>
+                                      handleChartInteraction(state, true)
+                                    }
+                                    margin={{
+                                      top: 10,
+                                      right: 10,
+                                      left: -20,
+                                      bottom: 0,
+                                    }}
+                                  >
+                                    <CartesianGrid
+                                      strokeDasharray="3 3"
+                                      vertical={false}
+                                      stroke="#E5E7EB"
+                                    />
+                                    <XAxis
+                                      dataKey="date"
+                                      tick={{ fontSize: 12, fill: '#6B7280' }}
+                                      tickMargin={8}
+                                    />
+                                    <YAxis
+                                      tick={{ fontSize: 12, fill: '#6B7280' }}
+                                      tickMargin={8}
+                                    />
+                                    <Tooltip
+                                      content={CompactPriceTooltip}
+                                      cursor={{ stroke: '#93C5FD' }}
+                                    />
+                                    <Line
+                                      type="monotone"
+                                      dataKey="price"
+                                      stroke="#1D4ED8"
+                                      strokeWidth={3}
+                                      dot={renderChartDot}
+                                      activeDot={{ r: 6 }}
+                                    />
+                                  </LineChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-center py-6 text-gray-500 font-bold border border-dashed rounded-lg border-gray-200 bg-gray-50 text-sm lg:text-base">
+                              価格比較グラフは表示できません。
+                            </div>
+                          )
+                        ) : (
+                          <div className="text-center py-6 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
+                            表示する商品が選択されていません。
+                          </div>
+                        )}
+                      </div>
+                    )}
+                </div>
+              )}
+            </section>
+
+            <section className="bg-white border border-gray-200 rounded-xl shadow-sm min-h-[280px] flex flex-col overflow-hidden">
+              <div className="bg-gray-50 px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200 shrink-0">
+                <h3 className="font-extrabold text-gray-700 text-sm lg:text-base">
+                  対象の購入履歴
                 </h3>
-                <p className="text-xs lg:text-sm text-gray-500 mt-1">
-                  入力のたびに自動で検索し、内容を自動保存します。
-                </p>
               </div>
 
-              {activeRow.hasSearched &&
+              {activeRow &&
+                activeRow.hasSearched &&
                 activeRow.results.length === 0 &&
                 !activeRow.isLoading && (
-                  <div className="text-center py-6 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
+                  <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
                     過去の購入履歴が見つかりませんでした。
                   </div>
                 )}
 
-              {activeRow.hasSearched &&
+              {activeRow &&
+                activeRow.hasSearched &&
                 activeRow.results.length > 0 &&
-                !activeRow.isLoading && (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                      <span className="text-xs lg:text-sm font-bold text-gray-500 w-full mb-1">
-                        表示する商品を選択:
-                      </span>
-                      {uniqueItemNames.map((name) => {
-                        const isExcluded =
-                          activeRow.excludedItemNames.includes(name)
-                        return (
-                          <button
-                            key={name}
-                            onClick={() => toggleExclude(activeRow.id, name)}
-                            className={`px-3 py-1 text-xs lg:text-sm font-bold rounded-full transition-colors border ${
-                              isExcluded
-                                ? 'bg-white text-gray-400 border-gray-300 hover:bg-gray-100'
-                                : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200'
-                            }`}
-                          >
-                            {isExcluded ? '＋' : '✓'} {name}
-                          </button>
-                        )
-                      })}
-                    </div>
-
-                    {filteredResults.length > 0 ? (
-                      isComparable ? (
-                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 shadow-sm">
-                          <div className="grid grid-cols-2 gap-4 mb-4">
-                            <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
-                              <div className="text-xs lg:text-sm font-bold text-gray-500 mb-1">
-                                最安値
-                              </div>
-                              <div className="text-xl lg:text-2xl font-extrabold text-blue-700">
-                                ¥{minPrice.toLocaleString()}
-                              </div>
-                            </div>
-                            <div className="bg-white p-3 rounded-lg shadow-sm text-center border border-gray-100">
-                              <div className="text-xs lg:text-sm font-bold text-gray-500 mb-1">
-                                平均価格
-                              </div>
-                              <div className="text-xl lg:text-2xl font-extrabold text-gray-800">
-                                ¥{avgPrice.toLocaleString()}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div
-                            className="h-[220px] lg:h-[300px] bg-white p-3 rounded-lg shadow-sm border border-gray-100 [&_*:focus]:outline-none [&_*:focus-visible]:outline-none"
-                            onMouseLeave={() => setHighlightedItemId(null)}
-                          >
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart
-                                data={chartData}
-                                onMouseMove={(state) =>
-                                  handleChartInteraction(state, false)
-                                }
-                                onClick={(state) =>
-                                  handleChartInteraction(state, true)
-                                }
-                                margin={{
-                                  top: 10,
-                                  right: 10,
-                                  left: -20,
-                                  bottom: 0,
-                                }}
-                              >
-                                <CartesianGrid
-                                  strokeDasharray="3 3"
-                                  vertical={false}
-                                  stroke="#E5E7EB"
-                                />
-                                <XAxis
-                                  dataKey="date"
-                                  tick={{ fontSize: 12, fill: '#6B7280' }}
-                                  tickMargin={8}
-                                />
-                                <YAxis
-                                  tick={{ fontSize: 12, fill: '#6B7280' }}
-                                  tickMargin={8}
-                                />
-                                <Tooltip
-                                  content={CompactPriceTooltip}
-                                  cursor={{ stroke: '#93C5FD' }}
-                                />
-                                <Line
-                                  type="monotone"
-                                  dataKey="price"
-                                  stroke="#1D4ED8"
-                                  strokeWidth={3}
-                                  dot={renderChartDot}
-                                  activeDot={{ r: 6 }}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center py-6 text-gray-500 font-bold border border-dashed rounded-lg border-gray-200 bg-gray-50 text-sm lg:text-base">
-                          価格比較グラフは表示できません。
-                        </div>
-                      )
-                    ) : (
-                      <div className="text-center py-6 text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50">
-                        表示する商品が選択されていません。
-                      </div>
-                    )}
-                  </div>
-                )}
-            </div>
-          )}
-        </section>
-
-        <section className="bg-white border border-gray-200 rounded-xl shadow-sm min-h-[280px] flex flex-col overflow-hidden">
-          <div className="bg-gray-50 px-4 py-3 lg:px-5 lg:py-4 border-b border-gray-200 shrink-0">
-            <h3 className="font-extrabold text-gray-700 text-sm lg:text-base">
-              対象の購入履歴
-            </h3>
-          </div>
-
-          {!activeRow && (
-            <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-xl border-gray-300 bg-gray-50 m-4">
-              左側からメモを選択してください。
-            </div>
-          )}
-
-          {activeRow &&
-            activeRow.hasSearched &&
-            activeRow.results.length === 0 &&
-            !activeRow.isLoading && (
-              <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
-                過去の購入履歴が見つかりませんでした。
-              </div>
-            )}
-
-          {activeRow &&
-            activeRow.hasSearched &&
-            activeRow.results.length > 0 &&
-            !activeRow.isLoading &&
-            (filteredResults.length > 0 ? (
-              <ul className="divide-y divide-gray-100 flex-1 overflow-y-auto max-h-64 lg:max-h-none">
-                {filteredResults
-                  .slice()
-                  .reverse()
-                  .map((item) => (
-                    <li
-                      key={item.id}
-                      ref={(el) => {
-                        historyItemRefs.current[item.id] = el
-                      }}
-                      className={`p-3 lg:p-4 transition-colors flex justify-between items-center gap-2 ${
-                        highlightedItemId === item.id
-                          ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
-                          : 'hover:bg-gray-50'
-                      }`}
-                    >
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs lg:text-sm font-bold text-gray-500 truncate">
-                          {item.receipts.date} | {item.receipts.store_name}
-                        </span>
-                        <span className="text-sm lg:text-base font-extrabold text-gray-800 truncate">
-                          {item.item_name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenHistory({
-                              receiptId: item.receipt_id,
-                              receiptDate: item.receipts.date,
-                              itemName: item.item_name,
-                            })
-                          }
-                          className="text-xs lg:text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 lg:px-3 lg:py-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                !activeRow.isLoading &&
+                (filteredResults.length > 0 ? (
+                  <ul className="divide-y divide-gray-100 flex-1 overflow-y-auto max-h-64 lg:max-h-none">
+                    {filteredResults
+                      .slice()
+                      .reverse()
+                      .map((item) => (
+                        <li
+                          key={item.id}
+                          ref={(el) => {
+                            historyItemRefs.current[item.id] = el
+                          }}
+                          className={`p-3 lg:p-4 transition-colors flex justify-between items-center gap-2 ${
+                            highlightedItemId === item.id
+                              ? 'bg-blue-50 ring-2 ring-inset ring-blue-300'
+                              : 'hover:bg-gray-50'
+                          }`}
                         >
-                          履歴へ
-                        </button>
-                        <div className="text-base lg:text-lg font-extrabold text-gray-800 text-right">
-                          ¥{item.price.toLocaleString()}
-                        </div>
-                      </div>
-                    </li>
-                  ))}
-              </ul>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
-                表示する商品が選択されていません。
-              </div>
-            ))}
-        </section>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs lg:text-sm font-bold text-gray-500 truncate">
+                              {item.receipts.date} | {item.receipts.store_name}
+                            </span>
+                            <span className="text-sm lg:text-base font-extrabold text-gray-800 truncate">
+                              {item.item_name}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                onOpenHistory({
+                                  receiptId: item.receipt_id,
+                                  receiptDate: item.receipts.date,
+                                  itemName: item.item_name,
+                                })
+                              }
+                              className="text-xs lg:text-sm font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 lg:px-3 lg:py-1.5 rounded-md hover:bg-blue-100 transition-colors"
+                            >
+                              履歴へ
+                            </button>
+                            <div className="text-base lg:text-lg font-extrabold text-gray-800 text-right">
+                              ¥{item.price.toLocaleString()}
+                            </div>
+                          </div>
+                        </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center text-gray-400 font-bold border-2 border-dashed rounded-lg border-gray-200 bg-gray-50 m-4 text-center text-sm px-4">
+                    表示する商品が選択されていません。
+                  </div>
+                ))}
+            </section>
+          </>
+        )}
       </div>
     </div>
   )
