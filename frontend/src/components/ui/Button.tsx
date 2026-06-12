@@ -12,7 +12,7 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const baseStyle =
-    'font-bold rounded transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
+    'font-bold rounded transition-colors duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
 
   const variants = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700 py-2 px-6 shadow',

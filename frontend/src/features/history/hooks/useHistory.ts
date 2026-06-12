@@ -12,10 +12,13 @@ import type {
   HistoryReceipt,
   HistoryCsvTransaction,
   HistoryReceiptItem,
+  HistoryReceiptFocusTarget,
 } from '../types'
 import { toast } from 'sonner'
 
-export const useHistory = () => {
+export const useHistory = (
+  receiptFocusTarget?: HistoryReceiptFocusTarget | null
+) => {
   const { getHeaders } = useApiConfig()
 
   const [activeTab, setActiveTab] = useState<'receipts' | 'csv'>('receipts')
@@ -69,11 +72,22 @@ export const useHistory = () => {
           const latestCsvMonth =
             monthsData.csv.length > 0 ? monthsData.csv[0] : fallbackMonth
 
-          setCurrentReceiptMonth(latestReceiptMonth)
+          const focusMonth = receiptFocusTarget?.receiptDate.slice(0, 7)
+          const initialReceiptMonth = focusMonth ?? latestReceiptMonth
+          const initialMonthToLoad =
+            receiptFocusTarget || activeTab === 'receipts'
+              ? initialReceiptMonth
+              : latestCsvMonth
+
+          setCurrentReceiptMonth(initialReceiptMonth)
           setCurrentCsvMonth(latestCsvMonth)
 
-          const initialMonthToLoad =
-            activeTab === 'receipts' ? latestReceiptMonth : latestCsvMonth
+          if (receiptFocusTarget) {
+            setActiveTab('receipts')
+            setSearchQuery(receiptFocusTarget.itemName)
+            setExpandedReceiptId(receiptFocusTarget.receiptId)
+          }
+
           const data = await fetchTransactions(initialMonthToLoad, headers)
           setReceipts(data.receipts || [])
           setCsvData(data.csv_transactions || [])

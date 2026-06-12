@@ -24,6 +24,13 @@ export interface HistoryCsvTransaction {
   price: number
 }
 
+export interface HistoryReceiptFocusTarget {
+  requestId: number
+  receiptId: string
+  receiptDate: string
+  itemName: string
+}
+
 export interface TransactionsResponse {
   receipts: HistoryReceipt[]
   csv_transactions: HistoryCsvTransaction[]

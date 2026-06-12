@@ -1,17 +1,11 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useHistory } from '../hooks/useHistory'
 import { HistoryEditModal } from './HistoryEditModal'
-
-interface HistoryFocusTarget {
-  requestId: number
-  receiptId: string
-  receiptDate: string
-  itemName: string
-}
+import type { HistoryReceiptFocusTarget } from '../types'
 
 interface HistoryPageProps {
-  focusTarget: HistoryFocusTarget | null
+  focusTarget: HistoryReceiptFocusTarget | null
   onFocusHandled?: () => void
 }
 
@@ -19,12 +13,14 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
   focusTarget,
   onFocusHandled,
 }) => {
+  const receiptCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const lastScrolledFocusRequestId = useRef<number | null>(null)
+
   const {
     activeTab,
     setActiveTab,
     isLoading,
     expandedReceiptId,
-    setExpandedReceiptId,
     toggleAccordion,
     currentMonth,
     setCurrentMonth,
@@ -57,22 +53,30 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     isMonthDropdownOpen,
     setIsMonthDropdownOpen,
     isFetchingMonth,
-  } = useHistory()
+  } = useHistory(focusTarget)
 
   useEffect(() => {
-    if (!focusTarget) return
-    setActiveTab('receipts')
-    setCurrentMonth(focusTarget.receiptDate.slice(0, 7))
-    setSearchQuery(focusTarget.itemName)
-    setExpandedReceiptId(focusTarget.receiptId)
-    onFocusHandled?.()
+    if (!focusTarget || isLoading || isFetchingMonth) return
+    if (lastScrolledFocusRequestId.current === focusTarget.requestId) return
+
+    const receipt = filteredReceipts.find((r) => r.id === focusTarget.receiptId)
+    if (!receipt) return
+
+    lastScrolledFocusRequestId.current = focusTarget.requestId
+
+    requestAnimationFrame(() => {
+      receiptCardRefs.current[focusTarget.receiptId]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+      onFocusHandled?.()
+    })
   }, [
     focusTarget,
+    filteredReceipts,
+    isFetchingMonth,
+    isLoading,
     onFocusHandled,
-    setActiveTab,
-    setCurrentMonth,
-    setExpandedReceiptId,
-    setSearchQuery,
   ])
 
   if (isLoading) {
@@ -236,7 +240,14 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
             filteredReceipts.map((receipt) => (
               <div
                 key={receipt.id}
-                className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow"
+                ref={(el) => {
+                  receiptCardRefs.current[receipt.id] = el
+                }}
+                className={`border rounded-xl overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow ${
+                  expandedReceiptId === receipt.id && searchQuery
+                    ? 'border-blue-400 ring-2 ring-blue-100'
+                    : 'border-gray-200'
+                }`}
               >
                 <div
                   onClick={() => toggleAccordion(receipt.id)}
@@ -288,7 +299,12 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
                         {receipt.receipt_items.map((item) => (
                           <li
                             key={item.id || item.item_name}
-                            className="flex justify-between text-gray-600 font-bold border-b border-gray-200/50 pb-1 last:border-0 last:pb-0"
+                            className={`flex justify-between font-bold border-b border-gray-200/50 pb-1 last:border-0 last:pb-0 ${
+                              expandedReceiptId === receipt.id &&
+                              searchQuery === item.item_name
+                                ? 'text-blue-700 bg-blue-50 -mx-2 px-2 py-1 rounded-md'
+                                : 'text-gray-600'
+                            }`}
                           >
                             <span className="truncate pr-4">
                               ・{item.item_name}
