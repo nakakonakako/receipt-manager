@@ -1,11 +1,14 @@
 import React from 'react'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
+import { CsvIconPicker } from './CsvIconPicker'
 
 interface CsvPresetSaveModalProps {
   isOpen: boolean
   presetName: string
+  presetIcon: string
   onNameChange: (val: string) => void
+  onIconChange: (val: string) => void
   onSkip: () => void
   onSave: () => void
 }
@@ -13,7 +16,9 @@ interface CsvPresetSaveModalProps {
 export const CsvPresetSaveModal: React.FC<CsvPresetSaveModalProps> = ({
   isOpen,
   presetName,
+  presetIcon,
   onNameChange,
+  onIconChange,
   onSkip,
   onSave,
 }) => {
@@ -23,10 +28,10 @@ export const CsvPresetSaveModal: React.FC<CsvPresetSaveModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-4">
       <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full animate-in fade-in zoom-in duration-200">
         <h2 className="text-xl font-bold text-gray-800 mb-2">
-          ✨ 抽出ルールの保存
+          ✨ 解析ルールの保存
         </h2>
         <p className="text-sm text-gray-600 mb-6">
-          このCSVのフォーマットを「プリセット」として保存しておくと、次回からAI解析をスキップして一瞬で読み込めるようになります！
+          保存することで同じフォーマットのCSVを次回から瞬時に読み込めるようになります！
         </p>
 
         <div className="mb-6">
@@ -41,6 +46,13 @@ export const CsvPresetSaveModal: React.FC<CsvPresetSaveModalProps> = ({
             className="w-full text-lg p-3"
             autoFocus
           />
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            アイコン
+          </label>
+          <CsvIconPicker value={presetIcon} onChange={onIconChange} />
         </div>
 
         <div className="flex justify-end gap-3 mt-4">

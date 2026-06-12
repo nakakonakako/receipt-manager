@@ -9,6 +9,7 @@ import {
 } from '../types'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import { supabase } from '@/lib/supabase'
+import { DEFAULT_PRESET_ICON, resolvePresetIcon } from '../utils/emoji'
 
 export const useCsvUploader = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -28,6 +29,8 @@ export const useCsvUploader = () => {
   const [isLoadingPresets, setIsLoadingPresets] = useState<boolean>(true)
   const [showPresetSaveModal, setShowPresetSaveModal] = useState<boolean>(false)
   const [newPresetName, setNewPresetName] = useState<string>('')
+  const [newPresetIcon, setNewPresetIcon] =
+    useState<string>(DEFAULT_PRESET_ICON)
 
   const [renameTarget, setRenameTarget] = useState<{
     id: string
@@ -38,6 +41,11 @@ export const useCsvUploader = () => {
     id: string
     name: string
   } | null>(null)
+  const [iconTarget, setIconTarget] = useState<{
+    id: string
+    name: string
+  } | null>(null)
+  const [editPresetIcon, setEditPresetIcon] = useState<string>('')
 
   const { getHeaders } = useApiConfig()
 
@@ -131,6 +139,7 @@ export const useCsvUploader = () => {
       user_id: user.id,
       name: newPresetName,
       mapping: currentMapping,
+      icon: resolvePresetIcon(newPresetIcon),
     }
 
     const { data, error } = await supabase
@@ -148,6 +157,7 @@ export const useCsvUploader = () => {
 
       setShowPresetSaveModal(false)
       setNewPresetName('')
+      setNewPresetIcon(DEFAULT_PRESET_ICON)
       handleReset()
     }
   }
@@ -155,6 +165,7 @@ export const useCsvUploader = () => {
   const handleSkipPresetSave = () => {
     setShowPresetSaveModal(false)
     setNewPresetName('')
+    setNewPresetIcon(DEFAULT_PRESET_ICON)
     handleReset()
   }
 
@@ -224,6 +235,35 @@ export const useCsvUploader = () => {
     setPresets((prev) => prev.filter((p) => p.id !== deleteTarget.id))
     if (selectedPresetId === deleteTarget.id) setSelectedPresetId('')
     closeDeleteModal()
+  }
+
+  const openIconModal = (id: string, name: string, currentIcon?: string) => {
+    setIconTarget({ id, name })
+    setEditPresetIcon(resolvePresetIcon(currentIcon))
+  }
+
+  const closeIconModal = () => {
+    setIconTarget(null)
+    setEditPresetIcon('')
+  }
+
+  const executeUpdateIcon = async () => {
+    if (!iconTarget) return
+    const nextIcon = resolvePresetIcon(editPresetIcon)
+
+    const { error } = await supabase
+      .from('csv_presets')
+      .update({ icon: nextIcon })
+      .eq('id', iconTarget.id)
+    if (error) {
+      alert('アイコンの変更中にエラーが発生しました')
+      return
+    }
+
+    setPresets((prev) =>
+      prev.map((p) => (p.id === iconTarget.id ? { ...p, icon: nextIcon } : p))
+    )
+    closeIconModal()
   }
 
   const handleDataChange = (
@@ -328,13 +368,18 @@ export const useCsvUploader = () => {
     presets,
     selectedPresetId,
     newPresetName,
+    newPresetIcon,
     showPresetSaveModal,
     renameTarget,
     editPresetName,
     deleteTarget,
+    iconTarget,
+    editPresetIcon,
     setSelectedPresetId,
     setNewPresetName,
+    setNewPresetIcon,
     setEditPresetName,
+    setEditPresetIcon,
     handleFileChange,
     handleAnalyze,
     handleSavePreset,
@@ -345,6 +390,9 @@ export const useCsvUploader = () => {
     openDeleteModal,
     closeDeleteModal,
     executeDeletePreset,
+    openIconModal,
+    closeIconModal,
+    executeUpdateIcon,
     handleDataChange,
     handleDeleteRow,
     handleReset,

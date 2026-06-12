@@ -21,6 +21,7 @@ export interface CsvPreset {
   user_id?: string
   name: string
   mapping: CsvMapping
+  icon?: string
 }
 
 export interface CsvAnalysisFormProps {

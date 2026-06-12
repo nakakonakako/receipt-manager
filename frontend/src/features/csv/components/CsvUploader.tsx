@@ -5,6 +5,8 @@ import { useCsvUploader } from '../hooks/useCsvUploader'
 import { CsvPresetSaveModal } from './CsvPresetSaveModal'
 import { CsvPresetDeleteModal } from './CsvPresetDeleteModal'
 import { CsvPresetRenameModal } from './CsvPresetRenameModal'
+import { CsvPresetIconModal } from './CsvPresetIconModal'
+import { resolvePresetIcon } from '../utils/emoji'
 
 export const CsvUploader: React.FC = () => {
   const {
@@ -20,13 +22,18 @@ export const CsvUploader: React.FC = () => {
     presets,
     selectedPresetId,
     newPresetName,
+    newPresetIcon,
     showPresetSaveModal,
     renameTarget,
     editPresetName,
     deleteTarget,
+    iconTarget,
+    editPresetIcon,
     setSelectedPresetId,
     setNewPresetName,
+    setNewPresetIcon,
     setEditPresetName,
+    setEditPresetIcon,
     handleFileChange,
     handleAnalyze,
     handleSavePreset,
@@ -37,6 +44,9 @@ export const CsvUploader: React.FC = () => {
     openDeleteModal,
     closeDeleteModal,
     executeDeletePreset,
+    openIconModal,
+    closeIconModal,
+    executeUpdateIcon,
     handleDataChange,
     handleDeleteRow,
     handleReset,
@@ -73,21 +83,31 @@ export const CsvUploader: React.FC = () => {
               {presets.map((p) => (
                 <div
                   key={p.id}
-                  className="flex justify-between items-center p-3 bg-gray-50 rounded border border-gray-200"
+                  className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center p-3 bg-gray-50 rounded border border-gray-200"
                 >
-                  <span className="font-bold text-sm text-gray-700">
-                    ☁️ {p.name}
-                  </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => openIconModal(p.id!, p.name, p.icon)}
+                      title="アイコンを変更"
+                      className="shrink-0 w-9 h-9 flex items-center justify-center text-lg bg-white border border-gray-300 rounded hover:bg-blue-50 transition-colors"
+                    >
+                      {resolvePresetIcon(p.icon)}
+                    </button>
+                    <span className="font-bold text-sm text-gray-700 truncate">
+                      {p.name}
+                    </span>
+                  </div>
                   <div className="flex gap-2 shrink-0">
                     <button
                       onClick={() => openRenameModal(p.id!, p.name)}
-                      className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                      className="flex-1 sm:flex-none text-sm px-3 py-1.5 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap"
                     >
                       ✏️ 名前変更
                     </button>
                     <button
                       onClick={() => openDeleteModal(p.id!, p.name)}
-                      className="text-sm px-3 py-1 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors"
+                      className="flex-1 sm:flex-none text-sm px-3 py-1.5 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
                     >
                       🗑️ 削除
                     </button>
@@ -97,9 +117,9 @@ export const CsvUploader: React.FC = () => {
             </div>
           ) : (
             <div className="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded bg-gray-50">
-              保存されたルールはありません。
+              保存されたプリセットはありません。
               <br />
-              CSVを解析した後に、ルールに名前を付けて保存できます。
+              CSVを解析した後に、プリセットに名前を付けて保存できます。
             </div>
           )}
         </div>
@@ -134,7 +154,9 @@ export const CsvUploader: React.FC = () => {
       <CsvPresetSaveModal
         isOpen={showPresetSaveModal}
         presetName={newPresetName}
+        presetIcon={newPresetIcon}
         onNameChange={setNewPresetName}
+        onIconChange={setNewPresetIcon}
         onSkip={handleSkipPresetSave}
         onSave={handleSavePreset}
       />
@@ -153,6 +175,15 @@ export const CsvUploader: React.FC = () => {
         targetName={deleteTarget?.name || ''}
         onClose={closeDeleteModal}
         onDelete={executeDeletePreset}
+      />
+
+      <CsvPresetIconModal
+        isOpen={!!iconTarget}
+        presetName={iconTarget?.name || ''}
+        value={editPresetIcon}
+        onChange={setEditPresetIcon}
+        onClose={closeIconModal}
+        onSave={executeUpdateIcon}
       />
     </div>
   )

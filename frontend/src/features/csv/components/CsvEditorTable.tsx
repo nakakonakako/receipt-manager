@@ -21,19 +21,19 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
         <h3 className="font-bold text-green-800 mb-1">
           ✅ 解析完了 ({parsedData.length} 件)
         </h3>
-        <p className="text-sm text-green-700">
-          不要な行は削除し、必要に応じて修正してください。
-        </p>
+        <p className="text-sm text-green-700">必要に応じて修正してください。</p>
       </div>
 
       <div className="border border-gray-200 rounded overflow-hidden bg-white max-h-[60vh] overflow-y-auto">
-        <table className="w-full text-sm text-left text-gray-500">
+        <table className="w-full table-fixed text-sm text-left text-gray-500">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10">
             <tr>
-              <th className="px-4 py-3 w-2/12">日付</th>
-              <th className="px-4 py-3 w-6/12">店名</th>
-              <th className="px-4 py-3 w-3/12">金額</th>
-              <th className="px-4 py-3 w-1/12 text-center">削除</th>
+              <th className="px-2 py-3 w-[27%] whitespace-nowrap">日付</th>
+              <th className="px-2 py-3 w-[40%] whitespace-nowrap">店名</th>
+              <th className="px-2 py-3 w-[22%] whitespace-nowrap">金額</th>
+              <th className="px-1 py-3 w-[11%] text-center whitespace-nowrap">
+                削除
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -44,25 +44,29 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
                     type="date"
                     value={row.date}
                     onChange={(e) => onDataChange(i, 'date', e.target.value)}
-                    className={`w-full ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
+                    className={`w-full min-w-0 px-1.5 ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
                   />
                 </td>
                 <td className="px-2 py-2">
                   <Input
                     value={row.store}
                     onChange={(e) => onDataChange(i, 'store', e.target.value)}
-                    className="w-full"
+                    className="w-full min-w-0"
                   />
                 </td>
                 <td className="px-2 py-2">
                   <NumberInput
                     value={row.price}
                     onChange={(val) => onDataChange(i, 'price', val)}
-                    className="w-full"
+                    className="w-full min-w-0"
                   />
                 </td>
-                <td className="px-2 py-2 text-center">
-                  <Button variant="danger" onClick={() => onDeleteRow(i)}>
+                <td className="px-1 py-2 text-center">
+                  <Button
+                    variant="danger"
+                    onClick={() => onDeleteRow(i)}
+                    className="px-2"
+                  >
                     ✕
                   </Button>
                 </td>

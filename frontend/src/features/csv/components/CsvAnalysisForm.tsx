@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button } from '@/components/ui/Button'
 import { type CsvAnalysisFormProps } from '../types'
+import { resolvePresetIcon } from '../utils/emoji'
 
 export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
   csvText,
@@ -11,11 +12,9 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
   onAnalyze,
   onReset,
 }) => {
-  const selectedName = presets.find((p) => p.id === selectedPresetId)?.name
-
   return (
     <div className="bg-gray-50 p-4 rounded border">
-      <h3 className="font-bold mb-4 text-gray-700">📄 抽出方法の選択</h3>
+      <h3 className="font-bold mb-4 text-gray-700">📄 解析方法の選択</h3>
 
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-3 bg-white p-3 rounded shadow-sm border border-gray-200">
         <label className="text-sm font-bold text-gray-600 shrink-0">
@@ -28,12 +27,10 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
             onChange={(e) => onSelectPreset(e.target.value)}
             className="p-2 border border-gray-300 rounded flex-1 outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
-            <option value="">
-              ✨ AIに自動解析させる（新規フォーマット用）
-            </option>
+            <option value="">新規フォーマットのCSVを解析</option>
             {presets.map((p) => (
               <option key={p.id} value={p.id}>
-                ☁️ {p.name} (クラウド保存)
+                {resolvePresetIcon(p.icon)} {p.name}
               </option>
             ))}
           </select>
@@ -44,16 +41,26 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
         {csvText}
       </pre>
 
-      <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={onReset} disabled={isAnalyzing}>
+      <div className="flex flex-col sm:flex-row sm:justify-end gap-3">
+        <Button
+          variant="secondary"
+          onClick={onReset}
+          disabled={isAnalyzing}
+          className="w-full sm:w-auto"
+        >
           ファイルを選び直す
         </Button>
-        <Button onClick={onAnalyze} disabled={isAnalyzing} variant="primary">
+        <Button
+          onClick={onAnalyze}
+          disabled={isAnalyzing}
+          variant="primary"
+          className="w-full sm:w-auto"
+        >
           {isAnalyzing
-            ? 'パース処理を実行中...'
+            ? '解析処理を実行中...'
             : selectedPresetId
-              ? `「${selectedName}」の設定を使ってパースする`
-              : 'AIで自動解析してパースする'}
+              ? 'プリセットを使って解析する'
+              : '解析を開始する'}
         </Button>
       </div>
     </div>
