@@ -148,6 +148,21 @@ export const useReceiptUploader = () => {
     setEditingState({ taskId, resultIndex: 0 })
   }
 
+  const getNextDetectedTask = (currentTaskId: string) => {
+    const nextTask = tasks.find(
+      (task) =>
+        task.id !== currentTaskId &&
+        task.status === 'success' &&
+        task.results.length > 0
+    )
+
+    if (!nextTask) return null
+    return {
+      taskId: nextTask.id,
+      resultIndex: 0,
+    }
+  }
+
   const handleSaveCurrent = async (data: Receipt) => {
     const headers = await getHeaders()
     if (!headers) return
@@ -165,8 +180,9 @@ export const useReceiptUploader = () => {
       if (currentTask && resultIndex < currentTask.results.length - 1) {
         setEditingState({ taskId, resultIndex: resultIndex + 1 })
       } else {
+        const nextEditingState = getNextDetectedTask(taskId)
         setTasks((prev) => prev.filter((t) => t.id !== taskId))
-        setEditingState(null)
+        setEditingState(nextEditingState)
       }
     } catch (error) {
       console.error(error)
@@ -184,8 +200,9 @@ export const useReceiptUploader = () => {
     if (currentTask && resultIndex < currentTask.results.length - 1) {
       setEditingState({ taskId, resultIndex: resultIndex + 1 })
     } else {
+      const nextEditingState = getNextDetectedTask(taskId)
       setTasks((prev) => prev.filter((t) => t.id !== taskId))
-      setEditingState(null)
+      setEditingState(nextEditingState)
     }
   }
   const handleDeleteTask = (taskId: string) => {
