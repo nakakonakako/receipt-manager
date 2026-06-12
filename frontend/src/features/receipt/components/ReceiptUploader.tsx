@@ -14,10 +14,9 @@ export const ReceiptUploader: React.FC = () => {
     handleSaveCurrent,
     handleSkipCurrent,
     handleDeleteTask,
-    cameraFiles,
     isCameraModalOpen,
-    setIsCameraModalOpen,
     handleCameraCapture,
+    handleContinueCamera,
     handleFinishCamera,
   } = useReceiptUploader()
 
@@ -197,19 +196,14 @@ export const ReceiptUploader: React.FC = () => {
               ✅
             </div>
 
-            <h3 className="text-xl font-extrabold text-gray-800 mb-2">
-              {cameraFiles.length}枚目が撮れました！
+            <h3 className="text-xl font-extrabold text-gray-800 mb-6">
+              撮影できました！
             </h3>
-            <p className="text-sm text-gray-600 mb-6 text-center leading-relaxed">
-              {isCombineMode
-                ? '「続けて撮影」すると、これらの画像が1つのタスクとして結合されます。'
-                : '「続けて撮影」すると、新しいタスクとして追加されます。'}
-            </p>
 
             <div className="flex flex-col gap-3 w-full">
               <button
                 onClick={() => {
-                  setIsCameraModalOpen(false)
+                  handleContinueCamera()
                   setTimeout(() => cameraInputRef.current?.click(), 100)
                 }}
                 className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-lg font-extrabold flex items-center justify-center gap-2 shadow-sm transition-colors"
