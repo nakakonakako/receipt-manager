@@ -23,8 +23,8 @@ export const App: React.FC = () => {
   const userName = session.user.email?.split('@')[0] || 'ユーザー'
 
   return (
-    <div className="bg-gray-50 min-h-screen flex flex-col">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+    <div className="bg-gray-50 h-dvh flex flex-col overflow-hidden">
+      <header className="bg-white border-b border-gray-200 shrink-0 z-40 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xl sm:text-2xl">🧾</span>
@@ -53,7 +53,7 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 flex flex-col w-full">
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
         <MainLayout />
       </main>
     </div>

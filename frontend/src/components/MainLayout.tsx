@@ -46,9 +46,9 @@ export const MainLayout = () => {
   }
 
   return (
-    <div className="flex-1 w-full max-w-4xl mx-auto p-3 sm:p-6">
+    <div className="flex flex-col flex-1 min-h-0 w-full max-w-4xl mx-auto p-3 sm:p-6 overflow-hidden">
       {/* スマホ幅ではプルダウンで切り替え（タブがつぶれるのを防ぐ） */}
-      <div className="sm:hidden mb-4">
+      <div className="sm:hidden mb-4 shrink-0">
         <label htmlFor="main-tab-select" className="sr-only">
           表示するページを選択
         </label>
@@ -72,7 +72,7 @@ export const MainLayout = () => {
       </div>
 
       {/* タブレット・PC幅では従来通りタブを表示 */}
-      <div className="hidden sm:flex bg-gray-200/60 p-1.5 rounded-xl mb-6 shadow-inner">
+      <div className="hidden sm:flex shrink-0 bg-gray-200/60 p-1.5 rounded-xl mb-6 shadow-inner">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -88,7 +88,11 @@ export const MainLayout = () => {
         ))}
       </div>
 
-      <div className="transition-opacity duration-300 w-full">
+      <div
+        className={`flex-1 min-h-0 transition-opacity duration-300 w-full ${
+          activeTab === 'chat' ? 'flex flex-col' : 'overflow-y-auto'
+        }`}
+      >
         {activeTab === 'register' && <RegisterPage />}
         {activeTab === 'history' && (
           <HistoryPage

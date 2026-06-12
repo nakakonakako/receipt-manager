@@ -125,7 +125,7 @@ export const ChatInterface: React.FC = () => {
   )
 
   return (
-    <div className="flex flex-col h-[600px] bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
+    <div className="flex flex-col h-[600px] sm:h-auto sm:flex-1 sm:min-h-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
       <div className="bg-blue-600 p-4 text-white font-extrabold flex justify-between items-center shrink-0 shadow-sm z-10">
         <span>家計簿AIチャット 🤖</span>
       </div>
