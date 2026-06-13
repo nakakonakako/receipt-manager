@@ -54,9 +54,14 @@ export const RegisterPage = () => {
         )}
       </div>
 
-      <p className="text-center text-xs text-gray-400">
-        {inputType === 'camera' &&
-          'カメラで撮影したレシート画像から自動でデータを抽出して登録できます。'}
+      <p className="text-center text-sm text-gray-400">
+        {inputType === 'camera' && (
+          <>
+            カメラで撮影したレシート画像から
+            <br />
+            自動でデータを抽出して登録できます。
+          </>
+        )}
         {inputType === 'manual' && 'レシートの内容を直接入力して登録できます。'}
         {inputType === 'csv' &&
           'CSVファイルから取引データを一括で登録できます。'}
