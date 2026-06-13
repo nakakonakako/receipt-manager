@@ -38,6 +38,7 @@ type MemoRowState = {
   excludedItemNames: string[]
   isLoading: boolean
   hasSearched: boolean
+  isCreating?: boolean
 }
 
 type ChartPoint = {
@@ -76,6 +77,7 @@ const toRowState = (row: MemoRowRecord): MemoRowState => ({
   excludedItemNames: [],
   isLoading: false,
   hasSearched: false,
+  isCreating: false,
 })
 
 export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
@@ -177,6 +179,23 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
     )
   }
 
+  const wait = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms))
+
+  const getHeadersWithRetry = async (
+    maxRetries = 4,
+    delayMs = 120
+  ): Promise<Record<string, string> | null> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+      const headers = await getHeaders()
+      if (headers) return headers
+      if (attempt < maxRetries) {
+        await wait(delayMs)
+      }
+    }
+    return null
+  }
+
   const scheduleSaveRow = (rowId: string, query: string, sortOrder: number) => {
     if (saveDebounceTimersRef.current[rowId]) {
       clearTimeout(saveDebounceTimersRef.current[rowId])
@@ -193,19 +212,63 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
   }
 
   const handleAddRow = async () => {
-    const headers = await getHeaders()
-    if (!headers) return
+    const optimisticId = `tmp-${crypto.randomUUID()}`
+    const optimisticRow: MemoRowState = {
+      id: optimisticId,
+      query: '',
+      sortOrder: rows.length,
+      results: [],
+      excludedItemNames: [],
+      isLoading: false,
+      hasSearched: false,
+      isCreating: true,
+    }
+
+    setRows((prev) => [...prev, optimisticRow])
+    setActiveRowId(optimisticId)
+    pendingScrollRowIdRef.current = optimisticId
+
+    const headers = await getHeadersWithRetry()
+    if (!headers) {
+      let fallbackId: string | null = null
+      setRows((prev) => {
+        const next = prev.filter((row) => row.id !== optimisticId)
+        fallbackId = next[0]?.id ?? null
+        return next
+      })
+      setActiveRowId((prev) => (prev === optimisticId ? fallbackId : prev))
+      return
+    }
+
     try {
       const row = await createMemoRow(
         { query: '', sortOrder: rows.length },
         headers
       )
-      const nextRow = toRowState(row)
-      setRows((prev) => [...prev, nextRow])
-      setActiveRowId(nextRow.id)
-      pendingScrollRowIdRef.current = nextRow.id
+      setRows((prev) =>
+        prev.map((current) =>
+          current.id === optimisticId
+            ? {
+                ...current,
+                id: row.id,
+                query: row.query,
+                sortOrder: row.sort_order,
+                isCreating: false,
+              }
+            : current
+        )
+      )
+      setActiveRowId((prev) => (prev === optimisticId ? row.id : prev))
+      pendingScrollRowIdRef.current = row.id
     } catch (error) {
       console.error('メモ作成エラー:', error)
+      let fallbackId: string | null = null
+      setRows((prev) => {
+        const next = prev.filter((current) => current.id !== optimisticId)
+        fallbackId = next[0]?.id ?? null
+        return next
+      })
+      setActiveRowId((prev) => (prev === optimisticId ? fallbackId : prev))
     }
   }
 
@@ -219,24 +282,57 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
       delete saveDebounceTimersRef.current[id]
     }
 
-    const headers = await getHeaders()
-    if (!headers) return
+    const wasActive = activeRowId === id
+    let removedRow: MemoRowState | null = null
+    let removedIndex = -1
+    let nextFirstId: string | null = null
+
+    setRows((prev) => {
+      removedIndex = prev.findIndex((row) => row.id === id)
+      if (removedIndex < 0) return prev
+      removedRow = prev[removedIndex]
+      const next = prev
+        .filter((row) => row.id !== id)
+        .map((row, index) => ({ ...row, sortOrder: index }))
+      nextFirstId = next[0]?.id ?? null
+      return next
+    })
+    if (wasActive) {
+      setActiveRowId(nextFirstId)
+    }
+
+    // サーバー作成前の行はローカル削除だけで完了
+    if (id.startsWith('tmp-')) {
+      return
+    }
+
+    const rollbackDelete = () => {
+      if (!removedRow || removedIndex < 0) return
+      setRows((prev) => {
+        const insertAt = Math.min(Math.max(removedIndex, 0), prev.length)
+        const restored = [
+          ...prev.slice(0, insertAt),
+          removedRow as MemoRowState,
+          ...prev.slice(insertAt),
+        ]
+        return restored.map((row, index) => ({ ...row, sortOrder: index }))
+      })
+      if (wasActive) {
+        setActiveRowId((removedRow as MemoRowState).id)
+      }
+    }
+
+    const headers = await getHeadersWithRetry()
+    if (!headers) {
+      rollbackDelete()
+      return
+    }
+
     try {
       await deleteMemoRow(id, headers)
-      setRows((prev) => {
-        const next = prev
-          .filter((row) => row.id !== id)
-          .map((row, index) => ({ ...row, sortOrder: index }))
-        if (next.length > 0 && activeRowId === id) {
-          setActiveRowId(next[0].id)
-        }
-        if (next.length === 0) {
-          setActiveRowId(null)
-        }
-        return next
-      })
     } catch (error) {
       console.error('メモ削除エラー:', error)
+      rollbackDelete()
     }
   }
 
@@ -490,7 +586,9 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
             )}
             {!isBootstrapping && rows.length === 0 && (
               <div className="text-center py-10 text-gray-400 font-bold border-2 border-dashed rounded-xl border-gray-300 bg-gray-50">
-                「＋ メモを追加」でメモを作成してください。
+                「＋ メモを追加」で
+                <br />
+                メモを作成してください。
               </div>
             )}
             {rows.map((row, index) => (
@@ -520,9 +618,10 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                         e.stopPropagation()
                         void handleRemoveRow(row.id)
                       }}
+                      disabled={row.isCreating}
                       className="px-2 py-1 text-[11px] lg:text-xs font-bold"
                     >
-                      削除
+                      {row.isCreating ? '作成中' : '削除'}
                     </Button>
                   </div>
                   <Input
@@ -541,14 +640,17 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                         setActiveRowId(row.id)
                       }
                     }}
+                    disabled={row.isCreating}
                     className="w-full text-sm lg:text-base py-1.5 lg:py-2"
                   />
                   <div className="mt-2 text-xs lg:text-sm text-gray-500 font-medium">
-                    {row.isLoading
-                      ? '検索中...'
-                      : row.hasSearched
-                        ? `${row.results.length} 件`
-                        : 'キーワード待ち'}
+                    {row.isCreating
+                      ? '作成中...'
+                      : row.isLoading
+                        ? '検索中...'
+                        : row.hasSearched
+                          ? `${row.results.length} 件`
+                          : 'キーワード待ち'}
                   </div>
                 </div>
 
