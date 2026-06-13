@@ -40,6 +40,7 @@ export const useHistory = (
 
   const [searchQuery, setSearchQuery] = useState('')
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
+  const [searchScope, setSearchScope] = useState<'current' | 'all'>('current')
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'receipt' | 'csv'
@@ -147,6 +148,51 @@ export const useHistory = (
     }
     loadMonthData()
   }, [currentMonth])
+
+  useEffect(() => {
+    const loadAllMonthsData = async () => {
+      if (searchScope !== 'all' || isLoading || allMonths.length === 0) return
+
+      const missingMonths = allMonths.filter(
+        (month) => !loadedMonths.has(month)
+      )
+      if (missingMonths.length === 0) return
+
+      const headers = await getHeaders()
+      if (!headers) return
+
+      setIsFetchingMonth(true)
+      try {
+        for (const month of missingMonths) {
+          const data = await fetchTransactions(month, headers)
+
+          setReceipts((prev) => {
+            const existingIds = new Set(prev.map((r) => r.id))
+            const newReceipts = (data.receipts || []).filter(
+              (r) => !existingIds.has(r.id)
+            )
+            return [...prev, ...newReceipts]
+          })
+          setCsvData((prev) => {
+            const existingIds = new Set(prev.map((c) => c.id))
+            const newCsv = (data.csv_transactions || []).filter(
+              (c) => !existingIds.has(c.id)
+            )
+            return [...prev, ...newCsv]
+          })
+
+          setLoadedMonths((prev) => new Set(prev).add(month))
+        }
+      } catch (error) {
+        console.error('全期間データの取得に失敗しました:', error)
+        toast.error('全期間データの取得に失敗しました。')
+      } finally {
+        setIsFetchingMonth(false)
+      }
+    }
+
+    void loadAllMonthsData()
+  }, [searchScope, activeTab, isLoading, allMonths, loadedMonths, getHeaders])
 
   const currentIndex = allMonths.indexOf(currentMonth)
   const handlePrevMonth = () => {
@@ -269,7 +315,10 @@ export const useHistory = (
     : ''
 
   const { filteredReceipts, receiptTotal } = useMemo(() => {
-    let filtered = receipts.filter((r) => r.date.startsWith(currentMonth))
+    let filtered =
+      searchScope === 'current'
+        ? receipts.filter((r) => r.date.startsWith(currentMonth))
+        : [...receipts]
     if (searchQuery) {
       filtered = filtered.filter(
         (r) =>
@@ -288,10 +337,13 @@ export const useHistory = (
     )
     const total = filtered.reduce((sum, r) => sum + r.total_amount, 0)
     return { filteredReceipts: filtered, receiptTotal: total }
-  }, [receipts, currentMonth, searchQuery, sortOrder])
+  }, [receipts, currentMonth, searchQuery, sortOrder, searchScope])
 
   const { filteredCsv, csvTotal } = useMemo(() => {
-    let filtered = csvData.filter((c) => c.date.startsWith(currentMonth))
+    let filtered =
+      searchScope === 'current'
+        ? csvData.filter((c) => c.date.startsWith(currentMonth))
+        : [...csvData]
     if (searchQuery) {
       filtered = filtered.filter((c) => c.store.includes(searchQuery))
     }
@@ -302,7 +354,7 @@ export const useHistory = (
     )
     const total = filtered.reduce((sum, c) => sum + c.price, 0)
     return { filteredCsv: filtered, csvTotal: total }
-  }, [csvData, currentMonth, searchQuery, sortOrder])
+  }, [csvData, currentMonth, searchQuery, sortOrder, searchScope])
 
   const toggleAccordion = (id: string) =>
     setExpandedReceiptId((prev) => (prev === id ? null : id))
@@ -323,6 +375,8 @@ export const useHistory = (
     handleNextMonth,
     searchQuery,
     setSearchQuery,
+    searchScope,
+    setSearchScope,
     sortOrder,
     setSortOrder,
     filteredReceipts,
