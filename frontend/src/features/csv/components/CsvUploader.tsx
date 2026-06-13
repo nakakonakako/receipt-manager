@@ -145,6 +145,7 @@ export const CsvUploader: React.FC = () => {
 
       {parsedData.length > 0 && (
         <CsvEditorTable
+          csvText={csvText}
           parsedData={parsedData}
           onDataChange={handleDataChange}
           onDeleteRow={handleDeleteRow}

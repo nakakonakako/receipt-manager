@@ -5,6 +5,7 @@ import { NumberInput } from '@/components/ui/NumberInput'
 import { type CsvEditorTableProps } from '../types'
 
 export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
+  csvText,
   parsedData,
   onDataChange,
   onDeleteRow,
@@ -23,6 +24,10 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
         </h3>
         <p className="text-sm text-green-700">必要に応じて修正してください。</p>
       </div>
+
+      <pre className="bg-gray-800 text-white p-3 text-xs overflow-x-auto rounded max-h-40 overflow-y-auto">
+        {csvText}
+      </pre>
 
       <div className="border border-gray-200 rounded overflow-hidden bg-white max-h-[60vh] overflow-y-auto">
         <table className="w-full table-fixed text-sm text-left text-gray-500">

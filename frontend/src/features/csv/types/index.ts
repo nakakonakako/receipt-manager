@@ -37,6 +37,7 @@ export interface CsvAnalysisFormProps {
 }
 
 export interface CsvEditorTableProps {
+  csvText: string
   parsedData: EditingTransaction[]
   onDataChange: (
     index: number,
