@@ -1,3 +1,5 @@
+import asyncio
+
 from app.schemas.csv import CsvAnalysisRequest, CsvParseResponse, CsvSaveRequest
 from app.schemas.memo import MemoRowUpsertRequest
 from app.schemas.receipt import ReceiptData, SearchQuery
@@ -33,7 +35,7 @@ async def get_supabase_service(
     x_supabase_token: str = Header(..., alias="x-supabase-token"),
 ) -> SupabaseService:
     try:
-        return SupabaseService(token=x_supabase_token)
+        return await asyncio.to_thread(SupabaseService, token=x_supabase_token)
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 
@@ -45,7 +47,9 @@ async def analyze_receipt(
 ):
     try:
         image_bytes_list = [await file.read() for file in files]
-        result = gemini_service.analyze_receipt(image_bytes_list)
+        result = await asyncio.to_thread(
+            gemini_service.analyze_receipt, image_bytes_list
+        )
 
         for receipt in result.get("receipts", []):
             for item in receipt.get("items", []):
@@ -57,7 +61,9 @@ async def analyze_receipt(
                 item_names.append(item["item_name"])
 
         if item_names:
-            learned_data = supabase_service.get_learned_categories(item_names)
+            learned_data = await asyncio.to_thread(
+                supabase_service.get_learned_categories, item_names
+            )
 
             for receipt in result.get("receipts", []):
                 for item in receipt.get("items", []):
@@ -83,7 +89,7 @@ async def save_receipt(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
-        result = supabase_service.add_receipt_data(data)
+        result = await asyncio.to_thread(supabase_service.add_receipt_data, data)
         return {"message": "Receipt data saved successfully.", "details": result}
 
     except Exception as e:
