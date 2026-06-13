@@ -448,6 +448,10 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
         return
       }
       try {
+        const shouldAutoFocusFirstRowOnOpen =
+          typeof window === 'undefined' ||
+          window.matchMedia('(min-width: 640px)').matches
+
         const savedRows = await fetchMemoRows(headers)
         if (savedRows.length === 0) {
           const createdRow = await createMemoRow(
@@ -456,11 +460,13 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
           )
           const nextRow = toRowState(createdRow)
           setRows([nextRow])
-          setActiveRowId(nextRow.id)
+          setActiveRowId(shouldAutoFocusFirstRowOnOpen ? nextRow.id : null)
         } else {
           const mappedRows = savedRows.map(toRowState)
           setRows(mappedRows)
-          setActiveRowId(mappedRows[0].id)
+          setActiveRowId(
+            shouldAutoFocusFirstRowOnOpen ? mappedRows[0].id : null
+          )
         }
       } catch (error) {
         console.error('メモ初期化エラー:', error)
@@ -631,15 +637,9 @@ export const SmartMemoPage: React.FC<SmartMemoPageProps> = ({
                     onChange={(e) => handleQueryChange(row.id, e.target.value)}
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (isDesktopLayout) {
-                        setActiveRowId(row.id)
-                      }
+                      setActiveRowId(row.id)
                     }}
-                    onFocus={() => {
-                      if (isDesktopLayout) {
-                        setActiveRowId(row.id)
-                      }
-                    }}
+                    onFocus={() => setActiveRowId(row.id)}
                     disabled={row.isCreating}
                     className="w-full text-sm lg:text-base py-1.5 lg:py-2"
                   />
