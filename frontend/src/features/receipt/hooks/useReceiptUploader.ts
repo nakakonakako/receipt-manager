@@ -176,7 +176,7 @@ export const useReceiptUploader = () => {
     setCameraFilesWithCache([])
     setCameraDraftTaskIdWithCache(null)
     setIsCameraModalOpen(false)
-    toast.success(`${cameraFiles.length}枚の画像をタスクに追加しました！`)
+    toast.success(`画像をタスクに追加しました！`)
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
