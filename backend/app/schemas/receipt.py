@@ -15,9 +15,6 @@ class ReceiptItem(BaseModel):
     search_tags: list[str] = Field(
         description="3 to 5 search keywords including general names, synonyms, and use cases (e.g., for 'ｻｰﾓｽ ﾏｸﾞ', use ['コップ', 'マグカップ', 'グラス', '水筒', '食器'])."
     )
-    is_comparable: bool = Field(
-        description="Always return true. The app defaults price-trend (memo chart) to ON for every line; users turn it off in the editor if needed. (Server also forces true before save; past per-item choices may be restored from stored preferences.)"
-    )
 
 
 class ReceiptData(BaseModel):

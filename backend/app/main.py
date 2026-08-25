@@ -1,7 +1,6 @@
 import asyncio
 
 from app.schemas.csv import CsvAnalysisRequest, CsvParseResponse, CsvSaveRequest
-from app.schemas.memo import MemoRowUpsertRequest
 from app.schemas.receipt import ReceiptData, SearchQuery
 from app.services.csv_service import CsvService
 from app.services.gemini_service import GeminiService
@@ -51,10 +50,6 @@ async def analyze_receipt(
             gemini_service.analyze_receipt, image_bytes_list
         )
 
-        for receipt in result.get("receipts", []):
-            for item in receipt.get("items", []):
-                item["is_comparable"] = True
-
         item_names = []
         for receipt in result.get("receipts", []):
             for item in receipt.get("items", []):
@@ -74,8 +69,6 @@ async def analyze_receipt(
                             item["main_category"] = pref["main_category"]
                         if pref.get("sub_category") is not None:
                             item["sub_category"] = pref["sub_category"]
-                        if pref.get("is_comparable") is not None:
-                            item["is_comparable"] = pref["is_comparable"]
 
         return result
 
@@ -211,70 +204,6 @@ async def delete_csv_transaction(
 ):
     try:
         result = supabase_service.delete_csv_transaction(transaction_id)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/memo/search")
-async def search_memo_items(
-    query: str,
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    try:
-        data = supabase_service.search_items_for_memo(query)
-        return {"items": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.get("/memo/rows")
-async def get_memo_rows(
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    try:
-        rows = supabase_service.get_memo_rows()
-        return {"rows": rows}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.post("/memo/rows")
-async def create_memo_row(
-    payload: MemoRowUpsertRequest,
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    try:
-        row = supabase_service.create_memo_row(
-            query=payload.query, sort_order=payload.sort_order
-        )
-        return {"row": row}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.put("/memo/rows/{row_id}")
-async def update_memo_row(
-    row_id: str,
-    payload: MemoRowUpsertRequest,
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    try:
-        row = supabase_service.update_memo_row(
-            row_id=row_id, query=payload.query, sort_order=payload.sort_order
-        )
-        return {"row": row}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@app.delete("/memo/rows/{row_id}")
-async def delete_memo_row(
-    row_id: str,
-    supabase_service: SupabaseService = Depends(get_supabase_service),
-):
-    try:
-        result = supabase_service.delete_memo_row(row_id)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

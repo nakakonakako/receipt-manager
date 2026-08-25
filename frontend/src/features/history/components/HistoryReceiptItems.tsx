@@ -68,7 +68,6 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
           main_category: '食費',
           sub_category: 'その他',
           search_tags: [],
-          is_comparable: true,
         },
       ],
     })
@@ -80,7 +79,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         <div>
           <h3 className="font-extrabold text-gray-700">購入品目</h3>
           <p className="text-[10px] text-gray-500 font-medium mt-0.5">
-            大/小分類・検索タグ・相場(ON/OFF)を修正できます。
+            大/小分類・検索タグを修正できます。
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -108,9 +107,6 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
             <tr>
               <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[220px]">
                 商品名 <span className="text-red-500">*</span>
-              </th>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b w-[120px] text-center">
-                相場グラフ
               </th>
               <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[120px]">
                 大分類
@@ -141,25 +137,6 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                     placeholder="商品名"
                     className="w-full border-gray-200"
                   />
-                </td>
-                <td className="p-2 text-center">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleItemChange(
-                        index,
-                        'is_comparable',
-                        !(item.is_comparable ?? true)
-                      )
-                    }
-                    className={`h-10 min-w-[92px] px-2 text-xs font-bold rounded-lg border ${
-                      (item.is_comparable ?? true)
-                        ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200/90'
-                        : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                    }`}
-                  >
-                    {(item.is_comparable ?? true) ? 'ON' : 'OFF'}
-                  </button>
                 </td>
                 <td className="p-2">
                   <select
@@ -226,7 +203,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
             {adjustmentAmount !== 0 && (
               <tr className="bg-gray-50">
                 <td
-                  colSpan={5}
+                  colSpan={4}
                   className="p-2 text-sm font-bold text-gray-500 pl-4"
                 >
                   🔒 消費税・自動調整額
@@ -254,7 +231,6 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
 
       <div className="block md:hidden space-y-2.5 mb-4">
         {receiptTarget.receipt_items.map((item, index) => {
-          const isComparable = item.is_comparable ?? true
           const isDetailOpen = openDetailIndexes[index] ?? false
           return (
             <div
@@ -285,41 +261,23 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                 />
               </div>
 
-              <div className="flex items-stretch gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleItemChange(index, 'is_comparable', !isComparable)
+              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
+                <label className="text-sm font-bold text-gray-700 pl-1">
+                  金額
+                </label>
+                <NumberInput
+                  value={item.price}
+                  onChange={(val) =>
+                    handleItemChange(
+                      index,
+                      'price',
+                      val === '' || val === '-' ? 0 : Number(val)
+                    )
                   }
-                  className={`shrink-0 min-w-[72px] px-3 rounded-lg border flex flex-col items-center justify-center leading-none ${
-                    isComparable
-                      ? 'bg-blue-100 text-blue-800 border-blue-200 hover:bg-blue-200/90'
-                      : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className="text-[10px] mb-0.5">相場</span>
-                  <span className="text-sm font-bold">
-                    {isComparable ? 'ON' : 'OFF'}
-                  </span>
-                </button>
-                <div className="flex-1 flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
-                  <label className="text-sm font-bold text-gray-700 pl-1">
-                    金額
-                  </label>
-                  <NumberInput
-                    value={item.price}
-                    onChange={(val) =>
-                      handleItemChange(
-                        index,
-                        'price',
-                        val === '' || val === '-' ? 0 : Number(val)
-                      )
-                    }
-                    maxLength={7}
-                    className="w-28 text-right text-base py-1.5 font-bold tabular-nums border-gray-300 bg-white shadow-sm"
-                    placeholder="0"
-                  />
-                </div>
+                  maxLength={7}
+                  className="w-28 text-right text-base py-1.5 font-bold tabular-nums border-gray-300 bg-white shadow-sm"
+                  placeholder="0"
+                />
               </div>
 
               <button

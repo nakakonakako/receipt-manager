@@ -5,7 +5,6 @@ export interface HistoryReceiptItem {
   main_category?: string
   sub_category?: string
   search_tags?: string[]
-  is_comparable?: boolean
 }
 
 export interface HistoryReceipt {
@@ -22,13 +21,6 @@ export interface HistoryCsvTransaction {
   date: string
   store: string
   price: number
-}
-
-export interface HistoryReceiptFocusTarget {
-  requestId: number
-  receiptId: string
-  receiptDate: string
-  itemName: string
 }
 
 export interface TransactionsResponse {

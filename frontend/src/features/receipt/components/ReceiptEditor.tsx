@@ -16,7 +16,6 @@ function normalizeEditingItem(item: ReceiptItem): EditingItem {
     main_category: item.main_category ?? 'その他',
     sub_category: item.sub_category ?? 'その他',
     search_tags: item.search_tags ?? [],
-    is_comparable: item.is_comparable ?? true,
   }
 }
 
@@ -27,7 +26,6 @@ function emptyLineItem(): EditingItem {
     main_category: '食費',
     sub_category: 'その他',
     search_tags: [],
-    is_comparable: true,
   }
 }
 
@@ -95,7 +93,6 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       main_category: (item.main_category ?? 'その他').trim() || 'その他',
       sub_category: (item.sub_category ?? 'その他').trim() || 'その他',
       search_tags: (item.search_tags ?? []).filter((t) => t.trim().length > 0),
-      is_comparable: item.is_comparable ?? true,
     }))
 
     const savedData: Receipt = {

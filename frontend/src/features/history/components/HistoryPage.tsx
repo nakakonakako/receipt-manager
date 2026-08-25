@@ -1,20 +1,10 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useRef } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useHistory } from '../hooks/useHistory'
 import { HistoryEditModal } from './HistoryEditModal'
-import type { HistoryReceiptFocusTarget } from '../types'
 
-interface HistoryPageProps {
-  focusTarget: HistoryReceiptFocusTarget | null
-  onFocusHandled?: () => void
-}
-
-export const HistoryPage: React.FC<HistoryPageProps> = ({
-  focusTarget,
-  onFocusHandled,
-}) => {
+export const HistoryPage: React.FC = () => {
   const receiptCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
-  const lastScrolledFocusRequestId = useRef<number | null>(null)
   const touchStartXRef = useRef<number | null>(null)
   const touchStartYRef = useRef<number | null>(null)
 
@@ -57,31 +47,7 @@ export const HistoryPage: React.FC<HistoryPageProps> = ({
     isMonthDropdownOpen,
     setIsMonthDropdownOpen,
     isFetchingMonth,
-  } = useHistory(focusTarget)
-
-  useEffect(() => {
-    if (!focusTarget || isLoading || isFetchingMonth) return
-    if (lastScrolledFocusRequestId.current === focusTarget.requestId) return
-
-    const receipt = filteredReceipts.find((r) => r.id === focusTarget.receiptId)
-    if (!receipt) return
-
-    lastScrolledFocusRequestId.current = focusTarget.requestId
-
-    requestAnimationFrame(() => {
-      receiptCardRefs.current[focusTarget.receiptId]?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-      })
-      onFocusHandled?.()
-    })
-  }, [
-    focusTarget,
-    filteredReceipts,
-    isFetchingMonth,
-    isLoading,
-    onFocusHandled,
-  ])
+  } = useHistory()
 
   if (isLoading) {
     return (

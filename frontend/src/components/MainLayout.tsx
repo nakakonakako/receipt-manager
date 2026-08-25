@@ -2,17 +2,9 @@ import { useState } from 'react'
 import { RegisterPage } from '@/components/RegisterPage'
 import { ChatInterface } from '@/features/search/components/ChatInterface'
 import { HistoryPage } from '@/features/history/components/HistoryPage'
-import { SmartMemoPage } from '@/features/memo/components/SmartMemoPage'
 import { DashboardPage } from '@/features/dashboard/components/DashboardPage'
 
-interface HistoryFocusTarget {
-  requestId: number
-  receiptId: string
-  receiptDate: string
-  itemName: string
-}
-
-type TabKey = 'register' | 'chat' | 'history' | 'memo' | 'dashboard'
+type TabKey = 'register' | 'chat' | 'history' | 'dashboard'
 
 interface TabDefinition {
   key: TabKey
@@ -24,28 +16,11 @@ const TABS: TabDefinition[] = [
   { key: 'register', label: '登録', icon: '📸' },
   { key: 'history', label: '履歴・管理', icon: '📊' },
   { key: 'chat', label: 'AIチャット', icon: '💬' },
-  { key: 'memo', label: 'メモ', icon: '🛒' },
   { key: 'dashboard', label: '統計', icon: '📈' },
 ]
 
 export const MainLayout = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('register')
-  const [historyFocusTarget, setHistoryFocusTarget] =
-    useState<HistoryFocusTarget | null>(null)
-
-  const handleOpenHistoryFromMemo = (payload: {
-    receiptId: string
-    receiptDate: string
-    itemName: string
-  }) => {
-    setHistoryFocusTarget({
-      requestId: Date.now(),
-      ...payload,
-    })
-    setActiveTab('history')
-  }
-
-  const isMemoTab = activeTab === 'memo'
 
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
@@ -93,25 +68,13 @@ export const MainLayout = () => {
       </div>
 
       <div
-        className={`flex-1 min-h-0 transition-opacity duration-300 w-full pb-3 sm:pb-6 ${
+        className={`flex-1 min-h-0 transition-opacity duration-300 w-full max-w-4xl mx-auto px-3 sm:px-6 pb-3 sm:pb-6 ${
           activeTab === 'chat' ? 'flex flex-col' : 'overflow-y-auto'
-        } ${
-          isMemoTab
-            ? 'max-w-4xl mx-auto px-3 sm:px-6 lg:max-w-none lg:mx-0 lg:px-10 xl:px-12'
-            : 'max-w-4xl mx-auto px-3 sm:px-6'
         }`}
       >
         {activeTab === 'register' && <RegisterPage />}
-        {activeTab === 'history' && (
-          <HistoryPage
-            focusTarget={historyFocusTarget}
-            onFocusHandled={() => setHistoryFocusTarget(null)}
-          />
-        )}
+        {activeTab === 'history' && <HistoryPage />}
         {activeTab === 'chat' && <ChatInterface />}
-        {activeTab === 'memo' && (
-          <SmartMemoPage onOpenHistory={handleOpenHistoryFromMemo} />
-        )}
         {activeTab === 'dashboard' && <DashboardPage />}
       </div>
     </div>

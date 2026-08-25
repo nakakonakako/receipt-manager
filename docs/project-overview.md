@@ -42,7 +42,7 @@
 | 目的 | 支出の記録・検索・管理 | 意図した商品だけの厳密単価比較 |
 | カテゴリ | AI / 学習の `main` / `sub` | 手動フォルダのみ |
 | 単価・重量 | 扱わない（本流にしない） | g / 個 / ml 等の確定データのみ |
-| 値段推移・店頭照会 | **置かない**（メモは削除予定） | B 側で実装 |
+| 値段推移・店頭照会 | **置かない**（削除済み） | B 側で実装 |
 | 連携 | B を知らない | A のレシート DB を一方向参照 |
 
 詳細: [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md)
@@ -82,7 +82,7 @@ Supabase（Auth + Postgres + RLS）
 
 - **現行** … 本番相当で動いている
 - **強化予定** … A として伸ばす
-- **削除予定** … A から外し、必要なら B へ
+- **削除済み** … 履歴として言及する場合のみ
 
 ### 4.1 UI タブ（`frontend/src/components/MainLayout.tsx`）
 
@@ -91,7 +91,6 @@ Supabase（Auth + Postgres + RLS）
 | `register` | 登録 | 現行 | レシート撮影 / 手動入力 / CSV 読込 |
 | `history` | 履歴・管理 | 現行・強化予定 | 月次履歴、編集・削除、店舗・商品・タグ検索 |
 | `chat` | AIチャット | 現行 | 家計データへの自然言語 Q&A |
-| `memo` | メモ | **削除予定** | スマート買い物メモ（値段推移）。B へ移管後に削除 |
 | `dashboard` | 統計 | 現行 | 月次カテゴリ円グラフなど |
 
 ### 4.2 機能モジュール
@@ -102,7 +101,6 @@ Supabase（Auth + Postgres + RLS）
 | CSV | `frontend/src/features/csv/` | 現行 | CSV → 列マッピング（Gemini またはプリセット）→ `/save_csv` |
 | 履歴 | `frontend/src/features/history/` | 現行・強化予定 | 月選択、明細編集削除、検索。サブカテゴリ検索の強化が望ましい |
 | AIチャット | `frontend/src/features/search/` | 現行 | `/search` + `chat_messages` 履歴 |
-| メモ | `frontend/src/features/memo/` | **削除予定** | 保存クエリ・商品検索・値段推移グラフ |
 | ダッシュボード | `frontend/src/features/dashboard/` | 現行 | `main_category` 集計。CSV は「キャッシュレス（未分類）」扱い |
 
 ### 4.3 バックエンド API（`backend/app/main.py`）
@@ -119,7 +117,6 @@ Supabase（Auth + Postgres + RLS）
 | POST | `/save_csv` | 要 | CSV 行保存 | 現行 |
 | PUT/DELETE | `/receipts/{id}` | 要 | レシート更新・削除 | 現行 |
 | PUT/DELETE | `/csv_transactions/{id}` | 要 | CSV 行更新・削除 | 現行 |
-| * | `/memo/*` | 要 | メモ検索・行 CRUD | **削除予定** |
 
 認証ヘッダ: `x-supabase-token`（Supabase セッションの access token）。
 
@@ -141,10 +138,9 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
 | `receipts` | レシート親 | `date`, `store_name`, `total_amount`, `payment_method` | |
-| `receipt_items` | 明細 | `item_name`, `price`, `main_category`, `sub_category`, `search_tags`, `is_comparable` | `is_comparable` はメモ用 → **削除予定** |
+| `receipt_items` | 明細 | `item_name`, `price`, `main_category`, `sub_category`, `search_tags` | |
 | `csv_transactions` | カード等の集約行 | `date`, `store`, `price` | 明細分割なし |
 | `csv_presets` | CSV 列マッピングプリセット | `name`, `mapping` (jsonb) | FE から直アクセス可 |
-| `memo_rows` | メモの保存クエリ | `query`, `sort_order` | **削除予定** |
 | `chat_messages` | AI チャット履歴 | `role`, `content` | FE から直アクセス可 |
 
 ---
@@ -163,7 +159,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | Tailwind CSS | ^4.1 |
 | Axios | ^1.13 |
 | @supabase/supabase-js | ^2.97 |
-| Recharts | ^3.8（メモグラフ用。メモ削除後は要再評価） |
+| Recharts | ^3.8（ダッシュボードの円グラフ） |
 | Node（Docker ビルド） | 22-alpine → nginx:alpine |
 
 ### バックエンド
@@ -278,4 +274,5 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-08-25 | メモ機能・`is_comparable`・`memo_rows` を削除。値段推移は B 側へ移管する方針 |
 | 2026-08-25 | 初版。A の目的・機能・環境・A/B 境界を整理。メモは削除予定として記載 |
