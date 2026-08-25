@@ -99,7 +99,7 @@ Supabase（Auth + Postgres + RLS）
 |------|------|------------|------------|
 | レシート | `frontend/src/features/receipt/` | 現行 | 画像 → `/analyze` → 編集（カテゴリ・タグ等）→ `/save`。手動入力もあり |
 | CSV | `frontend/src/features/csv/` | 現行 | CSV → 列マッピング（Gemini またはプリセット）→ `/save_csv` |
-| 履歴 | `frontend/src/features/history/` | 現行・強化予定 | 月選択、明細編集削除、検索。サブカテゴリ検索の強化が望ましい |
+| 履歴 | `frontend/src/features/history/` | 現行・強化予定 | 月選択、明細編集削除、テキスト検索。分類フィルタは [planned-history-category-filter.md](./planned-history-category-filter.md) |
 | AIチャット | `frontend/src/features/search/` | 現行 | `/search` + `chat_messages` 履歴 |
 | ダッシュボード | `frontend/src/features/dashboard/` | 現行 | `main_category` 集計。CSV は「キャッシュレス（未分類）」扱い |
 
@@ -125,8 +125,9 @@ Supabase（Auth + Postgres + RLS）
 - Gemini 抽出時に `main_category` / `sub_category` を付与
 - 同一 `item_name` の過去設定を学習して再適用（`get_learned_categories`）
 - 主な `main_category` 例: 食費、日用品、交通・通信、衣服・美容、趣味・娯楽、医療・健康、住居・家具、その他
-- `search_tags`（キーワード配列）で検索を補助
+- `search_tags`（キーワード配列）でテキスト検索を補助
 - **厳密比較の対象集合には使わない**（それは B の手動フォルダ）
+- **予定**: 大分類・サブはテキスト検索に混ぜず、候補選択のフィルタにする → [planned-history-category-filter.md](./planned-history-category-filter.md)
 
 ---
 
@@ -265,6 +266,7 @@ receipt-manager/
 |------|------|
 | [README.md](./README.md) | docs 索引 |
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | A/B 分離・メモ削除・カテゴリ方針 |
+| [planned-history-category-filter.md](./planned-history-category-filter.md) | 予定: 履歴の分類フィルタ構想 |
 
 新規の仕様・設計メモを足したら、上記索引と本節にも行を追加する。
 
@@ -274,5 +276,6 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-08-25 | 履歴の分類フィルタ構想を `planned-history-category-filter.md` に保管 |
 | 2026-08-25 | メモ機能・`is_comparable`・`memo_rows` を削除。値段推移は B 側へ移管する方針 |
 | 2026-08-25 | 初版。A の目的・機能・環境・A/B 境界を整理。メモは削除予定として記載 |

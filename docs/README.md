@@ -8,3 +8,4 @@
 |------|------|
 | [project-overview.md](./project-overview.md) | **プロジェクト概要（生きたドキュメント）** — 目的・機能・環境・スタック |
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | レシート管理（A）と厳密単価比較（B）の分離方針 |
+| [planned-history-category-filter.md](./planned-history-category-filter.md) | **予定** — 履歴の大分類・サブを候補選択で絞る構想 |
