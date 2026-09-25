@@ -224,7 +224,7 @@ npm run dev
 ### 7.3 本番
 
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
-- `docker-compose.production.yml` で FE は Docker 内部 `:80`（ホスト公開なし）、BE は内部 `:8000`。edge-proxy が FE へ Docker 内部 DNS で接続
+- `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - CI: マイグレーション → ビルド/プッシュ → VPS へ compose 適用
 
 ### 7.4 認証フロー
@@ -276,6 +276,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-09-26 | 本番 FE を外部 `edge` network に追加し、edge-proxy からの Docker 内部 DNS 接続を有効化 |
 | 2026-09-26 | 本番 FE のホスト側 `80:80` を廃止し、deploy 時のコマンド失敗と FE/BE コンテナ停止を検出 |
 | 2026-09-26 | CI の Docker / Supabase setup Action を Node.js 24 対応版へ更新。frontend Dockerfile の stage 表記を統一 |
 | 2026-08-25 | 履歴の分類フィルタ構想を `planned-history-category-filter.md` に保管 |

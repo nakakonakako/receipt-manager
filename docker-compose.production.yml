@@ -6,6 +6,9 @@ services:
       - ./nginx-config/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - receipt-backend
+    networks:
+      - default
+      - edge
 
   receipt-backend:
     image: ghcr.io/nakakonakako/receipt-manager-backend:latest
@@ -14,3 +17,7 @@ services:
       - "8000"
     env_file:
       - ./.env
+
+networks:
+  edge:
+    external: true
