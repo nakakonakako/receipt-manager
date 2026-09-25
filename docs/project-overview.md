@@ -183,7 +183,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | Docker + Compose | 本番コンテナ |
 | Nginx | SPA + `/api` プロキシ（`client_max_body_size 20M`） |
 | GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
-| Husky + lint-staged | pre-commit（Prettier / ESLint / Ruff） |
+| 品質チェック | リポジトリルートで `npm run check` |
 | Supabase CLI | `npm run db:push` / `db:list` |
 
 ※ `gspread` は依存に残っているが、アプリ本体からは未使用。
