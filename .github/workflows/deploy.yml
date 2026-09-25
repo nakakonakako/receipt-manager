@@ -150,9 +150,11 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
+            bash <<'DEPLOY'
+            set -euo pipefail
             cd ~/receipt-manager
 
-            cat <<EOF > .env
+            cat <<'EOF' > .env
             GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}
             SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}
             SUPABASE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
@@ -160,4 +162,12 @@ jobs:
 
             docker compose -f docker-compose.production.yml pull
             docker compose -f docker-compose.production.yml up -d
+            for container in receipt-frontend receipt-backend; do
+              status=$(docker inspect --format '{{.State.Status}}' "$container")
+              if [[ "$status" != running ]]; then
+                echo "$container is $status" >&2
+                exit 1
+              fi
+            done
             docker image prune -f
+            DEPLOY
