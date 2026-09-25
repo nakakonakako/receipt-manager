@@ -12,9 +12,28 @@ env:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    outputs:
+      migrations_changed: ${{ steps.migration_changes.outputs.changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check migration changes
+        id: migration_changes
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: |
+          if [[ "$BEFORE_SHA" =~ ^0{40}$ ]] || ! git cat-file -e "$BEFORE_SHA^{commit}"; then
+            changed=true
+          elif git diff --quiet "$BEFORE_SHA" "$AFTER_SHA" -- supabase/migrations/; then
+            changed=false
+          else
+            changed=true
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -40,6 +59,7 @@ jobs:
 
   migrate:
     needs: quality
+    if: ${{ needs.quality.result == 'success' && needs.quality.outputs.migrations_changed == 'true' }}
     runs-on: ubuntu-latest
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
@@ -61,7 +81,8 @@ jobs:
         run: supabase db push --yes --linked
 
   build-and-push:
-    needs: migrate
+    needs: [quality, migrate]
+    if: ${{ always() && !cancelled() && needs.quality.result == 'success' && (needs.migrate.result == 'success' || (needs.migrate.result == 'skipped' && needs.quality.outputs.migrations_changed == 'false')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
