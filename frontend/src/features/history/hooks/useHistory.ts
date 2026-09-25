@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useEffectEvent, useMemo } from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import {
   fetchTransactions,
@@ -49,11 +49,12 @@ export const useHistory = () => {
   >(null)
   const [editType, setEditType] = useState<'receipt' | 'csv' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const getHeadersForEffect = useEffectEvent(getHeaders)
 
   useEffect(() => {
     const initLoad = async () => {
       setIsLoading(true)
-      const headers = await getHeaders()
+      const headers = await getHeadersForEffect()
       if (headers) {
         try {
           const monthsData = await fetchAvailableMonths(headers)
@@ -70,8 +71,7 @@ export const useHistory = () => {
           const latestCsvMonth =
             monthsData.csv.length > 0 ? monthsData.csv[0] : fallbackMonth
 
-          const initialMonthToLoad =
-            activeTab === 'receipts' ? latestReceiptMonth : latestCsvMonth
+          const initialMonthToLoad = latestReceiptMonth
 
           setCurrentReceiptMonth(latestReceiptMonth)
           setCurrentCsvMonth(latestCsvMonth)
@@ -97,89 +97,87 @@ export const useHistory = () => {
   const setCurrentMonth =
     activeTab === 'receipts' ? setCurrentReceiptMonth : setCurrentCsvMonth
 
-  useEffect(() => {
-    const loadMonthData = async () => {
-      if (!currentMonth || loadedMonths.has(currentMonth) || isLoading) return
+  const loadMonthData = useEffectEvent(async (month: string) => {
+    if (!month || loadedMonths.has(month) || isLoading) return
 
-      setIsFetchingMonth(true)
-      const headers = await getHeaders()
-      if (headers) {
-        try {
-          const data = await fetchTransactions(currentMonth, headers)
-
-          setReceipts((prev) => {
-            const existingIds = new Set(prev.map((r) => r.id))
-            const newReceipts = (data.receipts || []).filter(
-              (r) => !existingIds.has(r.id)
-            )
-            return [...prev, ...newReceipts]
-          })
-          setCsvData((prev) => {
-            const existingIds = new Set(prev.map((c) => c.id))
-            const newCsv = (data.csv_transactions || []).filter(
-              (c) => !existingIds.has(c.id)
-            )
-            return [...prev, ...newCsv]
-          })
-
-          setLoadedMonths((prev) => new Set(prev).add(currentMonth))
-        } catch (error) {
-          console.error('データの取得に失敗しました:', error)
-          toast.error('データの取得に失敗しました。')
-        } finally {
-          setIsFetchingMonth(false)
-        }
-      } else {
-        setIsFetchingMonth(false)
-      }
-    }
-    loadMonthData()
-  }, [currentMonth])
-
-  useEffect(() => {
-    const loadAllMonthsData = async () => {
-      if (searchScope !== 'all' || isLoading || allMonths.length === 0) return
-
-      const missingMonths = allMonths.filter(
-        (month) => !loadedMonths.has(month)
-      )
-      if (missingMonths.length === 0) return
-
-      const headers = await getHeaders()
-      if (!headers) return
-
-      setIsFetchingMonth(true)
+    setIsFetchingMonth(true)
+    const headers = await getHeaders()
+    if (headers) {
       try {
-        for (const month of missingMonths) {
-          const data = await fetchTransactions(month, headers)
+        const data = await fetchTransactions(month, headers)
 
-          setReceipts((prev) => {
-            const existingIds = new Set(prev.map((r) => r.id))
-            const newReceipts = (data.receipts || []).filter(
-              (r) => !existingIds.has(r.id)
-            )
-            return [...prev, ...newReceipts]
-          })
-          setCsvData((prev) => {
-            const existingIds = new Set(prev.map((c) => c.id))
-            const newCsv = (data.csv_transactions || []).filter(
-              (c) => !existingIds.has(c.id)
-            )
-            return [...prev, ...newCsv]
-          })
+        setReceipts((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id))
+          const newReceipts = (data.receipts || []).filter(
+            (r) => !existingIds.has(r.id)
+          )
+          return [...prev, ...newReceipts]
+        })
+        setCsvData((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id))
+          const newCsv = (data.csv_transactions || []).filter(
+            (c) => !existingIds.has(c.id)
+          )
+          return [...prev, ...newCsv]
+        })
 
-          setLoadedMonths((prev) => new Set(prev).add(month))
-        }
+        setLoadedMonths((prev) => new Set(prev).add(month))
       } catch (error) {
-        console.error('全期間データの取得に失敗しました:', error)
-        toast.error('全期間データの取得に失敗しました。')
+        console.error('データの取得に失敗しました:', error)
+        toast.error('データの取得に失敗しました。')
       } finally {
         setIsFetchingMonth(false)
       }
+    } else {
+      setIsFetchingMonth(false)
     }
+  })
 
-    void loadAllMonthsData()
-  }, [searchScope, activeTab, isLoading, allMonths, loadedMonths, getHeaders])
+  useEffect(() => {
+    void loadMonthData(currentMonth)
+  }, [currentMonth])
+
+  const loadAllMonthsData = useEffectEvent(async (months: string[]) => {
+    const missingMonths = months.filter((month) => !loadedMonths.has(month))
+    if (missingMonths.length === 0) return
+
+    const headers = await getHeaders()
+    if (!headers) return
+
+    setIsFetchingMonth(true)
+    try {
+      for (const month of missingMonths) {
+        const data = await fetchTransactions(month, headers)
+
+        setReceipts((prev) => {
+          const existingIds = new Set(prev.map((r) => r.id))
+          const newReceipts = (data.receipts || []).filter(
+            (r) => !existingIds.has(r.id)
+          )
+          return [...prev, ...newReceipts]
+        })
+        setCsvData((prev) => {
+          const existingIds = new Set(prev.map((c) => c.id))
+          const newCsv = (data.csv_transactions || []).filter(
+            (c) => !existingIds.has(c.id)
+          )
+          return [...prev, ...newCsv]
+        })
+
+        setLoadedMonths((prev) => new Set(prev).add(month))
+      }
+    } catch (error) {
+      console.error('全期間データの取得に失敗しました:', error)
+      toast.error('全期間データの取得に失敗しました。')
+    } finally {
+      setIsFetchingMonth(false)
+    }
+  })
+
+  useEffect(() => {
+    if (searchScope !== 'all' || isLoading || allMonths.length === 0) return
+    void loadAllMonthsData(allMonths)
+  }, [searchScope, isLoading, allMonths])
 
   const currentIndex = allMonths.indexOf(currentMonth)
   const handlePrevMonth = () => {

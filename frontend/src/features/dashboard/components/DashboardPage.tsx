@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useEffectEvent, useMemo } from 'react'
 import { PieChart, Pie, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import {
@@ -30,11 +30,12 @@ export const DashboardPage: React.FC = () => {
   const [receipts, setReceipts] = useState<HistoryReceipt[]>([])
   const [csvData, setCsvData] = useState<HistoryCsvTransaction[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const getHeadersForEffect = useEffectEvent(getHeaders)
 
   useEffect(() => {
     const initLoad = async () => {
       setIsLoading(true)
-      const headers = await getHeaders()
+      const headers = await getHeadersForEffect()
       if (headers) {
         try {
           const monthsData = await fetchAvailableMonths(headers)
@@ -62,7 +63,7 @@ export const DashboardPage: React.FC = () => {
     const loadTransactions = async () => {
       if (!currentMonth) return
       setIsLoading(true)
-      const headers = await getHeaders()
+      const headers = await getHeadersForEffect()
       if (headers) {
         try {
           const data = await fetchTransactions(currentMonth, headers)
