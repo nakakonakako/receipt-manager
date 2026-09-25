@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-08-25 |
+| ドキュメント最終更新 | 2026-09-26 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -276,6 +276,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-09-26 | CI の Docker / Supabase setup Action を Node.js 24 対応版へ更新。frontend Dockerfile の stage 表記を統一 |
 | 2026-08-25 | 履歴の分類フィルタ構想を `planned-history-category-filter.md` に保管 |
 | 2026-08-25 | メモ機能・`is_comparable`・`memo_rows` を削除。値段推移は B 側へ移管する方針 |
 | 2026-08-25 | 初版。A の目的・機能・環境・A/B 境界を整理。メモは削除予定として記載 |
