@@ -12,14 +12,5 @@
   "devDependencies": {
     "concurrently": "^9.2.1",
     "supabase": "^2.117.0"
-  },
-  "lint-staged": {
-    "frontend/**/*.{js,jsx,ts,tsx,json,css}": [
-      "prettier --write"
-    ],
-    "backend/**/*.py": [
-      "uv run --directory backend ruff check --fix",
-      "uv run --directory backend ruff format"
-    ]
   }
 }
