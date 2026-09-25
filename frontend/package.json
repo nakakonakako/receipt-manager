@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "prepare": "husky"
+    "check": "npm run check:frontend && npm run check:backend",
+    "check:frontend": "npm run lint --prefix frontend && npm run build --prefix frontend",
+    "check:backend": "uv run --directory backend ruff check . && uv run --directory backend ruff format --check ."
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
@@ -36,21 +38,9 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4"
-  },
-  "lint-staged": {
-    "*.{js,jsx,ts,tsx,css,md}": [
-      "eslint --fix",
-      "prettier --write"
-    ],
-    "*.py": [
-      "uv run ruff check --fix",
-      "uv run ruff format"
-    ]
   }
 }
