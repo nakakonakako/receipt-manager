@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
-    "supabase": "^2.115.0"
+    "supabase": "^2.117.0"
   },
   "lint-staged": {
     "frontend/**/*.{js,jsx,ts,tsx,json,css}": [
