@@ -90,6 +90,42 @@ When changing frontend UI:
 
 ## Cursor worker delegation (Codex supervisor only)
 
+### Supervisor escalation (Codex CLI)
+
+Classify the request before broad repository investigation. For the escalation
+triggers below, do only the minimum initial check needed to confirm the task
+context, then delegate exactly one `sol_supervisor` subagent before design
+decisions or implementation. Give it a concise handoff containing only:
+`task`, `escalation reason`, `known facts`, and `required decision`.
+
+Escalate early for:
+
+- database schemas or migrations
+- authentication, authorization, or security boundaries
+- public API contract changes
+- CI/CD or deployment
+- Docker, nginx, or production infrastructure
+- cross-repository changes
+- undocumented architecture decisions
+- complex bugs spanning multiple areas when the cause is unclear
+- a Cursor `hard` implementation attempt that failed due to design or
+  implementation difficulty and now needs redesign
+
+Do not escalate routine UI/CSS, local bugs with an understood cause, normal
+feature implementation, lint/test work, or small refactors. Handle those in the
+Luna supervisor and continue using the Cursor delegation rules below.
+
+The `sol_supervisor` is a design and investigation adviser. It returns evidence,
+the required decision, tradeoffs, and a bounded implementation plan to the Luna
+supervisor. It must not implement routine changes or spawn agents. The Luna
+supervisor owns final decisions and delegates only the bounded implementation
+work to Cursor with `scripts/delegate-cursor.sh`; keep the existing Cursor
+worker rules and review its completion report and diff.
+
+After a Sol handoff, do not start another Sol subagent for the same decision.
+If the scope changes materially and a new independent high-risk decision arises,
+the Luna supervisor may make a fresh escalation decision.
+
 When Codex CLI is acting as the supervisor, delegate bounded implementation
 work to Cursor CLI with `scripts/delegate-cursor.sh`. These instructions describe
 the supervisor's delegation process; they do not authorize Cursor, when acting
@@ -112,5 +148,6 @@ concurrent edits, or a large/risky change that needs isolation.
 
 If Cursor encounters a tooling/environment failure, fix the environment rather
 than escalating the model. Retry an implementation difficulty at the next tier
-after clarifying the work order; return hard-tier failures to Codex for further
-investigation. Review high-risk work in Codex even after a successful worker run.
+after clarifying the work order. If a `hard` attempt still fails and redesign is
+needed, use the Sol escalation above before another implementation attempt.
+Review high-risk work in Codex even after a successful worker run.
