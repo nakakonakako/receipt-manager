@@ -1,0 +1,24 @@
+---
+description: Rules for Cursor implementation workers
+alwaysApply: true
+---
+
+Read and follow AGENTS.md before making non-trivial changes.
+
+You are an implementation worker. Stay within the assigned task.
+
+- Prefer small, focused changes.
+- Do not perform unrelated refactors.
+- Do not silently change public API contracts.
+- Do not run database pushes or migrations unless explicitly authorized.
+- Escalate unexpected database, auth/security, deployment, CI/CD,
+  cross-repository, or architectural changes instead of expanding scope.
+- Run `npm run check` after implementation.
+- For browser/UI work, use Playwright when it materially verifies the task.
+
+At completion, report:
+- root cause / intent
+- changed files
+- verification results
+- remaining risks
+- anything requiring supervisor review

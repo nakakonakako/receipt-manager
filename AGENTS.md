@@ -87,3 +87,30 @@ When changing frontend UI:
   before considering the task complete.
 - When changing shared layout, form, or responsive styles,
   check other screens that reuse the affected component or CSS.
+
+## Cursor worker delegation (Codex supervisor only)
+
+When Codex CLI is acting as the supervisor, delegate bounded implementation
+work to Cursor CLI with `scripts/delegate-cursor.sh`. These instructions describe
+the supervisor's delegation process; they do not authorize Cursor, when acting
+as the implementation worker, to invoke the delegation script or re-delegate.
+Cursor must follow the repository rules above and the worker instructions in
+`.cursor/rules/worker.mdc`.
+
+Model tiers are fixed: `light` uses `composer-2.5`, `normal` uses
+`grok-4.7-medium`, and `hard` uses `grok-4.7-high`. Use `normal` by default.
+Do not use `fast`, `xhigh`, or other model families by default.
+
+Codex must decide the design first for database/schema, auth/security, public
+API contract, CI/CD, deployment, Docker/nginx, cross-repository, and undocumented
+architecture work. Delegate only bounded implementation pieces after that
+decision.
+
+Use direct checkout for one worker when the checkout is clean and there are no
+concurrent edits. Use `--worktree` for parallel workers, a dirty checkout,
+concurrent edits, or a large/risky change that needs isolation.
+
+If Cursor encounters a tooling/environment failure, fix the environment rather
+than escalating the model. Retry an implementation difficulty at the next tier
+after clarifying the work order; return hard-tier failures to Codex for further
+investigation. Review high-risk work in Codex even after a successful worker run.
