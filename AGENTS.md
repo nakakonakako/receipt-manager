@@ -112,8 +112,11 @@ Escalate early for:
   implementation difficulty and now needs redesign
 
 Do not escalate routine UI/CSS, local bugs with an understood cause, normal
-feature implementation, lint/test work, or small refactors. Handle those in the
-Luna supervisor and continue using the Cursor delegation rules below.
+feature implementation, lint/test work, or small refactors to Sol. Keep those
+on the Luna supervisor's normal routing path and delegate their bounded
+implementation to Cursor under the rules below. "Handle those in the Luna
+supervisor" means Luna owns classification, scope, routing, and review; it does
+not mean Luna implements them herself.
 
 The `sol_supervisor` is a design and investigation adviser. It returns evidence,
 the required decision, tradeoffs, and a bounded implementation plan to the Luna
@@ -126,21 +129,55 @@ After a Sol handoff, do not start another Sol subagent for the same decision.
 If the scope changes materially and a new independent high-risk decision arises,
 the Luna supervisor may make a fresh escalation decision.
 
-When Codex CLI is acting as the supervisor, delegate bounded implementation
-work to Cursor CLI with `scripts/delegate-cursor.sh`. These instructions describe
-the supervisor's delegation process; they do not authorize Cursor, when acting
-as the implementation worker, to invoke the delegation script or re-delegate.
-Cursor must follow the repository rules above and the worker instructions in
-`.cursor/rules/worker.mdc`.
+When Codex CLI is acting as Luna, Luna is the supervisor and Cursor is the
+bounded implementation worker. Unless the user explicitly assigns
+implementation to Luna or the task is delegation-infrastructure maintenance,
+Luna must delegate bounded code implementation, UI fixes, bug fixes, test/lint
+fixes, and small refactors to Cursor with `scripts/delegate-cursor.sh`.
+
+Sol escalation and Cursor delegation are separate decisions: not escalating to
+Sol does not route implementation to Luna. Routine UI/CSS, understood local
+bugs, normal features, lint/test work, and small refactors need no Sol advice by
+default, but their implementation still goes to Cursor.
+
+Luna's direct work is primarily requirement clarification, initial
+investigation and task classification, Sol escalation decisions, implementation
+approach decisions, Cursor work-order preparation, review of Cursor's results
+and diff, and maintenance of delegation infrastructure itself. Do not take
+ordinary implementation over just because delegation takes setup or the
+checkout is dirty.
+
+Use the fixed tier mapping through the script, with `normal` by default:
+
+- `light` -> `composer-2.5`
+- `normal` -> `grok-4.7-medium`
+- `hard` -> `grok-4.7-high`
+
+Use direct checkout only when it is clean and there is no concurrent work. If
+the checkout is dirty or isolation is needed, use `--worktree <name>` rather
+than implementing directly in Luna. Do not use `--allow-dirty` as a shortcut;
+it is only appropriate when mixing changes is intentional and explicitly
+approved by the supervisor/user.
+
+If Cursor CLI is unavailable, the delegate script is broken, or another tooling
+failure prevents delegation, report the specific failure and repair the
+environment or delegation infrastructure, then resume delegation. Do not
+silently replace Cursor implementation with Luna implementation as a workaround.
+An explicit user request for Luna to implement a task overrides this default.
+
+These instructions describe the supervisor's delegation process; they do not
+authorize Cursor, when acting as the implementation worker, to invoke the
+delegation script or re-delegate. Cursor must follow the repository rules above
+and the worker instructions in `.cursor/rules/worker.mdc`.
 
 Model tiers are fixed: `light` uses `composer-2.5`, `normal` uses
 `grok-4.7-medium`, and `hard` uses `grok-4.7-high`. Use `normal` by default.
 Do not use `fast`, `xhigh`, or other model families by default.
 
-Codex must decide the design first for database/schema, auth/security, public
-API contract, CI/CD, deployment, Docker/nginx, cross-repository, and undocumented
-architecture work. Delegate only bounded implementation pieces after that
-decision.
+For database/schema, auth/security, public API contract, CI/CD, deployment,
+Docker/nginx, cross-repository, and undocumented architecture work, Sol advises
+before design decisions, Luna makes the final design decision, and bounded
+implementation is then delegated to Cursor as usual.
 
 Use direct checkout for one worker when the checkout is clean and there are no
 concurrent edits. Use `--worktree` for parallel workers, a dirty checkout,
