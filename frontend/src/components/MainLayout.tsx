@@ -54,6 +54,8 @@ export const MainLayout = () => {
           {TABS.map((tab) => (
             <button
               key={tab.key}
+              type="button"
+              aria-pressed={activeTab === tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex-1 py-2.5 text-sm font-extrabold rounded-lg transition-all duration-300 flex justify-center items-center gap-2 ${
                 activeTab === tab.key
