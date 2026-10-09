@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-09-26 |
+| ドキュメント最終更新 | 2026-10-09 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -138,11 +138,28 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
-| `receipts` | レシート親 | `date`, `store_name`, `total_amount`, `payment_method` | |
-| `receipt_items` | 明細 | `item_name`, `price`, `main_category`, `sub_category`, `search_tags` | |
+| `receipts` | レシート親 | `date`, `store_name`, `total_amount`, `payment_method` | 主キー `id` に加え `UNIQUE (user_id, id)` |
+| `receipt_items` | 明細 | `item_name`, `price`, `main_category`, `sub_category`, `search_tags` | 主キー `id` に加え `UNIQUE (user_id, id)`。親レシートは `(user_id, receipt_id)` |
 | `csv_transactions` | カード等の集約行 | `date`, `store`, `price` | 明細分割なし |
 | `csv_presets` | CSV 列マッピングプリセット | `name`, `mapping` (jsonb) | FE から直アクセス可 |
 | `chat_messages` | AI チャット履歴 | `role`, `content` | FE から直アクセス可 |
+
+同一 Supabase に同居する価格比較テーブル（`price_folders`、`price_records`、`price_memo_items`）もこのマイグレーション群で管理する。所有者の一致は複合外部キーで保証する。
+
+### 5.1 所有者整合（複合外部キー）
+
+子行の `user_id` と参照先の所有者が一致しない参照を拒否する。既存の主キー `id` は維持し、親側に `UNIQUE (user_id, id)` を追加したうえで ID 単独の外部キーを置き換える。
+
+| 子 | 親 | ON DELETE |
+|----|----|-----------|
+| `price_records (user_id, folder_id)` | `price_folders (user_id, id)` | CASCADE |
+| `price_memo_items (user_id, folder_id)` | `price_folders (user_id, id)` | CASCADE |
+| `price_records (user_id, receipt_item_id)` | `receipt_items (user_id, id)` | SET NULL (`receipt_item_id` のみ)。列は NULL 可（MATCH SIMPLE）。`user_id` は NOT NULL のまま |
+| `receipt_items (user_id, receipt_id)` | `receipts (user_id, id)` | CASCADE |
+
+- 正本: `supabase/migrations/20261009010000_owner_composite_foreign_keys.sql`
+- 適用前診断（件数のみ、読み取り専用）: `supabase/diagnostics/owner_fk_integrity.sql`
+- 不整合または欠損参照がある場合、制約変更の前に失敗する。行の修復・削除・付け替えはしない。失敗時はマイグレーション全体がロールバックされ、以前の外部キーが残る。
 
 ---
 
@@ -276,6 +293,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-09 | レシート・価格フォルダ参照を所有者付き複合外部キーへ置換。診断 SQL は `supabase/diagnostics/owner_fk_integrity.sql` |
 | 2026-09-26 | 本番 FE を外部 `edge` network に追加し、edge-proxy からの Docker 内部 DNS 接続を有効化 |
 | 2026-09-26 | 本番 FE のホスト側 `80:80` を廃止し、deploy 時のコマンド失敗と FE/BE コンテナ停止を検出 |
 | 2026-09-26 | CI の Docker / Supabase setup Action を Node.js 24 対応版へ更新。frontend Dockerfile の stage 表記を統一 |
