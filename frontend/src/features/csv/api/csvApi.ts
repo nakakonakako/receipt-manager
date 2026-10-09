@@ -8,12 +8,17 @@ interface CsvParseResponse {
 
 export const analyzeCsv = async (
   csvText: string,
-  mapping?: CsvMapping
+  mapping: CsvMapping | undefined,
+  headers: Record<string, string>
 ): Promise<CsvParseResponse> => {
-  const response = await apiClient.post<CsvParseResponse>('/analyze_csv', {
-    csv_text: csvText,
-    mapping: mapping,
-  })
+  const response = await apiClient.post<CsvParseResponse>(
+    '/analyze_csv',
+    {
+      csv_text: csvText,
+      mapping,
+    },
+    { headers }
+  )
 
   return response.data
 }

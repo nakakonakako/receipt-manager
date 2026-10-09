@@ -1,6 +1,10 @@
 import asyncio
 
-from app.schemas.csv import CsvAnalysisRequest, CsvParseResponse, CsvSaveRequest
+from app.schemas.csv import (
+    CsvAnalysisRequest,
+    CsvParseResponse,
+    CsvSaveRequest,
+)
 from app.schemas.receipt import ReceiptData, SearchQuery
 from app.services.csv_service import CsvService
 from app.services.gemini_service import GeminiService
@@ -23,6 +27,7 @@ load_dotenv()
 
 gemini_service = GeminiService()
 csv_service = CsvService()
+MAX_CSV_MAPPING_SAMPLE_CHARACTERS = 10_000
 
 
 @app.get("/")
@@ -130,14 +135,32 @@ async def get_transactions(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _get_csv_mapping_sample(csv_text: str) -> str:
+    sample_end = 0
+    sample_limit = min(len(csv_text), MAX_CSV_MAPPING_SAMPLE_CHARACTERS)
+    line_count = 0
+
+    while sample_end < sample_limit and line_count < 5:
+        newline = csv_text.find("\n", sample_end, sample_limit)
+        if newline == -1:
+            sample_end = sample_limit
+            break
+        sample_end = newline + 1
+        line_count += 1
+
+    return csv_text[:sample_end].strip()
+
+
 @app.post("/analyze_csv")
-async def analyze_csv(request: CsvAnalysisRequest):
+async def analyze_csv(
+    request: CsvAnalysisRequest,
+    supabase_service: SupabaseService = Depends(get_supabase_service),
+):
     try:
         if request.mapping is not None:
             mapping = request.mapping
         else:
-            lines = request.csv_text.strip().split("\n")
-            sample_text = "\n".join(lines[:5])
+            sample_text = _get_csv_mapping_sample(request.csv_text)
             mapping = gemini_service.analyze_csv(sample_text)
 
         transactions = csv_service.parse_csv(request.csv_text, mapping)

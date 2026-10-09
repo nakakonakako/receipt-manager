@@ -115,11 +115,14 @@ export const useCsvUploader = () => {
 
   const handleAnalyze = async () => {
     if (!csvText) return
+    const headers = await getHeaders()
+    if (!headers) return
+
     setIsAnalyzing(true)
 
     try {
       const preset = presets.find((p) => p.id === selectedPresetId)
-      const result = await analyzeCsv(csvText, preset?.mapping)
+      const result = await analyzeCsv(csvText, preset?.mapping, headers)
 
       if (result.transactions.length === 0) {
         alert(
