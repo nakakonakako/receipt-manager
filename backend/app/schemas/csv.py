@@ -2,9 +2,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+MAX_CSV_TEXT_CHARACTERS = 20 * 1024 * 1024
+
 
 class CsvAnalysisRequest(BaseModel):
-    csv_text: str
+    csv_text: str = Field(min_length=1, max_length=MAX_CSV_TEXT_CHARACTERS)
     mapping: dict[str, Any] | None = None
 
 

@@ -113,7 +113,7 @@ Supabase（Auth + Postgres + RLS）
 | POST | `/search` | 要 | 家計 Q&A | 現行 |
 | GET | `/available_months` | 要 | データがある月一覧 | 現行 |
 | GET | `/transactions` | 要 | 指定月のレシート + CSV | 現行 |
-| POST | `/analyze_csv` | 現状不要 | CSV 列推定・パース | 現行 |
+| POST | `/analyze_csv` | 要 | CSV 列推定・パース（マッピング未指定時は Gemini で列推定） | 現行 |
 | POST | `/save_csv` | 要 | CSV 行保存 | 現行 |
 | PUT/DELETE | `/receipts/{id}` | 要 | レシート更新・削除 | 現行 |
 | PUT/DELETE | `/csv_transactions/{id}` | 要 | CSV 行更新・削除 | 現行 |
@@ -293,6 +293,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-10 | `/analyze_csv` にSupabase認証とCSV入力・Geminiサンプルのサイズ上限を追加 |
 | 2026-10-09 | レシート・価格フォルダ参照を所有者付き複合外部キーへ置換。診断 SQL は `supabase/diagnostics/owner_fk_integrity.sql` |
 | 2026-09-26 | 本番 FE を外部 `edge` network に追加し、edge-proxy からの Docker 内部 DNS 接続を有効化 |
 | 2026-09-26 | 本番 FE のホスト側 `80:80` を廃止し、deploy 時のコマンド失敗と FE/BE コンテナ停止を検出 |
