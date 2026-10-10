@@ -2,9 +2,23 @@ import calendar
 import datetime
 import os
 
+from supabase_auth.errors import AuthApiError, AuthInvalidJwtError
 from app.schemas.csv import ParsedCsvTransaction
 from app.schemas.receipt import ReceiptData
 from supabase import Client, create_client
+
+
+class InvalidSupabaseTokenError(Exception):
+    """Raised only when Supabase explicitly rejects the caller's token."""
+
+
+INVALID_TOKEN_ERROR_CODES = {
+    "bad_jwt",
+    "invalid_jwt",
+    "no_authorization",
+    "session_not_found",
+    "user_not_found",
+}
 
 
 class SupabaseService:
@@ -15,17 +29,23 @@ class SupabaseService:
         )
 
         if not url or not key:
-            raise ValueError(
-                "Supabase URL and Key must be set in environment variables."
-            )
+            raise RuntimeError("Supabase URL and key configuration is missing.")
 
         self.client: Client = create_client(url, key)
 
         self.client.options.headers.update({"Authorization": f"Bearer {token}"})
 
-        user_response = self.client.auth.get_user(token)
-        if not user_response or not user_response:
-            raise ValueError("Invalid Supabase token provided.")
+        try:
+            user_response = self.client.auth.get_user(token)
+        except AuthInvalidJwtError:
+            raise InvalidSupabaseTokenError("Invalid Supabase token.") from None
+        except AuthApiError as error:
+            if error.status in (400, 401) and error.code in INVALID_TOKEN_ERROR_CODES:
+                raise InvalidSupabaseTokenError("Invalid Supabase token.") from None
+            raise
+
+        if not user_response or not user_response.user:
+            raise InvalidSupabaseTokenError("Invalid Supabase token.")
         self.user_id = user_response.user.id
 
     def add_receipt_data(self, receipt: ReceiptData) -> dict:
