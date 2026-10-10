@@ -161,6 +161,14 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - 適用前診断（件数のみ、読み取り専用）: `supabase/diagnostics/owner_fk_integrity.sql`
 - 不整合または欠損参照がある場合、制約変更の前に失敗する。行の修復・削除・付け替えはしない。失敗時はマイグレーション全体がロールバックされ、以前の外部キーが残る。
 
+### 5.2 価格比較アプリの原子的な更新 RPC
+
+`supabase/migrations/20261010010000_s1_08_atomic_price_operations.sql` は、price-memo が使う2つの `SECURITY INVOKER` RPC を追加する。どちらも `auth.uid()` と既存 RLS を使い、`authenticated` のみに実行権限を与える。
+
+- `rename_price_store(p_store_id, p_name)` は所有店舗をロックし、店舗名と同じ旧名を持つ所有者の価格記録を原子的に更新する。実際に名前が変わった場合だけ記録の `updated_at` も更新し、新しい店舗行を返す。
+- `reorder_price_memo_items(p_expected_folder_ids, p_folder_ids)` は現在順（`sort_order, created_at, id`）と希望順を比較し、古い一覧なら `PM001` で失敗する。短時間のテーブル書き込みロックで他の追加・削除・並び替えと直列化し、全件を一括更新する。
+- RPC 定義後に PostgREST schema cache の再読込を通知する。
+
 ---
 
 ## 6. 技術スタック
@@ -293,6 +301,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-10 | price-memo用の店舗改名・買い物メモ並び替えRPCを追加し、更新を原子的に実行 |
 | 2026-10-10 | `/analyze_csv` にSupabase認証とCSV入力・Geminiサンプルのサイズ上限を追加 |
 | 2026-10-09 | レシート・価格フォルダ参照を所有者付き複合外部キーへ置換。診断 SQL は `supabase/diagnostics/owner_fk_integrity.sql` |
 | 2026-09-26 | 本番 FE を外部 `edge` network に追加し、edge-proxy からの Docker 内部 DNS 接続を有効化 |
