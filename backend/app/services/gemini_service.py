@@ -1,5 +1,6 @@
 import datetime
 import json
+import logging
 import os
 
 from app.schemas.csv import CsvMapping
@@ -9,6 +10,7 @@ from google import genai
 from google.genai import types
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 class GeminiService:
@@ -45,9 +47,9 @@ class GeminiService:
                 config=config,
             )
             return json.loads(response.text)
-        except Exception as e:
-            print(f"Error during Gemini API call: {e}")
-            raise e
+        except Exception:
+            logger.error("Gemini receipt analysis failed")
+            raise
 
     def answer_question(self, question: str, context_data: str) -> str:
         today = datetime.date.today().strftime("%Y-%m-%d")
@@ -85,9 +87,9 @@ class GeminiService:
                 ),
             )
             return response.text
-        except Exception as e:
-            print(f"Error during Gemini API call: {e}")
-            raise e
+        except Exception:
+            logger.error("Gemini question answering failed")
+            raise
 
     def analyze_csv(self, csv_sample: str) -> dict:
         prompt = "Analyze the provided CSV sample lines and determine the column indices according to the schema."
@@ -108,6 +110,6 @@ class GeminiService:
 
             return json.loads(response.text)
 
-        except Exception as e:
-            print(f"Gemini CSV Mapping Error: {e}")
-            raise e
+        except Exception:
+            logger.error("Gemini CSV mapping failed")
+            raise
