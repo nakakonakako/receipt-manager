@@ -80,9 +80,17 @@ jobs:
       - name: Push migrations to production
         run: supabase db push --yes --linked
 
+  verify_rpc:
+    needs: migrate
+    if: ${{ needs.migrate.result == 'success' }}
+    uses: ./.github/workflows/verify-production-rpcs.yml
+    secrets:
+      PROD_SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+      PROD_SUPABASE_PROJECT_ID: ${{ secrets.PROD_SUPABASE_PROJECT_ID }}
+
   build-and-push:
-    needs: [quality, migrate]
-    if: ${{ always() && !cancelled() && needs.quality.result == 'success' && (needs.migrate.result == 'success' || (needs.migrate.result == 'skipped' && needs.quality.outputs.migrations_changed == 'false')) }}
+    needs: [quality, migrate, verify_rpc]
+    if: ${{ always() && !cancelled() && needs.quality.result == 'success' && ((needs.quality.outputs.migrations_changed == 'true' && needs.migrate.result == 'success' && needs.verify_rpc.result == 'success') || (needs.quality.outputs.migrations_changed == 'false' && needs.migrate.result == 'skipped' && needs.verify_rpc.result == 'skipped')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

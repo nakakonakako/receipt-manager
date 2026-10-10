@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-09 |
+| ドキュメント最終更新 | 2026-10-10 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -71,7 +71,7 @@ Supabase（Auth + Postgres + RLS）
 | DB・Auth | `supabase/` | `config.toml`、マイグレーション |
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
-| CI | `.github/workflows/deploy.yml` | migrate → GHCR build → VPS deploy |
+| CI | `.github/workflows/deploy.yml` | マイグレーション変更時は quality → migrate → 読み取り専用RPC検証 → GHCR build → VPS deploy。変更がなければ migrate と検証をスキップ。手動検証は `verify-production-rpcs.yml` |
 | ドキュメント | `docs/` | 本ファイルおよび仕様メモ |
 
 ---
@@ -168,6 +168,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - `rename_price_store(p_store_id, p_name)` は所有店舗をロックし、店舗名と同じ旧名を持つ所有者の価格記録を原子的に更新する。実際に名前が変わった場合だけ記録の `updated_at` も更新し、新しい店舗行を返す。
 - `reorder_price_memo_items(p_expected_folder_ids, p_folder_ids)` は現在順（`sort_order, created_at, id`）と希望順を比較し、古い一覧なら `PM001` で失敗する。短時間のテーブル書き込みロックで他の追加・削除・並び替えと直列化し、全件を一括更新する。
 - RPC 定義後に PostgREST schema cache の再読込を通知する。
+- 適用後の読み取り専用検証: `supabase/diagnostics/verify_s1_08_rpc_integrity.sql`。`pg_catalog` と `supabase_migrations` だけを見る。`20261010010000` が1件適用されていること、上記2関数の引数名・型・順序、戻り値（`public.price_stores` / `void`）、`SECURITY INVOKER`、空の `search_path`、`PUBLIC` と `anon` に実行権限がなく `authenticated` にはあることを満たさないとエラーになる。
 
 ---
 
@@ -250,7 +251,8 @@ npm run dev
 
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
-- CI: マイグレーション → ビルド/プッシュ → VPS へ compose 適用
+- CI: マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、従来のビルドと deploy に進む。
+- DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で同じ `supabase/diagnostics/verify_s1_08_rpc_integrity.sql` を実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
 ### 7.4 認証フロー
 
@@ -278,6 +280,7 @@ receipt-manager/
 │       ├── schemas/
 │       └── services/      # gemini, supabase, csv
 ├── supabase/migrations/
+├── supabase/diagnostics/
 ├── nginx-config/
 ├── docs/              # 本ドキュメント群
 └── docker-compose.production.yml
@@ -301,6 +304,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-10 | 本番の価格RPCをマイグレーション成功後に読み取り検証。Session Pooler ホスト変数が無ければ検証は失敗する |
 | 2026-10-10 | price-memo用の店舗改名・買い物メモ並び替えRPCを追加し、更新を原子的に実行 |
 | 2026-10-10 | `/analyze_csv` にSupabase認証とCSV入力・Geminiサンプルのサイズ上限を追加 |
 | 2026-10-09 | レシート・価格フォルダ参照を所有者付き複合外部キーへ置換。診断 SQL は `supabase/diagnostics/owner_fk_integrity.sql` |

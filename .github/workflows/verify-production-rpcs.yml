@@ -1,0 +1,70 @@
+name: Verify production S1-08 RPCs
+
+on:
+  workflow_call:
+    secrets:
+      PROD_SUPABASE_DB_PASSWORD:
+        required: true
+      PROD_SUPABASE_PROJECT_ID:
+        required: true
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify production RPC definitions
+    runs-on: ubuntu-latest
+    env:
+      PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+      PGPORT: "5432"
+      PGDATABASE: postgres
+      PGUSER: postgres.${{ secrets.PROD_SUPABASE_PROJECT_ID }}
+      PGPASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+      PGSSLMODE: require
+      PGCONNECT_TIMEOUT: "10"
+    steps:
+      - name: Require main branch for production verification
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Production RPC verification failed closed: ref must be refs/heads/main." >&2
+            exit 1
+          fi
+
+      - name: Require pooler host and existing database secrets
+        env:
+          PROD_SUPABASE_PROJECT_ID: ${{ secrets.PROD_SUPABASE_PROJECT_ID }}
+          PROD_SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${PGHOST}" || "${PGHOST}" =~ [[:space:]] ]]; then
+            echo "Repository or organization variable PROD_SUPABASE_POOLER_HOST must be set to the Supabase session pooler hostname. This repository does not contain a host." >&2
+            exit 1
+          fi
+          if [[ -z "${PROD_SUPABASE_PROJECT_ID}" || -z "${PROD_SUPABASE_DB_PASSWORD}" ]]; then
+            echo "Existing secrets PROD_SUPABASE_PROJECT_ID and PROD_SUPABASE_DB_PASSWORD are required. No new secret is used." >&2
+            exit 1
+          fi
+          if [[ ! "${PROD_SUPABASE_PROJECT_ID}" =~ ^[A-Za-z0-9]+$ ]]; then
+            echo "PROD_SUPABASE_PROJECT_ID has an unexpected format." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install PostgreSQL client
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: Run read-only S1-08 verification
+        run: |
+          set -euo pipefail
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_08_rpc_integrity.sql
