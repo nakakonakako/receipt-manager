@@ -71,7 +71,7 @@ Supabase（Auth + Postgres + RLS）
 | DB・Auth | `supabase/` | `config.toml`、マイグレーション |
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
-| CI | `.github/workflows/deploy.yml` | migrate → GHCR build → VPS deploy |
+| CI | `.github/workflows/deploy.yml` | quality → migrate → 読み取り専用RPC検証 → GHCR build → VPS deploy。RPC検証は手動workflowからも再実行可能 |
 | ドキュメント | `docs/` | 本ファイルおよび仕様メモ |
 
 ---
@@ -250,7 +250,8 @@ npm run dev
 
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
-- CI: マイグレーション → ビルド/プッシュ → VPS へ compose 適用
+- CI: マイグレーション → 読み取り専用RPC検証 → ビルド/プッシュ → VPS へ compose 適用
+- DB検証: migration成功後に読み取り専用SQLでS1-08 RPCの履歴・署名・SECURITY INVOKER・EXECUTE権限を確認。検証workflowは `workflow_dispatch` でも手動起動可能。接続には既存の `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID` を使い、Session PoolerのホストをGitHub Actions変数 `PROD_SUPABASE_POOLER_HOST` に設定（手動検証は `main` 限定、migration・build・deployなし）
 
 ### 7.4 認証フロー
 
