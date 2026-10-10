@@ -230,6 +230,7 @@ npm run dev
 ```
 
 - 開発時、Vite が `/api` を `http://localhost:8000` へプロキシ
+- ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - DB 反映: `npm run db:push`（linked な Supabase プロジェクトへ）
 
 ### 7.2 環境変数
@@ -252,7 +253,7 @@ npm run dev
 
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
-- PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/build、backend Ruff check/format、backend unittest（現在7件）を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
+- PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/build、backend Ruff check/format、backend unittest（現在9件）を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。
 - DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で同じ `supabase/diagnostics/verify_s1_08_rpc_integrity.sql` を実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
@@ -306,7 +307,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
-| 2026-10-10 | `main` 向けPRに読み取り専用の品質チェックを追加し、`npm run check` にbackend unittestを含めた |
+| 2026-10-10 | `main` 向けPRに読み取り専用の品質チェックを追加し、PR時CIとmain後CDの役割を文書化 |
 | 2026-10-10 | 本番の価格RPCをマイグレーション成功後に読み取り検証。Session Pooler ホスト変数が無ければ検証は失敗する |
 | 2026-10-10 | price-memo用の店舗改名・買い物メモ並び替えRPCを追加し、更新を原子的に実行 |
 | 2026-10-10 | `/analyze_csv` にSupabase認証とCSV入力・Geminiサンプルのサイズ上限を追加 |
