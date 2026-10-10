@@ -229,6 +229,7 @@ npm run dev
 ```
 
 - 開発時、Vite が `/api` を `http://localhost:8000` へプロキシ
+- ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - DB 反映: `npm run db:push`（linked な Supabase プロジェクトへ）
 
 ### 7.2 環境変数
