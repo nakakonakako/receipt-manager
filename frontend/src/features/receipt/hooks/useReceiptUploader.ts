@@ -1,104 +1,115 @@
-import React, { useState } from 'react'
+import React, { useState, useSyncExternalStore } from 'react'
 import axios from 'axios'
+import { toast } from 'sonner'
 import { useApiConfig } from '@/hooks/useApiConfig'
+import { useAuth } from '@/contexts/AuthContext'
 import { type Receipt, type UploadTask } from '../types'
 import { analyzeReceipt, saveTransaction } from '../api/receiptApi'
-import { toast } from 'sonner'
+import {
+  receiptUploaderStateCache,
+  revokeReceiptUploaderPreviewUrls,
+  type ReceiptUploaderEditingState,
+  type ReceiptUploaderRequestContext,
+  type ReceiptUploaderState,
+} from './receiptUploaderStateCache'
 
-type EditingState = {
-  taskId: string
-  resultIndex: number
-} | null
-
-type ReceiptUploaderStateCache = {
-  tasks: UploadTask[]
-  editingState: EditingState
-  isCombineMode: boolean
-  cameraFiles: File[]
-  cameraDraftTaskId: string | null
-}
-
-type ReceiptUploaderGlobal = typeof globalThis & {
-  __receiptUploaderStateCache?: ReceiptUploaderStateCache
-}
-
-const getReceiptUploaderStateCache = (): ReceiptUploaderStateCache => {
-  const globalState = globalThis as ReceiptUploaderGlobal
-  if (!globalState.__receiptUploaderStateCache) {
-    globalState.__receiptUploaderStateCache = {
-      tasks: [],
-      editingState: null,
-      isCombineMode: false,
-      cameraFiles: [],
-      cameraDraftTaskId: null,
-    }
-  }
-  return globalState.__receiptUploaderStateCache
-}
+const sameEditingState = (
+  left: ReceiptUploaderEditingState,
+  right: ReceiptUploaderEditingState
+) => left?.taskId === right?.taskId && left?.resultIndex === right?.resultIndex
 
 export const useReceiptUploader = () => {
   const { getHeaders } = useApiConfig()
-  const stateCache = getReceiptUploaderStateCache()
-
-  const [tasks, setTasks] = useState<UploadTask[]>(stateCache.tasks)
-  const [editingState, setEditingState] = useState<EditingState>(
-    stateCache.editingState
+  const { session } = useAuth()
+  const ownerUserId = session?.user.id ?? null
+  const snapshot = useSyncExternalStore(
+    receiptUploaderStateCache.subscribe,
+    receiptUploaderStateCache.getSnapshot,
+    receiptUploaderStateCache.getSnapshot
   )
-  const [isCombineMode, setIsCombineMode] = useState(stateCache.isCombineMode)
+  const ownedSnapshot = snapshot.ownerUserId === ownerUserId ? snapshot : null
+  const tasks = ownedSnapshot?.tasks ?? []
+  const editingState = ownedSnapshot?.editingState ?? null
+  const isCombineMode = ownedSnapshot?.isCombineMode ?? false
+  const cameraFiles = ownedSnapshot?.cameraFiles ?? []
+  const cameraDraftTaskId = ownedSnapshot?.cameraDraftTaskId ?? null
+  const requestContext = ownerUserId
+    ? receiptUploaderStateCache.getRequestContext(ownerUserId)
+    : null
 
-  const [cameraFiles, setCameraFiles] = useState<File[]>(stateCache.cameraFiles)
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false)
-  const [cameraDraftTaskId, setCameraDraftTaskId] = useState<string | null>(
-    stateCache.cameraDraftTaskId
-  )
 
-  const setEditingStateWithCache = (next: EditingState) => {
-    stateCache.editingState = next
-    setEditingState(next)
-  }
+  const updateCache = (
+    context: ReceiptUploaderRequestContext | null,
+    updater: (state: ReceiptUploaderState) => ReceiptUploaderState
+  ) => (context ? receiptUploaderStateCache.update(context, updater) : false)
 
-  const setIsCombineModeWithCache = (next: boolean) => {
-    stateCache.isCombineMode = next
-    setIsCombineMode(next)
-  }
+  const updateTasks = (
+    updater: (previous: UploadTask[]) => UploadTask[],
+    context = requestContext
+  ) =>
+    updateCache(context, (state) => ({
+      ...state,
+      tasks: updater(state.tasks),
+    }))
 
-  const setCameraFilesWithCache = (next: File[]) => {
-    stateCache.cameraFiles = next
-    setCameraFiles(next)
-  }
+  const setEditingStateWithCache = (
+    next: ReceiptUploaderEditingState,
+    context = requestContext
+  ) => updateCache(context, (state) => ({ ...state, editingState: next }))
 
-  const setCameraDraftTaskIdWithCache = (next: string | null) => {
-    stateCache.cameraDraftTaskId = next
-    setCameraDraftTaskId(next)
-  }
+  const setIsCombineModeWithCache = (next: boolean) =>
+    updateCache(requestContext, (state) => ({ ...state, isCombineMode: next }))
 
-  const syncTasks = (nextTasks: UploadTask[]) => {
-    stateCache.tasks = nextTasks
-    setTasks(nextTasks)
-  }
+  const setCameraFilesWithCache = (next: File[], context = requestContext) =>
+    updateCache(context, (state) => ({ ...state, cameraFiles: next }))
 
-  const updateTasks = (updater: (prev: UploadTask[]) => UploadTask[]) => {
-    const nextTasks = updater(stateCache.tasks)
-    syncTasks(nextTasks)
-  }
+  const setCameraDraftTaskIdWithCache = (
+    next: string | null,
+    context = requestContext
+  ) => updateCache(context, (state) => ({ ...state, cameraDraftTaskId: next }))
 
-  const commitCameraFilesToCombineTask = (filesToCommit: File[]) => {
-    if (filesToCommit.length === 0) return
+  const getOwnedSnapshot = (context: ReceiptUploaderRequestContext) =>
+    receiptUploaderStateCache.isCurrent(context)
+      ? receiptUploaderStateCache.getSnapshot()
+      : null
 
-    const previewUrls = filesToCommit.map((f) => URL.createObjectURL(f))
-
-    if (cameraDraftTaskId) {
-      updateTasks((prev) =>
-        prev.map((task) =>
-          task.id === cameraDraftTaskId
-            ? {
-                ...task,
-                files: [...task.files, ...filesToCommit],
-                previewUrls: [...task.previewUrls, ...previewUrls],
-              }
-            : task
-        )
+  const appendTasks = (newTasks: UploadTask[], context = requestContext) => {
+    if (!updateTasks((previous) => [...previous, ...newTasks], context)) {
+      revokeReceiptUploaderPreviewUrls(
+        newTasks.flatMap((task) => task.previewUrls)
       )
+    }
+  }
+
+  const commitCameraFilesToCombineTask = (
+    filesToCommit: File[],
+    context = requestContext
+  ) => {
+    if (filesToCommit.length === 0 || !context) return
+    const current = getOwnedSnapshot(context)
+    if (!current) return
+
+    const previewUrls = filesToCommit.map((file) => URL.createObjectURL(file))
+    const draftTask = current.cameraDraftTaskId
+      ? current.tasks.find((task) => task.id === current.cameraDraftTaskId)
+      : undefined
+
+    if (draftTask) {
+      const didUpdate = updateTasks(
+        (previous) =>
+          previous.map((task) =>
+            task.id === draftTask.id
+              ? {
+                  ...task,
+                  files: [...task.files, ...filesToCommit],
+                  previewUrls: [...task.previewUrls, ...previewUrls],
+                }
+              : task
+          ),
+        context
+      )
+      if (!didUpdate) revokeReceiptUploaderPreviewUrls(previewUrls)
       return
     }
 
@@ -109,8 +120,8 @@ export const useReceiptUploader = () => {
       status: 'idle',
       results: [],
     }
-    updateTasks((prev) => [...prev, newTask])
-    setCameraDraftTaskIdWithCache(newTask.id)
+    appendTasks([newTask], context)
+    setCameraDraftTaskIdWithCache(newTask.id, context)
   }
 
   const combineCommittedCount =
@@ -122,124 +133,193 @@ export const useReceiptUploader = () => {
     : cameraFiles.length
 
   const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (
+      !requestContext ||
+      !receiptUploaderStateCache.isCurrent(requestContext)
+    ) {
+      e.target.value = ''
+      return
+    }
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0]
-      setCameraFilesWithCache([...cameraFiles, file])
-      setIsCameraModalOpen(true)
+      const didUpdate = updateCache(requestContext, (state) => ({
+        ...state,
+        cameraFiles: [...state.cameraFiles, file],
+      }))
+      if (didUpdate) setIsCameraModalOpen(true)
       e.target.value = ''
     }
   }
 
   const handleContinueCamera = () => {
-    if (cameraFiles.length > 0) {
-      if (isCombineMode) {
-        commitCameraFilesToCombineTask(cameraFiles)
+    if (!requestContext) return
+    const current = getOwnedSnapshot(requestContext)
+    if (!current) return
+
+    if (current.cameraFiles.length > 0) {
+      if (current.isCombineMode) {
+        commitCameraFilesToCombineTask(current.cameraFiles, requestContext)
       } else {
-        const newTasks: UploadTask[] = cameraFiles.map((file) => ({
+        const newTasks = current.cameraFiles.map((file) => ({
           id: crypto.randomUUID(),
           files: [file],
           previewUrls: [URL.createObjectURL(file)],
-          status: 'idle',
+          status: 'idle' as const,
           results: [],
         }))
-        updateTasks((prev) => [...prev, ...newTasks])
+        appendTasks(newTasks, requestContext)
       }
-      setCameraFilesWithCache([])
+      setCameraFilesWithCache([], requestContext)
     }
     setIsCameraModalOpen(false)
   }
 
   const handleFinishCamera = () => {
-    if (cameraFiles.length === 0) {
+    if (!requestContext) return
+    const current = getOwnedSnapshot(requestContext)
+    if (!current) return
+
+    if (current.cameraFiles.length === 0) {
       setIsCameraModalOpen(false)
       return
     }
 
-    if (isCombineMode) {
-      const totalCount = cameraCapturedCount
-      setCameraDraftTaskIdWithCache(null)
-      setCameraFilesWithCache([])
+    if (current.isCombineMode) {
+      const committedCount = current.cameraDraftTaskId
+        ? (current.tasks.find((task) => task.id === current.cameraDraftTaskId)
+            ?.files.length ?? 0)
+        : 0
+      const totalCount = committedCount + current.cameraFiles.length
+      commitCameraFilesToCombineTask(current.cameraFiles, requestContext)
+      setCameraDraftTaskIdWithCache(null, requestContext)
+      setCameraFilesWithCache([], requestContext)
       setIsCameraModalOpen(false)
       toast.success(`${totalCount}枚の画像をタスクに追加しました！`)
       return
     }
 
-    const newTasks: UploadTask[] = cameraFiles.map((file) => ({
+    const newTasks = current.cameraFiles.map((file) => ({
       id: crypto.randomUUID(),
       files: [file],
       previewUrls: [URL.createObjectURL(file)],
-      status: 'idle',
+      status: 'idle' as const,
       results: [],
     }))
-    updateTasks((prev) => [...prev, ...newTasks])
+    appendTasks(newTasks, requestContext)
 
-    setCameraFilesWithCache([])
-    setCameraDraftTaskIdWithCache(null)
+    setCameraFilesWithCache([], requestContext)
+    setCameraDraftTaskIdWithCache(null, requestContext)
     setIsCameraModalOpen(false)
-    toast.success(`画像をタスクに追加しました！`)
+    toast.success('画像をタスクに追加しました！')
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (
+      !requestContext ||
+      !receiptUploaderStateCache.isCurrent(requestContext)
+    ) {
+      e.target.value = ''
+      return
+    }
     if (e.target.files && e.target.files.length > 0) {
       const newFiles = Array.from(e.target.files)
+      const current = getOwnedSnapshot(requestContext)
+      if (!current) {
+        e.target.value = ''
+        return
+      }
 
-      if (isCombineMode) {
-        const newTask: UploadTask = {
-          id: crypto.randomUUID(),
-          files: newFiles,
-          previewUrls: newFiles.map((f) => URL.createObjectURL(f)),
-          status: 'idle',
-          results: [],
-        }
-        updateTasks((prev) => [...prev, newTask])
+      if (current.isCombineMode) {
+        appendTasks(
+          [
+            {
+              id: crypto.randomUUID(),
+              files: newFiles,
+              previewUrls: newFiles.map((file) => URL.createObjectURL(file)),
+              status: 'idle',
+              results: [],
+            },
+          ],
+          requestContext
+        )
       } else {
-        const newTasks: UploadTask[] = newFiles.map((file) => ({
-          id: crypto.randomUUID(),
-          files: [file],
-          previewUrls: [URL.createObjectURL(file)],
-          status: 'idle',
-          results: [],
-        }))
-        updateTasks((prev) => [...prev, ...newTasks])
+        appendTasks(
+          newFiles.map((file) => ({
+            id: crypto.randomUUID(),
+            files: [file],
+            previewUrls: [URL.createObjectURL(file)],
+            status: 'idle' as const,
+            results: [],
+          })),
+          requestContext
+        )
       }
 
       e.target.value = ''
     }
   }
 
-  const processTask = async (taskId: string) => {
-    const headers = await getHeaders()
-    if (!headers) return
-
-    updateTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: 'analyzing' } : t))
-    )
-
-    const t = stateCache.tasks.find((task) => task.id === taskId)
-    if (!t) return
+  const processTask = async (
+    taskId: string,
+    context: ReceiptUploaderRequestContext | null = requestContext
+  ) => {
+    if (!context) return
+    const startingState = getOwnedSnapshot(context)
+    const startingTask = startingState?.tasks.find((task) => task.id === taskId)
+    if (!startingTask) return
 
     try {
-      const data = await analyzeReceipt(t.files, headers)
+      const headers = await getHeaders()
+      if (!headers || !receiptUploaderStateCache.isCurrent(context)) return
+
+      const currentTask = receiptUploaderStateCache
+        .getSnapshot()
+        .tasks.find((task) => task.id === taskId)
+      if (!currentTask || currentTask.files !== startingTask.files) return
+
+      if (
+        !updateTasks(
+          (previous) =>
+            previous.map((task) =>
+              task.id === taskId ? { ...task, status: 'analyzing' } : task
+            ),
+          context
+        )
+      ) {
+        return
+      }
+
+      const data = await analyzeReceipt(startingTask.files, headers)
+      if (!receiptUploaderStateCache.isCurrent(context)) return
 
       if (!data || !data.receipts || data.receipts.length === 0) {
         alert(
           '画像からレシートを読み取れませんでした。別の画像でお試しください。'
         )
-        updateTasks((prev) =>
-          prev.map((t) => (t.id === taskId ? { ...t, status: 'error' } : t))
+        updateTasks(
+          (previous) =>
+            previous.map((task) =>
+              task.id === taskId ? { ...task, status: 'error' } : task
+            ),
+          context
         )
         return
       }
 
-      updateTasks((prev) =>
-        prev.map((t) =>
-          t.id === taskId
-            ? { ...t, status: 'success', results: data.receipts }
-            : t
-        )
+      const didUpdate = updateTasks(
+        (previous) =>
+          previous.map((task) =>
+            task.id === taskId
+              ? { ...task, status: 'success', results: data.receipts }
+              : task
+          ),
+        context
       )
-      toast.success(`${data.receipts.length}枚のレシートを検出しました！`)
+      if (didUpdate) {
+        toast.success(`${data.receipts.length}枚のレシートを検出しました！`)
+      }
     } catch (error) {
+      if (!receiptUploaderStateCache.isCurrent(context)) return
       console.error(error)
       if (
         axios.isAxiosError(error) &&
@@ -251,19 +331,25 @@ export const useReceiptUploader = () => {
         window.location.reload()
         return
       }
-      updateTasks((prev) =>
-        prev.map((t) => (t.id === taskId ? { ...t, status: 'error' } : t))
+      const didUpdate = updateTasks(
+        (previous) =>
+          previous.map((task) =>
+            task.id === taskId ? { ...task, status: 'error' } : task
+          ),
+        context
       )
-      toast.error(
-        'レシートの解析中にエラーが発生しました。もう一度お試しください。'
-      )
+      if (didUpdate) {
+        toast.error(
+          'レシートの解析中にエラーが発生しました。もう一度お試しください。'
+        )
+      }
     }
   }
 
   const handleStartAll = () => {
-    tasks.forEach((t) => {
-      if (t.status === 'idle') {
-        processTask(t.id)
+    tasks.forEach((task) => {
+      if (task.status === 'idle') {
+        void processTask(task.id, requestContext)
       }
     })
   }
@@ -272,8 +358,12 @@ export const useReceiptUploader = () => {
     setEditingStateWithCache({ taskId, resultIndex: 0 })
   }
 
-  const getNextDetectedTask = (currentTaskId: string) => {
-    const nextTask = stateCache.tasks.find(
+  const getNextDetectedTask = (
+    currentTaskId: string,
+    context: ReceiptUploaderRequestContext
+  ) => {
+    const current = getOwnedSnapshot(context)
+    const nextTask = current?.tasks.find(
       (task) =>
         task.id !== currentTaskId &&
         task.status === 'success' &&
@@ -288,48 +378,102 @@ export const useReceiptUploader = () => {
   }
 
   const handleSaveCurrent = async (data: Receipt) => {
-    const headers = await getHeaders()
-    if (!headers) return
-
-    if (!editingState) return
-    const { taskId, resultIndex } = editingState
-    const currentTask = stateCache.tasks.find((t) => t.id === taskId)
+    if (!requestContext || !editingState) return
+    const context = requestContext
+    const startingEditingState = editingState
+    const startingState = getOwnedSnapshot(context)
+    const startingTask = startingState?.tasks.find(
+      (task) => task.id === startingEditingState.taskId
+    )
+    if (!startingTask) return
 
     try {
+      const headers = await getHeaders()
+      if (!headers || !receiptUploaderStateCache.isCurrent(context)) return
+
+      const currentBeforeSave = receiptUploaderStateCache.getSnapshot()
+      const taskBeforeSave = currentBeforeSave.tasks.find(
+        (task) => task.id === startingEditingState.taskId
+      )
+      if (
+        !taskBeforeSave ||
+        taskBeforeSave.files !== startingTask.files ||
+        !sameEditingState(currentBeforeSave.editingState, startingEditingState)
+      ) {
+        return
+      }
+
       await saveTransaction(data, headers)
+      if (!receiptUploaderStateCache.isCurrent(context)) return
+
+      const currentAfterSave = receiptUploaderStateCache.getSnapshot()
+      const currentTask = currentAfterSave.tasks.find(
+        (task) => task.id === startingEditingState.taskId
+      )
+      if (
+        !currentTask ||
+        !sameEditingState(currentAfterSave.editingState, startingEditingState)
+      ) {
+        return
+      }
+
       toast.success(
         `${data.purchase_date}/${data.store_name} のレシートを保存しました。`
       )
 
-      if (currentTask && resultIndex < currentTask.results.length - 1) {
-        setEditingStateWithCache({ taskId, resultIndex: resultIndex + 1 })
+      const { taskId, resultIndex } = startingEditingState
+      if (resultIndex < currentTask.results.length - 1) {
+        setEditingStateWithCache(
+          { taskId, resultIndex: resultIndex + 1 },
+          context
+        )
       } else {
-        const nextEditingState = getNextDetectedTask(taskId)
-        updateTasks((prev) => prev.filter((t) => t.id !== taskId))
-        if (cameraDraftTaskId === taskId) {
-          setCameraDraftTaskIdWithCache(null)
+        const nextEditingState = getNextDetectedTask(taskId, context)
+        updateTasks(
+          (previous) => previous.filter((task) => task.id !== taskId),
+          context
+        )
+        if (
+          receiptUploaderStateCache.getSnapshot().cameraDraftTaskId === taskId
+        ) {
+          setCameraDraftTaskIdWithCache(null, context)
         }
-        setEditingStateWithCache(nextEditingState)
+        setEditingStateWithCache(nextEditingState, context)
       }
     } catch (error) {
+      if (
+        !receiptUploaderStateCache.isCurrent(context) ||
+        !sameEditingState(
+          receiptUploaderStateCache.getSnapshot().editingState,
+          startingEditingState
+        )
+      ) {
+        return
+      }
       console.error(error)
       toast.error('レシートの保存中にエラーが発生しました。')
     }
   }
 
   const handleSkipCurrent = () => {
-    if (!editingState) return
+    if (!requestContext || !editingState) return
+    const current = getOwnedSnapshot(requestContext)
+    if (!current) return
+
     const { taskId, resultIndex } = editingState
-    const currentTask = stateCache.tasks.find((t) => t.id === taskId)
+    const currentTask = current.tasks.find((task) => task.id === taskId)
+    if (!currentTask) return
 
     alert('このレシートの登録をスキップしました。')
 
-    if (currentTask && resultIndex < currentTask.results.length - 1) {
+    if (resultIndex < currentTask.results.length - 1) {
       setEditingStateWithCache({ taskId, resultIndex: resultIndex + 1 })
     } else {
-      const nextEditingState = getNextDetectedTask(taskId)
-      updateTasks((prev) => prev.filter((t) => t.id !== taskId))
-      if (cameraDraftTaskId === taskId) {
+      const nextEditingState = getNextDetectedTask(taskId, requestContext)
+      updateTasks((previous) => previous.filter((task) => task.id !== taskId))
+      if (
+        receiptUploaderStateCache.getSnapshot().cameraDraftTaskId === taskId
+      ) {
         setCameraDraftTaskIdWithCache(null)
       }
       setEditingStateWithCache(nextEditingState)
@@ -337,8 +481,9 @@ export const useReceiptUploader = () => {
   }
 
   const handleDeleteTask = (taskId: string) => {
-    updateTasks((prev) => prev.filter((t) => t.id !== taskId))
-    if (cameraDraftTaskId === taskId) {
+    if (!requestContext) return
+    updateTasks((previous) => previous.filter((task) => task.id !== taskId))
+    if (receiptUploaderStateCache.getSnapshot().cameraDraftTaskId === taskId) {
       setCameraDraftTaskIdWithCache(null)
     }
   }

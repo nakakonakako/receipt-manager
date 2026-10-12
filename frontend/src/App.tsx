@@ -54,7 +54,7 @@ export const App: React.FC = () => {
       </header>
 
       <main className="flex-1 min-h-0 flex flex-col overflow-hidden w-full">
-        <MainLayout />
+        <MainLayout key={session.user.id} />
       </main>
     </div>
   )
