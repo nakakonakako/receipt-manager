@@ -1,5 +1,9 @@
 import { apiClient } from '@/lib/apiClient'
-import { type CsvMapping, type ParsedTransaction } from '../types'
+import {
+  type CsvMapping,
+  type LegacyCsvMapping,
+  type ParsedTransaction,
+} from '../types'
 
 interface CsvParseResponse {
   transactions: ParsedTransaction[]
@@ -8,7 +12,7 @@ interface CsvParseResponse {
 
 export const analyzeCsv = async (
   csvText: string,
-  mapping: CsvMapping | undefined,
+  mapping: CsvMapping | LegacyCsvMapping | undefined,
   headers: Record<string, string>
 ): Promise<CsvParseResponse> => {
   const response = await apiClient.post<CsvParseResponse>(

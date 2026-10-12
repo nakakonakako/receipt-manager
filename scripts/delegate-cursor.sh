@@ -13,6 +13,7 @@ Options:
   --prompt      Pass the work order directly.
   --worktree    Run Cursor in an isolated Git worktree.
   --allow-dirty Allow direct execution in a dirty current checkout.
+  --trust       Trust the current workspace for this invocation.
   -h, --help    Show this help.
 
 Model mapping:
@@ -27,6 +28,7 @@ task_file=""
 prompt=""
 worktree=""
 allow_dirty=0
+trust_workspace=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -35,6 +37,7 @@ while [[ $# -gt 0 ]]; do
     --prompt) prompt="${2:?missing value for --prompt}"; shift 2 ;;
     --worktree) worktree="${2:?missing value for --worktree}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift ;;
+    --trust) trust_workspace=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -113,6 +116,9 @@ WORK ORDER
 ${work_order}"
 
 cmd=(agent --model "$model")
+if [[ "$trust_workspace" -eq 1 ]]; then
+  cmd+=(--trust)
+fi
 if [[ -n "$worktree" ]]; then
   cmd+=(--worktree "$worktree")
 fi
@@ -121,6 +127,9 @@ cmd+=(-p "$full_prompt")
 echo "[delegate-cursor] repo: $repo_root" >&2
 echo "[delegate-cursor] tier: $tier" >&2
 echo "[delegate-cursor] model: $model" >&2
+if [[ "$trust_workspace" -eq 1 ]]; then
+  echo "[delegate-cursor] workspace trust: enabled for this invocation" >&2
+fi
 if [[ -n "$worktree" ]]; then
   echo "[delegate-cursor] worktree: $worktree" >&2
 else

@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 class GeminiService:
     def __init__(self):
         api_key = os.getenv("GEMINI_API_KEY")
-        self.client = genai.Client(api_key=api_key)
+        self.client = genai.Client(
+            api_key=api_key,
+            # google-genai 1.53: timeout is milliseconds. retry_options=None
+            # is a single attempt, so this is one 120 second HTTP timeout.
+            http_options=types.HttpOptions(timeout=120_000),
+        )
 
     def analyze_receipt(self, image_bytes_list: list[bytes]) -> dict:
         config = types.GenerateContentConfig(

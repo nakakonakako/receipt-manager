@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-11 |
+| ドキュメント最終更新 | 2026-10-13 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -71,7 +71,7 @@ Supabase（Auth + Postgres + RLS）
 | DB・Auth | `supabase/` | `config.toml`、マイグレーション |
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
-| PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
+| PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build/test、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
 | main後CD | `.github/workflows/deploy.yml` | `main` push 後に quality を実行し、マイグレーション変更時は migrate → 読み取り専用RPC検証、その後 GHCR build → VPS deploy。変更がなければ migrate と検証をスキップ。手動検証は `verify-production-rpcs.yml` |
 | ドキュメント | `docs/` | 本ファイルおよび仕様メモ |
 
@@ -99,7 +99,7 @@ Supabase（Auth + Postgres + RLS）
 | 領域 | パス | ステータス | できること |
 |------|------|------------|------------|
 | レシート | `frontend/src/features/receipt/` | 現行 | 画像 → `/analyze` → 編集（カテゴリ・タグ等）→ `/save`。手動入力もあり |
-| CSV | `frontend/src/features/csv/` | 現行 | CSV → 列マッピング（Gemini またはプリセット）→ `/save_csv` |
+| CSV | `frontend/src/features/csv/` | 現行 | CSV → 列マッピング（Gemini またはプリセット）→ 月ごとの `/save_csv`。1ファイルはヘッダーを含む論理行20,000行、20MiBまで。日付範囲の制限はなく、複数年を含められる |
 | 履歴 | `frontend/src/features/history/` | 現行・強化予定 | 月選択、明細編集削除、テキスト検索。分類フィルタは [planned-history-category-filter.md](./planned-history-category-filter.md) |
 | AIチャット | `frontend/src/features/search/` | 現行 | `/search` + `chat_messages` 履歴 |
 | ダッシュボード | `frontend/src/features/dashboard/` | 現行 | `main_category` 集計。CSV は「キャッシュレス（未分類）」扱い |
@@ -114,14 +114,22 @@ Supabase（Auth + Postgres + RLS）
 | POST | `/search` | 要 | 家計 Q&A | 現行 |
 | GET | `/available_months` | 要 | データがある月一覧 | 現行 |
 | GET | `/transactions` | 要 | 指定月のレシート + CSV | 現行 |
-| POST | `/analyze_csv` | 要 | CSV 列推定・パース（マッピング未指定時は Gemini で列推定） | 現行 |
-| POST | `/save_csv` | 要 | CSV 行保存 | 現行 |
+| POST | `/analyze_csv` | 要 | CSV 列推定・パース（マッピング未指定時は Gemini で列推定）。論理行20,000行または20MiB文字を超える入力は、解析と Gemini 呼び出しの前に拒否 | 現行 |
+| POST | `/save_csv` | 要 | CSV 行保存。月ごとの分割送信はフロントの既存経路 | 現行 |
 | PUT/DELETE | `/receipts/{id}` | 要 | レシート更新・削除 | 現行 |
 | PUT/DELETE | `/csv_transactions/{id}` | 要 | CSV 行更新・削除 | 現行 |
 
 認証ヘッダ: `x-supabase-token`（Supabase セッションの access token）。
 
-APIエラー応答は既存のJSON形式を維持する。リクエスト検証エラーと認証ヘッダ欠落は FastAPI の `422`、明示的に無効な Supabase トークンは固定メッセージの `401`、予期しない処理・設定・外部サービスエラーは内部詳細を含まない固定メッセージの `500` を返す。エラーログには処理箇所のみを記録し、例外本文やリクエストデータは含めない。
+APIエラー応答は既存のJSON形式を維持する。リクエスト検証エラーと認証ヘッダ欠落は FastAPI の `422`、明示的に無効な Supabase トークンは固定メッセージの `401`、予期しない処理・設定・外部サービスエラーは内部詳細を含まない固定メッセージの `500` を返す。エラーログには処理箇所のみを記録し、例外本文、プロンプト、CSV内容、認証情報、トークンは含めない。
+
+CSVの上限はヘッダーを含む論理行20,000行、および `csv_text` 20MiB（20 × 1024 × 1024文字）です。行数超過の `422` は `CSVは20,000行以内にしてください。` です。引用符内の改行は1論理行です。UTF-8を優先し、不正なUTF-8はShift-JISとして読みます。既存の列プリセット（旧キーを含む）と、保存時に年月ごとに `/save_csv` する経路は維持します。20,000行を超えるファイルの分割、再開、重複排除は行いません。
+
+検索の質問は500文字までです。対象データが検索用の行数・文字数上限に収まらない場合は、Geminiを呼ばず、期間を短くする固定の日本語 `422` を返します。チャット画面はその固定案内だけを表示し、サーバーの例外文は出しません。
+
+GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions.timeout` はミリ秒で `120000`）で、`retry_options` 未指定は1回だけ試行します。
+
+リクエスト本体の上限は、フロントのファイルサイズ20MiB、バックエンドの文字数20MiB、nginxの `client_max_body_size 20M` です。開発時のViteプロキシに追加の本体上限はありません。JSON化で引用符や改行、Shift-JISからUTF-8への展開が20MiBを超える場合、フロントは送信前に拒否し、本番nginxは413を返します。nginxの本体上限を20Mより大きくするかは未変更です。
 
 ### 4.4 カテゴリ（A）
 
@@ -255,7 +263,7 @@ npm run dev
 
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
-- PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/build、backend Ruff check/format、backend unittest（現在9件）を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
+- PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。
 - DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で同じ `supabase/diagnostics/verify_s1_08_rpc_integrity.sql` を実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
