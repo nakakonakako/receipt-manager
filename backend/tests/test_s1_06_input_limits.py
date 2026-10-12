@@ -116,18 +116,19 @@ class S106ApiInputLimitTests(unittest.TestCase):
     def test_csv_accepts_exactly_twenty_thousand_logical_rows_without_gemini(self):
         self.allow_authenticated_user(object())
         mapping = {
-            "has_header": True,
+            "has_header": False,
             "date_col_index": 0,
             "store_col_index": 1,
             "price_col_index": 2,
         }
-        csv_text = "date,store,price\n" * MAX_CSV_ROWS
+        csv_text = "2024-06-15,店,100\n" * MAX_CSV_ROWS
         with patch.object(main.gemini_service, "analyze_csv") as analyze_csv:
             response = self.client.post(
                 "/analyze_csv", json={"csv_text": csv_text, "mapping": mapping}
             )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"transactions": [], "mapping": mapping})
+        self.assertEqual(len(response.json()["transactions"]), MAX_CSV_ROWS)
+        self.assertEqual(response.json()["mapping"], mapping)
         analyze_csv.assert_not_called()
 
     def test_quoted_newline_over_limit_is_rejected_without_partial_result(self):
