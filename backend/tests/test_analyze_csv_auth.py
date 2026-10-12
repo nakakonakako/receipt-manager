@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 from app import main
 from app.schemas.csv import CsvAnalysisRequest, MAX_CSV_TEXT_CHARACTERS
+from app.services.supabase_service import InvalidSupabaseTokenError
 
 
 class AnalyzeCsvAuthTests(unittest.TestCase):
@@ -40,7 +41,7 @@ class AnalyzeCsvAuthTests(unittest.TestCase):
             patch.object(
                 main,
                 "SupabaseService",
-                side_effect=ValueError("invalid token"),
+                side_effect=InvalidSupabaseTokenError("invalid token"),
             ),
             patch.object(main.gemini_service, "analyze_csv") as analyze_csv,
             patch.object(main.csv_service, "parse_csv") as parse_csv,

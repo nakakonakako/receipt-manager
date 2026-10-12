@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from app.schemas.csv import (
     CsvAnalysisRequest,
@@ -8,17 +9,25 @@ from app.schemas.csv import (
 from app.schemas.receipt import ReceiptData, SearchQuery
 from app.services.csv_service import CsvService
 from app.services.gemini_service import GeminiService
-from app.services.supabase_service import SupabaseService
+from app.services.supabase_service import InvalidSupabaseTokenError, SupabaseService
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 
 app = FastAPI()
+logger = logging.getLogger(__name__)
+SAFE_INTERNAL_ERROR_DETAIL = "Internal Server Error"
+SAFE_AUTH_ERROR_DETAIL = "Invalid authentication credentials."
 
 load_dotenv()
 
 gemini_service = GeminiService()
 csv_service = CsvService()
 MAX_CSV_MAPPING_SAMPLE_CHARACTERS = 10_000
+
+
+def _internal_server_error(operation: str) -> HTTPException:
+    logger.error("Unexpected error while processing endpoint %s", operation)
+    return HTTPException(status_code=500, detail=SAFE_INTERNAL_ERROR_DETAIL)
 
 
 @app.get("/")
@@ -31,8 +40,12 @@ async def get_supabase_service(
 ) -> SupabaseService:
     try:
         return await asyncio.to_thread(SupabaseService, token=x_supabase_token)
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=str(e))
+    except HTTPException:
+        raise
+    except InvalidSupabaseTokenError:
+        raise HTTPException(status_code=401, detail=SAFE_AUTH_ERROR_DETAIL) from None
+    except Exception:
+        raise _internal_server_error("authentication") from None
 
 
 @app.post("/analyze")
@@ -68,8 +81,10 @@ async def analyze_receipt(
 
         return result
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("analyze") from None
 
 
 @app.post("/save")
@@ -81,8 +96,10 @@ async def save_receipt(
         result = await asyncio.to_thread(supabase_service.add_receipt_data, data)
         return {"message": "Receipt data saved successfully.", "details": result}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("save") from None
 
 
 @app.post("/search")
@@ -100,8 +117,10 @@ async def search_receipts(
         answer = gemini_service.answer_question(search_query.query, data)
         return {"answer": answer}
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("search") from None
 
 
 @app.get("/available_months")
@@ -110,8 +129,10 @@ async def get_available_months(
 ):
     try:
         return supabase_service.get_available_months()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("available_months") from None
 
 
 @app.get("/transactions")
@@ -122,8 +143,10 @@ async def get_transactions(
     try:
         data = supabase_service.get_transactions_by_month(month)
         return data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("transactions") from None
 
 
 def _get_csv_mapping_sample(csv_text: str) -> str:
@@ -157,8 +180,10 @@ async def analyze_csv(
         transactions = csv_service.parse_csv(request.csv_text, mapping)
 
         return CsvParseResponse(transactions=transactions, mapping=mapping)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("analyze_csv") from None
 
 
 @app.post("/save_csv")
@@ -169,8 +194,10 @@ async def save_csv(
     try:
         result = supabase_service.add_csv_data(request.transactions)
         return {"message": "CSV data saved successfully.", "details": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("save_csv") from None
 
 
 @app.put("/receipts/{receipt_id}")
@@ -182,8 +209,10 @@ async def update_receipt(
     try:
         result = supabase_service.update_receipt(receipt_id, payload)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("update_receipt") from None
 
 
 @app.put("/csv_transactions/{transaction_id}")
@@ -195,8 +224,10 @@ async def update_csv_transaction(
     try:
         result = supabase_service.update_csv_transaction(transaction_id, payload)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("update_csv_transaction") from None
 
 
 @app.delete("/receipts/{receipt_id}")
@@ -207,8 +238,10 @@ async def delete_receipt(
     try:
         result = supabase_service.delete_receipt(receipt_id)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("delete_receipt") from None
 
 
 @app.delete("/csv_transactions/{transaction_id}")
@@ -219,5 +252,7 @@ async def delete_csv_transaction(
     try:
         result = supabase_service.delete_csv_transaction(transaction_id)
         return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception:
+        raise _internal_server_error("delete_csv_transaction") from None

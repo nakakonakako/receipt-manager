@@ -1,9 +1,12 @@
 import csv
 import io
+import logging
 import re
 
 from app.schemas.csv import ParsedCsvTransaction
 from dateutil import parser
+
+logger = logging.getLogger(__name__)
 
 
 class CsvService:
@@ -40,8 +43,8 @@ class CsvService:
                 try:
                     parsed_date = parser.parse(raw_date, fuzzy=True)
                     formatted_date = parsed_date.strftime("%Y-%m-%d")
-                except Exception as e:
-                    print(f"Date parsing failed for '{raw_date}': {e}")
+                except Exception:
+                    logger.warning("Skipping CSV row with an invalid date (row=%d)", i)
                     continue
 
                 parsed_transactions.append(
@@ -50,8 +53,8 @@ class CsvService:
                     )
                 )
 
-            except Exception as e:
-                print(f"Error processing row {i}: {e}")
+            except Exception:
+                logger.warning("Skipping malformed CSV row (row=%d)", i)
                 continue
 
         return parsed_transactions
