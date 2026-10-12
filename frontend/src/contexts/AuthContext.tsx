@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { receiptUploaderStateCache } from '../features/receipt/hooks/receiptUploaderStateCache'
 
 type AuthContextType = {
   session: Session | null
@@ -23,22 +24,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setIsLoading(false)
-    })
-
+    let isActive = true
+    let authEventVersion = 0
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      authEventVersion += 1
+      receiptUploaderStateCache.setOwner(session?.user.id ?? null)
       setSession(session)
       setIsLoading(false)
     })
 
-    return () => subscription.unsubscribe()
+    const initialAuthEventVersion = authEventVersion
+    void supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (!isActive || authEventVersion !== initialAuthEventVersion) return
+        receiptUploaderStateCache.setOwner(session?.user.id ?? null)
+        setSession(session)
+        setIsLoading(false)
+      })
+      .catch((error: unknown) => {
+        if (!isActive || authEventVersion !== initialAuthEventVersion) return
+        receiptUploaderStateCache.setOwner(null)
+        console.error('Failed to restore authentication session:', error)
+        setIsLoading(false)
+      })
+
+    return () => {
+      isActive = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const logout = async () => {
+    receiptUploaderStateCache.setOwner(null)
     await supabase.auth.signOut()
   }
 

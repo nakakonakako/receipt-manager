@@ -2,10 +2,13 @@ import React, { useState } from 'react'
 import { ReceiptEditor } from './ReceiptEditor'
 import { saveTransaction } from '../api/receiptApi'
 import { useApiConfig } from '@/hooks/useApiConfig'
+import { useAuth } from '@/contexts/AuthContext'
+import { receiptUploaderStateCache } from '../hooks/receiptUploaderStateCache'
 import { type Receipt } from '../types'
 
 export const ManualRegister: React.FC = () => {
   const { getHeaders } = useApiConfig()
+  const { session } = useAuth()
 
   const [resetKey, setResetKey] = useState(0)
 
@@ -26,14 +29,24 @@ export const ManualRegister: React.FC = () => {
   }
 
   const handleSave = async (data: Receipt) => {
-    const headers = await getHeaders()
-    if (!headers) return
+    const ownerUserId = session?.user.id
+    const requestContext = ownerUserId
+      ? receiptUploaderStateCache.getRequestContext(ownerUserId)
+      : null
+    if (!requestContext) return
 
     try {
+      const headers = await getHeaders()
+      if (!headers || !receiptUploaderStateCache.isCurrent(requestContext)) {
+        return
+      }
+
       await saveTransaction(data, headers)
+      if (!receiptUploaderStateCache.isCurrent(requestContext)) return
       alert(`${data.store_name}のレシートを保存しました！`)
       setResetKey((prev) => prev + 1)
     } catch (error) {
+      if (!receiptUploaderStateCache.isCurrent(requestContext)) return
       console.error('レシートの保存に失敗しました:', error)
       alert('レシートの保存に失敗しました。再度お試しください。')
     }
