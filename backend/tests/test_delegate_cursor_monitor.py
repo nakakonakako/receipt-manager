@@ -334,6 +334,51 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertIn("composer-2.5", argv)
         self.assertNotIn("PROMPT_SENTINEL", result.stdout + result.stderr)
 
+    def test_delegate_script_defaults_to_trust_and_no_trust_disables_it(self) -> None:
+        captured_args = self.root / "captured-args.json"
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        fake_agent = bin_dir / "agent"
+        fake_agent.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json,os,sys\n"
+            "from pathlib import Path\n"
+            "Path(os.environ['CAPTURED_ARGS']).write_text(json.dumps(sys.argv[1:]))\n"
+            "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n",
+            encoding="utf-8",
+        )
+        fake_agent.chmod(0o755)
+        env = os.environ.copy()
+        env["PATH"] = f"{bin_dir}:{env['PATH']}"
+        env["XDG_STATE_HOME"] = str(self.state_home)
+        env["CAPTURED_ARGS"] = str(captured_args)
+
+        for trust_option, should_trust in ((None, True), ("--no-trust", False)):
+            with self.subTest(trust_option=trust_option):
+                args = [
+                    str(REPO_ROOT / "scripts/delegate-cursor.sh"),
+                    "--tier",
+                    "light",
+                    "--allow-dirty",
+                ]
+                if trust_option:
+                    args.append(trust_option)
+                args.extend(("--prompt", "PONG"))
+                result = subprocess.run(
+                    args,
+                    cwd=REPO_ROOT,
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=10,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                argv = json.loads(captured_args.read_text(encoding="utf-8"))
+                self.assertEqual("--trust" in argv, should_trust)
+                self.assertIn("--output-format", argv)
+                self.assertIn("stream-json", argv)
+
 
 if __name__ == "__main__":
     unittest.main()

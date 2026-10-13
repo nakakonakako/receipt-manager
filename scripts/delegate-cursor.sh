@@ -4,8 +4,8 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/delegate-cursor.sh --tier <light|normal|hard> --task-file <path> [--worktree <name>] [--trust]
-  scripts/delegate-cursor.sh --tier <light|normal|hard> --prompt <text> [--worktree <name>] [--trust]
+  scripts/delegate-cursor.sh --tier <light|normal|hard> --task-file <path> [--worktree <name>] [--trust|--no-trust]
+  scripts/delegate-cursor.sh --tier <light|normal|hard> --prompt <text> [--worktree <name>] [--trust|--no-trust]
 
 Options:
   --tier        Cursor model tier. Default: normal
@@ -13,7 +13,8 @@ Options:
   --prompt      Pass the work order directly.
   --worktree    Run Cursor in an isolated Git worktree.
   --allow-dirty Allow direct execution in a dirty current checkout.
-  --trust       Trust the workspace (Cursor CLI workspace trust only).
+  --trust       Trust the workspace (enabled by default).
+  --no-trust    Disable workspace trust for this invocation.
   -h, --help    Show this help.
 
 Model mapping:
@@ -28,7 +29,7 @@ task_file=""
 prompt=""
 worktree=""
 allow_dirty=0
-trust=0
+trust=1
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +39,7 @@ while [[ $# -gt 0 ]]; do
     --worktree) worktree="${2:?missing value for --worktree}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift ;;
     --trust) trust=1; shift ;;
+    --no-trust) trust=0; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
