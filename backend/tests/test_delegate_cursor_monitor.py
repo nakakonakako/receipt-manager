@@ -114,8 +114,8 @@ class DelegateCursorMonitorTests(unittest.TestCase):
     def test_failure_classifies_and_scrubs_bounded_stderr_diagnostics(self) -> None:
         agent = self.fake_agent(
             "import sys\n"
-            "[print('Error detail ' + 'x' * 800, file=sys.stderr) for _ in range(120)]\n"
             'print(\'resource_exhausted: {"api_key":"SECRET_API_KEY"}\', file=sys.stderr)\n'
+            "[print('Error detail ' + 'x' * 800, file=sys.stderr) for _ in range(120)]\n"
             "print('Network connection error: ECONNRESET Authorization: Bearer SECRET_BEARER', file=sys.stderr)\n"
             "print('authentication failed token=SECRET_TOKEN', file=sys.stderr)\n"
             "print('permission denied: /private/path', file=sys.stderr)\n"

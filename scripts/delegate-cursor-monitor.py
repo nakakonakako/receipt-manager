@@ -126,7 +126,7 @@ def scrub_stderr_line(line: str) -> str:
                 scrubbed = pattern.sub("[REDACTED]", scrubbed)
         else:
             scrubbed = pattern.sub("[REDACTED]", scrubbed)
-    return scrubbed[:512]
+    return scrubbed.encode("utf-8")[:512].decode("utf-8", errors="ignore")
 
 
 class StderrDiagnostics:
@@ -136,8 +136,12 @@ class StderrDiagnostics:
         self.buffer = bytearray()
         self.discarding_long_line = False
         self.error_events: list[dict[str, str]] = []
-        self.excerpts: list[str] = []
-        self.excerpt_bytes = 0
+        self.leading_excerpts: list[str] = []
+        self.trailing_excerpts: list[str] = []
+
+    @property
+    def excerpts(self) -> list[str]:
+        return [*self.leading_excerpts, *self.trailing_excerpts]
 
     def _consume_line(self, raw_line: bytes, truncated: bool = False) -> list[dict[str, str]]:
         text = raw_line.decode("utf-8", errors="replace")
@@ -152,16 +156,12 @@ class StderrDiagnostics:
                     self.error_events.append(record)
                     added.append(record)
         safe_line = scrub_stderr_line(text)
-        line_size = len(safe_line.encode("utf-8"))
-        if line_size <= MAX_DIAGNOSTIC_BYTES:
-            while self.excerpts and (
-                len(self.excerpts) >= MAX_DIAGNOSTIC_LINES
-                or self.excerpt_bytes + line_size > MAX_DIAGNOSTIC_BYTES
-            ):
-                removed = self.excerpts.pop(0)
-                self.excerpt_bytes -= len(removed.encode("utf-8"))
-            self.excerpts.append(safe_line)
-            self.excerpt_bytes += line_size
+        if len(self.leading_excerpts) < MAX_DIAGNOSTIC_LINES // 2:
+            self.leading_excerpts.append(safe_line)
+        else:
+            if len(self.trailing_excerpts) >= MAX_DIAGNOSTIC_LINES // 2:
+                self.trailing_excerpts.pop(0)
+            self.trailing_excerpts.append(safe_line)
         return added
 
     def feed(self, chunk: bytes) -> list[dict[str, str]]:
