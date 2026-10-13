@@ -134,17 +134,25 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             "network_connection",
             "authentication",
             "permission_denied",
+            "workspace_trust_required",
             "mcp_initialization",
             "worktree_setup",
         }
         observed = {event["category"] for event in status["stderr_error_events"]}
         self.assertTrue(expected_categories.issubset(observed), observed)
-        self.assertGreaterEqual(
+        self.assertEqual(
+            sum(
+                event["category"] == "workspace_trust_required"
+                for event in status["stderr_error_events"]
+            ),
+            1,
+        )
+        self.assertEqual(
             sum(
                 event["category"] == "permission_denied"
                 for event in status["stderr_error_events"]
             ),
-            2,
+            1,
         )
         for event in status["stderr_error_events"]:
             self.assertTrue(event["occurred_at"])
