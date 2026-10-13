@@ -6,6 +6,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import { type Receipt, type UploadTask } from '../types'
 import { analyzeReceipt, saveTransaction } from '../api/receiptApi'
 import {
+  formatReceiptImagePreflightToast,
+  validateReceiptImageSelection,
+} from '../utils/receiptImageLimits'
+import {
   receiptUploaderStateCache,
   revokeReceiptUploaderPreviewUrls,
   type ReceiptUploaderEditingState,
@@ -73,6 +77,18 @@ export const useReceiptUploader = () => {
     receiptUploaderStateCache.isCurrent(context)
       ? receiptUploaderStateCache.getSnapshot()
       : null
+
+  const rejectInvalidReceiptFiles = async (
+    files: File[],
+    combineMode: boolean
+  ): Promise<boolean> => {
+    const result = await validateReceiptImageSelection(files, { combineMode })
+    if (!result.ok) {
+      toast.error(formatReceiptImagePreflightToast(result))
+      return false
+    }
+    return true
+  }
 
   const appendTasks = (newTasks: UploadTask[], context = requestContext) => {
     if (!updateTasks((previous) => [...previous, ...newTasks], context)) {
@@ -142,11 +158,36 @@ export const useReceiptUploader = () => {
     }
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0]
-      const didUpdate = updateCache(requestContext, (state) => ({
-        ...state,
-        cameraFiles: [...state.cameraFiles, file],
-      }))
-      if (didUpdate) setIsCameraModalOpen(true)
+      void (async () => {
+        const current = getOwnedSnapshot(requestContext)
+        if (!current) return
+
+        const pendingCombineFiles = current.isCombineMode
+          ? [
+              ...(current.cameraDraftTaskId
+                ? (current.tasks.find((task) => task.id === current.cameraDraftTaskId)
+                    ?.files ?? [])
+                : []),
+              ...current.cameraFiles,
+              file,
+            ]
+          : [file]
+
+        if (
+          !(await rejectInvalidReceiptFiles(
+            pendingCombineFiles,
+            current.isCombineMode
+          ))
+        ) {
+          return
+        }
+
+        const didUpdate = updateCache(requestContext, (state) => ({
+          ...state,
+          cameraFiles: [...state.cameraFiles, file],
+        }))
+        if (didUpdate) setIsCameraModalOpen(true)
+      })()
       e.target.value = ''
     }
   }
@@ -229,31 +270,39 @@ export const useReceiptUploader = () => {
         return
       }
 
-      if (current.isCombineMode) {
-        appendTasks(
-          [
-            {
+      void (async () => {
+        if (
+          !(await rejectInvalidReceiptFiles(newFiles, current.isCombineMode))
+        ) {
+          return
+        }
+
+        if (current.isCombineMode) {
+          appendTasks(
+            [
+              {
+                id: crypto.randomUUID(),
+                files: newFiles,
+                previewUrls: newFiles.map((file) => URL.createObjectURL(file)),
+                status: 'idle',
+                results: [],
+              },
+            ],
+            requestContext
+          )
+        } else {
+          appendTasks(
+            newFiles.map((file) => ({
               id: crypto.randomUUID(),
-              files: newFiles,
-              previewUrls: newFiles.map((file) => URL.createObjectURL(file)),
-              status: 'idle',
+              files: [file],
+              previewUrls: [URL.createObjectURL(file)],
+              status: 'idle' as const,
               results: [],
-            },
-          ],
-          requestContext
-        )
-      } else {
-        appendTasks(
-          newFiles.map((file) => ({
-            id: crypto.randomUUID(),
-            files: [file],
-            previewUrls: [URL.createObjectURL(file)],
-            status: 'idle' as const,
-            results: [],
-          })),
-          requestContext
-        )
-      }
+            })),
+            requestContext
+          )
+        }
+      })()
 
       e.target.value = ''
     }
@@ -289,6 +338,21 @@ export const useReceiptUploader = () => {
         return
       }
 
+      const preflight = await validateReceiptImageSelection(startingTask.files, {
+        combineMode: true,
+      })
+      if (!preflight.ok) {
+        toast.error(formatReceiptImagePreflightToast(preflight))
+        updateTasks(
+          (previous) =>
+            previous.map((task) =>
+              task.id === taskId ? { ...task, status: 'error' } : task
+            ),
+          context
+        )
+        return
+      }
+
       const data = await analyzeReceipt(startingTask.files, headers)
       if (!receiptUploaderStateCache.isCurrent(context)) return
 
@@ -320,8 +384,21 @@ export const useReceiptUploader = () => {
       }
     } catch (error) {
       if (!receiptUploaderStateCache.isCurrent(context)) return
-      console.error(error)
       if (
+        axios.isAxiosError(error) &&
+        error.response?.status === 422 &&
+        typeof error.response.data?.detail === 'string'
+      ) {
+        toast.error(error.response.data.detail)
+        updateTasks(
+          (previous) =>
+            previous.map((task) =>
+              task.id === taskId ? { ...task, status: 'error' } : task
+            ),
+          context
+        )
+        return
+      } else if (
         axios.isAxiosError(error) &&
         (error.response?.status === 401 || error.response?.status === 403)
       ) {

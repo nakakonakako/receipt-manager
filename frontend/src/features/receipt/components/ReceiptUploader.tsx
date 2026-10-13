@@ -91,7 +91,9 @@ export const ReceiptUploader: React.FC = () => {
         >
           <span className="text-4xl">📂</span>
           <span className="font-bold text-gray-700">ファイルを選択</span>
-          <span className="text-xs text-gray-500">(複数選択OK)</span>
+          <span className="text-xs text-gray-500 text-center px-2">
+            JPEG / PNG / WebP・10枚まで・合計12MiB
+          </span>
           <input
             type="file"
             multiple

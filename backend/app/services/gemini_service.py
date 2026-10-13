@@ -5,6 +5,13 @@ import os
 
 from app.schemas.csv import CsvMapping
 from app.schemas.receipt import ReceiptDatas
+from app.schemas.receipt_image import (
+    ALLOWED_RECEIPT_IMAGE_MIME_TYPES,
+    MAX_RECEIPT_IMAGE_BYTES,
+    MAX_RECEIPT_IMAGES_PER_REQUEST,
+    MAX_RECEIPT_IMAGES_TOTAL_BYTES,
+    worst_case_split_base64_char_count,
+)
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -23,7 +30,30 @@ class GeminiService:
             http_options=types.HttpOptions(timeout=120_000),
         )
 
-    def analyze_receipt(self, image_bytes_list: list[bytes]) -> dict:
+    def _validate_receipt_images_for_gemini(
+        self, images: list[tuple[bytes, str]]
+    ) -> None:
+        if not images:
+            raise ValueError("receipt images required")
+        if len(images) > MAX_RECEIPT_IMAGES_PER_REQUEST:
+            raise ValueError("too many receipt images")
+        total_raw = 0
+        total_base64_chars = 0
+        for image_bytes, mime_type in images:
+            if mime_type not in ALLOWED_RECEIPT_IMAGE_MIME_TYPES:
+                raise ValueError("unsupported receipt image mime")
+            if len(image_bytes) == 0 or len(image_bytes) > MAX_RECEIPT_IMAGE_BYTES:
+                raise ValueError("receipt image size out of range")
+            total_raw += len(image_bytes)
+            total_base64_chars += ((len(image_bytes) + 2) // 3) * 4
+        if total_raw > MAX_RECEIPT_IMAGES_TOTAL_BYTES:
+            raise ValueError("receipt images total size out of range")
+        base64_limit = worst_case_split_base64_char_count(total_raw, len(images))
+        if total_base64_chars > base64_limit:
+            raise ValueError("receipt images base64 payload out of range")
+
+    def analyze_receipt(self, images: list[tuple[bytes, str]]) -> dict:
+        self._validate_receipt_images_for_gemini(images)
         config = types.GenerateContentConfig(
             temperature=0.0,
             response_mime_type="application/json",
@@ -40,8 +70,8 @@ class GeminiService:
         """
 
         contents = [
-            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg")
-            for img_bytes in image_bytes_list
+            types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+            for img_bytes, mime_type in images
         ]
         contents.append(prompt)
 
