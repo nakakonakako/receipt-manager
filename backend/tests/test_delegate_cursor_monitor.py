@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -93,12 +94,92 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             "STDERR_SENTINEL",
         ):
             self.assertNotIn(sentinel, combined)
-        self.assertGreater(status["stderr_bytes_discarded"], 0)
+        self.assertGreater(status["stderr_bytes_read"], 0)
         self.assertIn("event: system/init", result.stdout)
         self.assertIn("event: result/success", result.stdout)
         self.assertIn("worker response (not saved by monitor)", result.stdout)
         self.assertIn("RESULT_SENTINEL", result.stdout)
         self.assertNotIn("RESULT_SENTINEL", json.dumps(status))
+        self.assertIsNone(status["stderr_diagnostic_log"])
+        self.assertEqual(status["stderr_error_events"], [])
+        self.assertEqual(
+            list(
+                (self.state_home / "receipt-manager/delegate-cursor").glob(
+                    "cursor-stderr-*.log"
+                )
+            ),
+            [],
+        )
+
+    def test_failure_classifies_and_scrubs_bounded_stderr_diagnostics(self) -> None:
+        agent = self.fake_agent(
+            "import sys\n"
+            "[print('Error detail ' + 'x' * 800, file=sys.stderr) for _ in range(120)]\n"
+            'print(\'resource_exhausted: {"api_key":"SECRET_API_KEY"}\', file=sys.stderr)\n'
+            "print('Network connection error: ECONNRESET Authorization: Bearer SECRET_BEARER', file=sys.stderr)\n"
+            "print('authentication failed token=SECRET_TOKEN', file=sys.stderr)\n"
+            "print('permission denied: /private/path', file=sys.stderr)\n"
+            "print('MCP initialization error for https://example.test/?token=SECRET_QUERY', file=sys.stderr)\n"
+            "print('worktree setup failed for checkout', file=sys.stderr)\n"
+            "print('Unclassified diagnostic user@example.test credential=SECRET_UNKNOWN', file=sys.stderr)\n"
+            "sys.stderr.flush()\n"
+            "raise SystemExit(1)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertNotEqual(result.returncode, 0)
+        status = self.status()
+        expected_categories = {
+            "resource_exhausted",
+            "network_connection",
+            "authentication",
+            "permission_denied",
+            "mcp_initialization",
+            "worktree_setup",
+        }
+        observed = {event["category"] for event in status["stderr_error_events"]}
+        self.assertTrue(expected_categories.issubset(observed), observed)
+        for event in status["stderr_error_events"]:
+            self.assertTrue(event["occurred_at"])
+        diagnostic_path = Path(status["stderr_diagnostic_log"])
+        diagnostic = diagnostic_path.read_text(encoding="utf-8")
+        self.assertIn("resource_exhausted", diagnostic)
+        self.assertIn("Unclassified diagnostic", diagnostic)
+        for secret in (
+            "SECRET_API_KEY",
+            "SECRET_BEARER",
+            "SECRET_TOKEN",
+            "SECRET_QUERY",
+            "SECRET_UNKNOWN",
+            "user@example.test",
+        ):
+            self.assertNotIn(secret, result.stdout + json.dumps(status) + diagnostic)
+        self.assertLessEqual(diagnostic_path.stat().st_size, 8192)
+        self.assertLessEqual(len(diagnostic.splitlines()), 12)
+        self.assertEqual(stat.S_IMODE(diagnostic_path.stat().st_mode), 0o600)
+        self.assertEqual(stat.S_IMODE(diagnostic_path.parent.stat().st_mode), 0o700)
+        self.assertIn(str(diagnostic_path), result.stdout)
+
+    def test_old_diagnostic_logs_are_pruned_on_next_run(self) -> None:
+        log_dir = self.state_home / "receipt-manager/delegate-cursor"
+        log_dir.mkdir(parents=True)
+        old_log = log_dir / "cursor-stderr-expired.log"
+        old_log.write_text("old diagnostic", encoding="utf-8")
+        expired_at = time.time() - 8 * 24 * 60 * 60
+        os.utime(old_log, (expired_at, expired_at))
+        for index in range(21):
+            recent_log = log_dir / f"cursor-stderr-recent-{index}.log"
+            recent_log.write_text("bounded diagnostic", encoding="utf-8")
+            recent_at = time.time() - (21 - index) * 60
+            os.utime(recent_log, (recent_at, recent_at))
+        agent = self.fake_agent(
+            "import json\n"
+            "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertFalse(old_log.exists())
+        retained_logs = list(log_dir.glob("cursor-stderr-*.log"))
+        self.assertLessEqual(len(retained_logs), 20)
 
     def test_missing_or_error_result_is_not_success(self) -> None:
         for source, expected_status in (

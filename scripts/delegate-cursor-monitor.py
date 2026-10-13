@@ -32,6 +32,54 @@ EVENT_SUBTYPES = {
     "failed",
     "running",
 }
+MAX_STDERR_LINE_BYTES = 4096
+MAX_DIAGNOSTIC_LINES = 12
+MAX_DIAGNOSTIC_BYTES = 8192
+MAX_DIAGNOSTIC_AGE_SECONDS = 7 * 24 * 60 * 60
+MAX_DIAGNOSTIC_FILES = 20
+ERROR_PATTERNS = {
+    "resource_exhausted": re.compile(
+        r"resource[_ -]?exhausted|insufficient (?:model )?capacity", re.IGNORECASE
+    ),
+    "network_connection": re.compile(
+        r"\bnetwork\b.{0,80}\b(?:error|failed|failure|timeout|unavailable|reset|refused)\b"
+        r"|\bconnection\b.{0,80}\b(?:error|failed|failure|timeout|refused|reset|closed)\b"
+        r"|\b(?:econnreset|econnrefused|econnaborted|etimedout|enotfound)\b"
+        r"|\b(?:dns|socket|tls|handshake)\b.{0,80}\b(?:error|failed|failure|timeout)\b",
+        re.IGNORECASE,
+    ),
+    "authentication": re.compile(
+        r"\b(?:authentication|authorization|unauthorized|not logged in|invalid token|401)\b"
+        r"|\bauth(?: error| failed| failure| denied)\b",
+        re.IGNORECASE,
+    ),
+    "permission_denied": re.compile(
+        r"permission denied|access denied|not permitted|\beacces\b|\beperm\b",
+        re.IGNORECASE,
+    ),
+    "mcp_initialization": re.compile(
+        r"\bmcp\b.{0,80}(?:initiali[sz]|failed|error)|(?:initiali[sz]|failed|error).{0,80}\bmcp\b",
+        re.IGNORECASE,
+    ),
+    "worktree_setup": re.compile(
+        r"worktree|workspace.{0,30}(?:setup|initiali[sz]|create)|(?:setup|initiali[sz]|create).{0,30}workspace",
+        re.IGNORECASE,
+    ),
+}
+SECRET_PATTERNS = (
+    re.compile(r"(?i)(authorization\s*:\s*(?:bearer|basic)\s+)\S+"),
+    re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/-]+=*"),
+    re.compile(
+        r"(?i)\b(api[ _-]?key|access[ _-]?token|refresh[ _-]?token|token|password|secret|credential)\s*[\"']?\s*[:=]\s*(?:\"[^\"]*\"|'[^']*'|[^\s,;}]+)"
+    ),
+    re.compile(
+        r"\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|ya29\.[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,})\b"
+    ),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"),
+    re.compile(r"(?i)(https?://)[^/@\s:]+:[^/@\s]+@"),
+    re.compile(r"(?i)([?&](?:token|key|secret|password)=)[^&#\s]+"),
+    re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
+)
 _interrupted: int | None = None
 
 
@@ -58,6 +106,146 @@ def set_status(path: Path, data: dict[str, object]) -> None:
         json.dump(data, handle, ensure_ascii=True, separators=(",", ":"))
         handle.write("\n")
     temporary.replace(path)
+
+
+def scrub_stderr_line(line: str) -> str:
+    scrubbed = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+    for pattern in SECRET_PATTERNS:
+        if pattern.groups:
+            if "https?://" in pattern.pattern:
+                scrubbed = pattern.sub(r"\1[REDACTED]@", scrubbed)
+            elif "[?&]" in pattern.pattern:
+                scrubbed = pattern.sub(r"\1[REDACTED]", scrubbed)
+            elif "authorization" in pattern.pattern.lower():
+                scrubbed = pattern.sub(r"\1[REDACTED]", scrubbed)
+            elif "bearer" in pattern.pattern.lower():
+                scrubbed = pattern.sub(r"\1[REDACTED]", scrubbed)
+            elif "api[ _-]?key" in pattern.pattern.lower():
+                scrubbed = pattern.sub(r"\1=[REDACTED]", scrubbed)
+            else:
+                scrubbed = pattern.sub("[REDACTED]", scrubbed)
+        else:
+            scrubbed = pattern.sub("[REDACTED]", scrubbed)
+    return scrubbed[:512]
+
+
+class StderrDiagnostics:
+    """Bounded in-memory stderr classifier and failure-only excerpt buffer."""
+
+    def __init__(self) -> None:
+        self.buffer = bytearray()
+        self.discarding_long_line = False
+        self.error_events: list[dict[str, str]] = []
+        self.excerpts: list[str] = []
+        self.excerpt_bytes = 0
+
+    def _consume_line(self, raw_line: bytes, truncated: bool = False) -> list[dict[str, str]]:
+        text = raw_line.decode("utf-8", errors="replace")
+        if truncated:
+            text += " [line truncated]"
+        occurred_at = utc_now()
+        added: list[dict[str, str]] = []
+        for category, pattern in ERROR_PATTERNS.items():
+            if pattern.search(text):
+                record = {"category": category, "occurred_at": occurred_at}
+                if len(self.error_events) < 30:
+                    self.error_events.append(record)
+                    added.append(record)
+        safe_line = scrub_stderr_line(text)
+        line_size = len(safe_line.encode("utf-8"))
+        if line_size <= MAX_DIAGNOSTIC_BYTES:
+            while self.excerpts and (
+                len(self.excerpts) >= MAX_DIAGNOSTIC_LINES
+                or self.excerpt_bytes + line_size > MAX_DIAGNOSTIC_BYTES
+            ):
+                removed = self.excerpts.pop(0)
+                self.excerpt_bytes -= len(removed.encode("utf-8"))
+            self.excerpts.append(safe_line)
+            self.excerpt_bytes += line_size
+        return added
+
+    def feed(self, chunk: bytes) -> list[dict[str, str]]:
+        added: list[dict[str, str]] = []
+        remaining = chunk
+        while remaining:
+            if self.discarding_long_line:
+                newline = remaining.find(b"\n")
+                if newline < 0:
+                    return added
+                remaining = remaining[newline + 1 :]
+                self.discarding_long_line = False
+                continue
+            newline = remaining.find(b"\n")
+            if newline >= 0:
+                segment = remaining[:newline]
+                if len(self.buffer) + len(segment) > MAX_STDERR_LINE_BYTES:
+                    available = max(0, MAX_STDERR_LINE_BYTES - len(self.buffer))
+                    self.buffer.extend(segment[:available])
+                    added.extend(self._consume_line(bytes(self.buffer), truncated=True))
+                    self.buffer.clear()
+                else:
+                    self.buffer.extend(segment)
+                    added.extend(self._consume_line(bytes(self.buffer)))
+                    self.buffer.clear()
+                remaining = remaining[newline + 1 :]
+                continue
+            if len(self.buffer) + len(remaining) > MAX_STDERR_LINE_BYTES:
+                available = max(0, MAX_STDERR_LINE_BYTES - len(self.buffer))
+                self.buffer.extend(remaining[:available])
+                added.extend(self._consume_line(bytes(self.buffer), truncated=True))
+                self.buffer.clear()
+                self.discarding_long_line = True
+            else:
+                self.buffer.extend(remaining)
+            break
+        return added
+
+    def finish(self) -> list[dict[str, str]]:
+        if not self.buffer:
+            return []
+        added = self._consume_line(bytes(self.buffer), truncated=self.discarding_long_line)
+        self.buffer.clear()
+        return added
+
+
+def prune_diagnostic_logs(state_dir: Path, preserve: Path | None = None) -> None:
+    now = time.time()
+    logs = sorted(
+        (path for path in state_dir.glob("cursor-stderr-*.log") if path != preserve),
+        key=lambda path: _log_mtime(path),
+        reverse=True,
+    )
+    max_files = MAX_DIAGNOSTIC_FILES - 1 if preserve else MAX_DIAGNOSTIC_FILES
+    for index, path in enumerate(logs):
+        try:
+            if now - path.stat().st_mtime > MAX_DIAGNOSTIC_AGE_SECONDS or index >= max_files:
+                path.unlink(missing_ok=True)
+        except OSError:
+            continue
+
+
+def _log_mtime(path: Path) -> float:
+    try:
+        return path.stat().st_mtime
+    except OSError:
+        return 0
+
+
+def save_failure_diagnostics(state_dir: Path, pid: int, diagnostics: StderrDiagnostics) -> Path | None:
+    if not diagnostics.excerpts:
+        return None
+    prune_diagnostic_logs(state_dir)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = state_dir / f"cursor-stderr-{timestamp}-{pid}.log"
+    content = "\n".join(diagnostics.excerpts).encode("utf-8")[:MAX_DIAGNOSTIC_BYTES]
+    try:
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(content)
+    except OSError:
+        return None
+    prune_diagnostic_logs(state_dir, preserve=path)
+    return path
 
 
 def on_signal(signum: int, _frame: object) -> None:
@@ -87,6 +275,7 @@ def main() -> int:
     state_dir = state_root / "receipt-manager" / "delegate-cursor"
     state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     os.chmod(state_dir, 0o700)
+    prune_diagnostic_logs(state_dir)
     status_path = state_dir / f"{key}.json"
     lock_path = state_dir / f"{key}.lock"
     lock = lock_path.open("a", encoding="utf-8")
@@ -108,6 +297,8 @@ def main() -> int:
     result_is_error: bool | None = None
     worker_response: str | None = None
     stderr_bytes = 0
+    stderr_diagnostics = StderrDiagnostics()
+    stderr_diagnostic_log: Path | None = None
     malformed_lines = 0
     interrupted_signal: int | None = None
     pid: int | None = None
@@ -128,7 +319,9 @@ def main() -> int:
         "result_status": None,
         "result_is_error": None,
         "outcome": outcome,
-        "stderr_bytes_discarded": 0,
+        "stderr_bytes_read": 0,
+        "stderr_error_events": [],
+        "stderr_diagnostic_log": None,
         "unparsed_line_count": 0,
     }
 
@@ -189,6 +382,16 @@ def main() -> int:
                     continue
                 if key_event.data == "stderr":
                     stderr_bytes += len(chunk)
+                    added_errors = stderr_diagnostics.feed(chunk)
+                    update(
+                        stderr_bytes_read=stderr_bytes,
+                        stderr_error_events=list(stderr_diagnostics.error_events),
+                    )
+                    for error in added_errors:
+                        print(
+                            f"[delegate-cursor] stderr_error: {error['category']} at {error['occurred_at']}",
+                            flush=True,
+                        )
                     continue
                 stdout_buffer.extend(chunk)
                 while b"\n" in stdout_buffer:
@@ -231,7 +434,7 @@ def main() -> int:
                         last_event_idle_seconds=0,
                         result_status=result_status,
                         result_is_error=result_is_error,
-                        stderr_bytes_discarded=stderr_bytes,
+                        stderr_bytes_read=stderr_bytes,
                         unparsed_line_count=malformed_lines,
                     )
                     print(
@@ -245,7 +448,7 @@ def main() -> int:
                 idle = int(now - last_event_mono)
                 update(
                     last_event_idle_seconds=idle,
-                    stderr_bytes_discarded=stderr_bytes,
+                    stderr_bytes_read=stderr_bytes,
                     unparsed_line_count=malformed_lines,
                 )
                 print(f"[delegate-cursor] 稼働中、最終イベントから{idle}秒無出力（heartbeatはworkerの進捗を保証しません）", flush=True)
@@ -259,6 +462,11 @@ def main() -> int:
         if stdout_buffer.strip():
             malformed_lines += 1
         exit_code = child.wait()
+        for error in stderr_diagnostics.finish():
+            print(
+                f"[delegate-cursor] stderr_error: {error['category']} at {error['occurred_at']}",
+                flush=True,
+            )
         if interrupted_signal is not None:
             outcome = "interrupted"
         elif exit_code != 0:
@@ -267,19 +475,25 @@ def main() -> int:
             outcome = "succeeded"
         else:
             outcome = "failed"
+        if outcome in {"failed", "interrupted"}:
+            stderr_diagnostic_log = save_failure_diagnostics(state_dir, pid, stderr_diagnostics)
         update(
             process_exit_code=exit_code,
             result_status=result_status,
             result_is_error=result_is_error,
             outcome=outcome,
             last_event_idle_seconds=int(time.monotonic() - last_event_mono),
-            stderr_bytes_discarded=stderr_bytes,
+            stderr_bytes_read=stderr_bytes,
+            stderr_error_events=list(stderr_diagnostics.error_events),
+            stderr_diagnostic_log=str(stderr_diagnostic_log) if stderr_diagnostic_log else None,
             unparsed_line_count=malformed_lines,
         )
         print(f"[delegate-cursor] exit_code: {exit_code}", flush=True)
         print(f"[delegate-cursor] result_status: {result_status or 'missing'}", flush=True)
         print(f"[delegate-cursor] outcome: {outcome}", flush=True)
-        print(f"[delegate-cursor] stderr bytes discarded: {stderr_bytes}", flush=True)
+        print(f"[delegate-cursor] stderr bytes read: {stderr_bytes}", flush=True)
+        if stderr_diagnostic_log:
+            print(f"[delegate-cursor] sanitized stderr diagnostics: {stderr_diagnostic_log}", flush=True)
         if worker_response:
             print("[delegate-cursor] worker response (not saved by monitor):", flush=True)
             print(worker_response, flush=True)
