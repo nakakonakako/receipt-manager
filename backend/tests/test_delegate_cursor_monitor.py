@@ -118,6 +118,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             "[print('Error detail ' + 'x' * 800, file=sys.stderr) for _ in range(120)]\n"
             "print('Network connection error: ECONNRESET Authorization: Bearer SECRET_BEARER', file=sys.stderr)\n"
             "print('authentication failed token=SECRET_TOKEN', file=sys.stderr)\n"
+            "print('Workspace Trust Required', file=sys.stderr)\n"
             "print('permission denied: /private/path', file=sys.stderr)\n"
             "print('MCP initialization error for https://example.test/?token=SECRET_QUERY', file=sys.stderr)\n"
             "print('worktree setup failed for checkout', file=sys.stderr)\n"
@@ -138,11 +139,19 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         }
         observed = {event["category"] for event in status["stderr_error_events"]}
         self.assertTrue(expected_categories.issubset(observed), observed)
+        self.assertGreaterEqual(
+            sum(
+                event["category"] == "permission_denied"
+                for event in status["stderr_error_events"]
+            ),
+            2,
+        )
         for event in status["stderr_error_events"]:
             self.assertTrue(event["occurred_at"])
         diagnostic_path = Path(status["stderr_diagnostic_log"])
         diagnostic = diagnostic_path.read_text(encoding="utf-8")
         self.assertIn("resource_exhausted", diagnostic)
+        self.assertIn("Workspace Trust Required", diagnostic)
         self.assertIn("Unclassified diagnostic", diagnostic)
         for secret in (
             "SECRET_API_KEY",

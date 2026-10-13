@@ -54,7 +54,7 @@ ERROR_PATTERNS = {
         re.IGNORECASE,
     ),
     "permission_denied": re.compile(
-        r"permission denied|access denied|not permitted|\beacces\b|\beperm\b",
+        r"\bworkspace trust required\b|permission denied|access denied|not permitted|\beacces\b|\beperm\b",
         re.IGNORECASE,
     ),
     "mcp_initialization": re.compile(
