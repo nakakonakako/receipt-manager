@@ -10,6 +10,10 @@ from app.schemas.csv import (
 from app.schemas.receipt import ReceiptData, SearchQuery
 from app.services.csv_service import CsvRowLimitError, CsvService
 from app.services.gemini_service import GeminiService
+from app.services.receipt_image_service import (
+    ReceiptImageService,
+    ReceiptImageValidationError,
+)
 from app.services.supabase_service import (
     InvalidSupabaseTokenError,
     SearchDataLimitError,
@@ -30,6 +34,7 @@ load_dotenv()
 
 gemini_service = GeminiService()
 csv_service = CsvService()
+receipt_image_service = ReceiptImageService()
 MAX_CSV_MAPPING_SAMPLE_CHARACTERS = 10_000
 SAFE_VALIDATION_ERROR_DETAIL = "入力内容を確認してください。"
 SAFE_SEARCH_DATA_LIMIT_DETAIL = (
@@ -75,9 +80,10 @@ async def analyze_receipt(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
-        image_bytes_list = [await file.read() for file in files]
+        validated_images = await receipt_image_service.read_and_validate_uploads(files)
         result = await asyncio.to_thread(
-            gemini_service.analyze_receipt, image_bytes_list
+            gemini_service.analyze_receipt,
+            [(image.data, image.mime_type) for image in validated_images],
         )
 
         item_names = []
@@ -104,6 +110,8 @@ async def analyze_receipt(
 
     except HTTPException:
         raise
+    except ReceiptImageValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.detail) from None
     except Exception:
         raise _internal_server_error("analyze") from None
 

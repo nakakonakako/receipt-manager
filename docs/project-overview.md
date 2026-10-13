@@ -109,7 +109,7 @@ Supabase（Auth + Postgres + RLS）
 | Method | Path | 認証 | 用途 | ステータス |
 |--------|------|------|------|------------|
 | GET | `/` | 不要 | ヘルスチェック | 現行 |
-| POST | `/analyze` | 要 | レシート画像の Gemini 解析 + 学習カテゴリ適用 | 現行 |
+| POST | `/analyze` | 要 | レシート画像の Gemini 解析 + 学習カテゴリ適用。1回10枚・1枚10MiB・合計12MiB・JPEG/PNG/WebPのみ（実データ判定）。HEIC/HEIFは明示拒否。全検証後にのみ Gemini | 現行 |
 | POST | `/save` | 要 | レシート・明細の保存 | 現行 |
 | POST | `/search` | 要 | 家計 Q&A | 現行 |
 | GET | `/available_months` | 要 | データがある月一覧 | 現行 |
@@ -130,6 +130,8 @@ CSVの上限はヘッダーを含む論理行20,000行、および `csv_text` 20
 GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions.timeout` はミリ秒で `120000`）で、`retry_options` 未指定は1回だけ試行します。
 
 リクエスト本体の上限は、フロントのファイルサイズ20MiB、バックエンドの文字数20MiB、nginxの `client_max_body_size 20M` です。開発時のViteプロキシに追加の本体上限はありません。JSON化で引用符や改行、Shift-JISからUTF-8への展開が20MiBを超える場合、フロントは送信前に拒否し、本番nginxは413を返します。nginxの本体上限を20Mより大きくするかは未変更です。
+
+レシート画像（`/analyze`）は CSV とは別上限。1リクエスト最大10枚、1枚10MiB、合計12MiB（12,582,912 bytes）。対応形式は JPEG / PNG / WebP（拡張子・申告 MIME に依存せず実データで判定）。HEIC/HEIF は非対応として日本語で変換を案内。画素数は 16,777,216 まで。生 12 MiB を **1 blob** として Base64 化すると 16,777,216 文字、最大 10 枚に分割して独立にエンコードした最悪時は 16,777,240 文字（仕様書の `worst_case_split_base64_char_count`）。プロンプト・`response_schema` 等の固定オーバーヘッド見積もり `GEMINI_RECEIPT_ANALYZE_FIXED_OVERHEAD_BYTES=512,000` を加えた保守的上限 17,289,240 bytes は Gemini inline の 20,000,000 bytes 未満。詳細は [spec-receipt-image-limits.md](./spec-receipt-image-limits.md)。
 
 ### 4.4 カテゴリ（A）
 
@@ -208,6 +210,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | FastAPI | >=0.124 |
 | Uvicorn | >=0.38 |
 | google-genai | >=1.53（モデル例: `gemini-3-flash-preview`） |
+| Pillow | >=11.0（レシート画像の形式・破損・画素数検証） |
 | supabase (Python) | >=2.28 |
 | Ruff | フォーマット・lint |
 | パッケージ管理 | `uv` |
@@ -319,6 +322,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-13 | レシート画像 `/analyze` の枚数・サイズ・形式検証（JPEG/PNG/WebP、HEIC/HEIF 拒否）を追加 |
 | 2026-10-12 | ログアウト・アカウント切替時にレシート登録の一時データとプレビュー URL を破棄 |
 | 2026-10-11 | S1-04: 予期しないAPI例外・認証エラーの詳細を応答やログに露出しないよう修正 |
 | 2026-10-10 | `main` 向けPRに読み取り専用の品質チェックを追加し、PR時CIとmain後CDの役割を文書化 |
