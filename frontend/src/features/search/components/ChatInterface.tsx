@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeRaw from 'rehype-raw'
@@ -109,10 +110,16 @@ export const ChatInterface: React.FC = () => {
         setHistoryQueries((prev) => [...prev, currentQuery])
       }
     } catch (error) {
-      console.error('Error fetching answer:', error)
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined
+      if (status === 422) setQuery(currentQuery)
       const errorMessage: Message = {
         role: 'assistant',
-        content: '申し訳ありませんが、質問の処理中にエラーが発生しました。',
+        content:
+          status === 413
+            ? '送信内容が大きすぎます。質問を短くして再度お試しください。'
+            : status === 422
+              ? '質問は500文字以内で入力してください。対象データが多い場合は、対象期間を短くして再度お試しください。'
+              : '質問の処理に失敗しました。時間をおいて再度お試しください。',
       }
       setMessages((prev) => [...prev, errorMessage])
     } finally {
@@ -253,7 +260,7 @@ export const ChatInterface: React.FC = () => {
               placeholder="質問を入力..."
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value)
+                setQuery(Array.from(e.target.value).slice(0, 500).join(''))
                 setShowSuggestions(true)
               }}
               onFocus={() => setShowSuggestions(true)}
@@ -263,6 +270,9 @@ export const ChatInterface: React.FC = () => {
               }
               className="w-full bg-gray-50 border-gray-200 focus:bg-white pr-10"
             />
+            <span className="mt-1 block text-right text-xs text-gray-500">
+              {Array.from(query).length}/500
+            </span>
           </div>
           <Button
             onClick={handleSend}

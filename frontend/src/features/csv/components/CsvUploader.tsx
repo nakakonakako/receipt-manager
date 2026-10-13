@@ -65,6 +65,9 @@ export const CsvUploader: React.FC = () => {
             onChange={handleFileChange}
             className="w-full"
           />
+          <p className="mt-3 text-xs text-gray-500">
+            1ファイルあたり20,000行（ヘッダー含む）・20MiBまで。複数年の履歴を含められます。
+          </p>
         </div>
       )}
 

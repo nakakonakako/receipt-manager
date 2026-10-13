@@ -1,4 +1,11 @@
 export interface CsvMapping {
+  has_header: boolean
+  date_col_index: number
+  store_col_index: number
+  price_col_index: number
+}
+
+export interface LegacyCsvMapping {
   date_col_idx: number
   item_col_idx: number
   store_col_idx: number
@@ -20,7 +27,7 @@ export interface CsvPreset {
   id?: string
   user_id?: string
   name: string
-  mapping: CsvMapping
+  mapping: CsvMapping | LegacyCsvMapping
   icon?: string
   last_used_at?: string | null
   created_at?: string

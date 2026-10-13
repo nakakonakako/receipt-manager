@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -36,6 +38,6 @@ class ReceiptDatas(BaseModel):
 
 
 class SearchQuery(BaseModel):
-    query: str
-    data_type: str = "all"
-    period: str = "3months"
+    query: str = Field(min_length=1, max_length=500)
+    data_type: Literal["all", "receipt", "log"] = "all"
+    period: Literal["1month", "3months", "all"] = "3months"

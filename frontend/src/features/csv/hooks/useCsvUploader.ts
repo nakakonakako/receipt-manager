@@ -10,6 +10,17 @@ import {
 import { useApiConfig } from '@/hooks/useApiConfig'
 import { supabase } from '@/lib/supabase'
 import { DEFAULT_PRESET_ICON, resolvePresetIcon } from '../utils/emoji'
+import {
+  CSV_REQUEST_SIZE_LIMIT_MESSAGE,
+  CSV_ROW_LIMIT_MESSAGE,
+  CSV_SIZE_LIMIT_MESSAGE,
+  MAX_CSV_FILE_BYTES,
+  MAX_CSV_LOGICAL_ROWS,
+  countLogicalCsvRecords,
+  decodeCsvBytes,
+  encodedCsvRequestBytes,
+  groupTransactionsByMonth,
+} from '../utils/csvLimits'
 
 export const useCsvUploader = () => {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -96,17 +107,19 @@ export const useCsvUploader = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
+      if (selectedFile.size > MAX_CSV_FILE_BYTES) {
+        alert(CSV_SIZE_LIMIT_MESSAGE)
+        e.target.value = ''
+        return
+      }
       handleReset()
 
       const buffer = await selectedFile.arrayBuffer()
-      let text = ''
-
-      try {
-        const utf8Decoder = new TextDecoder('utf-8', { fatal: true })
-        text = utf8Decoder.decode(buffer)
-      } catch {
-        const sjisDecoder = new TextDecoder('shift_jis')
-        text = sjisDecoder.decode(buffer)
+      const text = decodeCsvBytes(buffer)
+      if (countLogicalCsvRecords(text) > MAX_CSV_LOGICAL_ROWS) {
+        alert(CSV_ROW_LIMIT_MESSAGE)
+        e.target.value = ''
+        return
       }
 
       setCsvText(text)
@@ -115,13 +128,21 @@ export const useCsvUploader = () => {
 
   const handleAnalyze = async () => {
     if (!csvText) return
+    if (countLogicalCsvRecords(csvText) > MAX_CSV_LOGICAL_ROWS) {
+      alert(CSV_ROW_LIMIT_MESSAGE)
+      return
+    }
+    const preset = presets.find((p) => p.id === selectedPresetId)
+    if (encodedCsvRequestBytes(csvText, preset?.mapping) > MAX_CSV_FILE_BYTES) {
+      alert(CSV_REQUEST_SIZE_LIMIT_MESSAGE)
+      return
+    }
     const headers = await getHeaders()
     if (!headers) return
 
     setIsAnalyzing(true)
 
     try {
-      const preset = presets.find((p) => p.id === selectedPresetId)
       const result = await analyzeCsv(csvText, preset?.mapping, headers)
 
       if (result.transactions.length === 0) {
@@ -138,8 +159,16 @@ export const useCsvUploader = () => {
         await touchPresetLastUsed(selectedPresetId)
       }
     } catch (error) {
-      console.error('Error analyzing CSV:', error)
-      alert('CSVの解析中にエラーが発生しました')
+      const status = axios.isAxiosError(error) ? error.response?.status : undefined
+      if (status === 413) {
+        alert(CSV_REQUEST_SIZE_LIMIT_MESSAGE)
+      } else if (status === 422) {
+        alert(
+          'CSVの内容または列マッピングを確認してください。20,000行以内のCSVを使用し、プリセットが合わない場合はAIで列を判定してください。'
+        )
+      } else {
+        alert('CSVの解析に失敗しました。時間をおいて再度お試しください。')
+      }
     } finally {
       setIsAnalyzing(false)
     }
@@ -327,29 +356,19 @@ export const useCsvUploader = () => {
       price: row.price === '' ? 0 : row.price,
     }))
 
-    const groupedByMonth: Record<string, ParsedTransaction[]> = {}
-    finalData.forEach((t) => {
-      const month = t.date.substring(0, 7)
-      if (!groupedByMonth[month]) {
-        groupedByMonth[month] = []
-      }
-      groupedByMonth[month].push(t)
-    })
-
-    const months = Object.keys(groupedByMonth)
-    setProgress({ current: 0, total: months.length })
+    const monthGroups = groupTransactionsByMonth(finalData)
+    setProgress({ current: 0, total: monthGroups.length })
 
     let currentIdx = 0
 
-    while (currentIdx < months.length) {
-      const targetMonth = months[currentIdx]
-      const dataToSend = groupedByMonth[targetMonth]
+    while (currentIdx < monthGroups.length) {
+      const dataToSend = monthGroups[currentIdx]
 
       try {
         await saveCsv(dataToSend, headers)
 
         currentIdx++
-        setProgress({ current: currentIdx, total: months.length })
+        setProgress({ current: currentIdx, total: monthGroups.length })
       } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 429) {
           setIsWaiting(true)
@@ -370,7 +389,7 @@ export const useCsvUploader = () => {
       }
     }
 
-    if (currentIdx === months.length) {
+    if (currentIdx === monthGroups.length) {
       alert('全てのデータを保存しました！')
 
       if (selectedPresetId === '' && currentMapping) {

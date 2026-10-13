@@ -1,5 +1,7 @@
 import calendar
+import csv
 import datetime
+import io
 import os
 
 from supabase_auth.errors import AuthApiError, AuthInvalidJwtError
@@ -19,6 +21,16 @@ INVALID_TOKEN_ERROR_CODES = {
     "session_not_found",
     "user_not_found",
 }
+
+SEARCH_DATA_MAX_ROWS = 2_000
+SEARCH_DATA_MAX_CHARACTERS = 30_000
+SEARCH_PAGE_SIZE = 100
+SEARCH_ITEM_PAGE_SIZE = 200
+SEARCH_DATA_HEADER = "purchase_date,store_name,item_name,price"
+
+
+class SearchDataLimitError(ValueError):
+    """Raised when complete search data cannot fit the configured bounds."""
 
 
 class SupabaseService:
@@ -178,49 +190,129 @@ class SupabaseService:
                 year -= 1
             return datetime.date(year, month, 1).isoformat()
 
-        return None
+        if period == "all":
+            return None
 
-    def get_all_data(self, data_type: str = "all", period: str = "3months") -> dict:
-        all_data = []
-        headers = ["purchase_date", "store_name", "item_name", "price"]
-        all_data.append(",".join(headers))
+        raise ValueError("Unsupported search period")
+
+    def get_all_data(self, data_type: str = "all", period: str = "3months") -> str:
+        if data_type not in {"all", "receipt", "log"}:
+            raise ValueError("Unsupported search data type")
+
+        output_rows = [SEARCH_DATA_HEADER]
+        output_characters = len(SEARCH_DATA_HEADER)
+        output_row_count = 0
 
         start_date = self._get_period_start_date(period)
 
-        if data_type in ["all", "receipt"]:
-            receipts_query = (
-                self.client.table("receipts")
-                .select("*, receipt_items(*)")
-                .order("date")
-            )
-            if start_date:
-                receipts_query = receipts_query.gte("date", start_date)
-            res = receipts_query.execute()
-            for row in res.data:
-                date = row.get("date")
-                store = row.get("store_name")
-                items = row.get("receipt_items", [])
+        def append_row(row: list[object]) -> None:
+            nonlocal output_characters, output_row_count
+            buffer = io.StringIO()
+            csv.writer(buffer, lineterminator="").writerow(row)
+            serialized = buffer.getvalue()
+            additional_characters = len(serialized) + 1
+            if output_row_count + 1 > SEARCH_DATA_MAX_ROWS:
+                raise SearchDataLimitError
+            if output_characters + additional_characters > SEARCH_DATA_MAX_CHARACTERS:
+                raise SearchDataLimitError
+            output_rows.append(serialized)
+            output_characters += additional_characters
+            output_row_count += 1
 
-                if items:
-                    for item in items:
-                        all_data.append(
-                            f"{date},{store},{item.get('item_name', '')},{item.get('price', '')}"
-                        )
-                else:
-                    all_data.append(f"{date},{store},合計,{row.get('total_amount')}")
+        if data_type in ["all", "receipt"]:
+            receipt_offset = 0
+            while True:
+                receipts_query = (
+                    self.client.table("receipts")
+                    .select("id,date,store_name,total_amount")
+                    .order("date")
+                    .order("id")
+                    .range(receipt_offset, receipt_offset + SEARCH_PAGE_SIZE - 1)
+                )
+                if start_date:
+                    receipts_query = receipts_query.gte("date", start_date)
+                receipt_rows = receipts_query.execute().data or []
+                if not receipt_rows:
+                    break
+
+                if output_row_count + len(receipt_rows) > SEARCH_DATA_MAX_ROWS:
+                    raise SearchDataLimitError
+
+                receipt_ids = [row["id"] for row in receipt_rows]
+                items_by_receipt: dict[str, list[dict]] = {
+                    receipt_id: [] for receipt_id in receipt_ids
+                }
+                item_offset = 0
+                item_count = 0
+                while True:
+                    items_query = (
+                        self.client.table("receipt_items")
+                        .select("id,receipt_id,item_name,price")
+                        .in_("receipt_id", receipt_ids)
+                        .order("receipt_id")
+                        .order("id")
+                        .range(item_offset, item_offset + SEARCH_ITEM_PAGE_SIZE - 1)
+                    )
+                    item_rows = items_query.execute().data or []
+                    if not item_rows:
+                        break
+                    item_count += len(item_rows)
+                    if output_row_count + item_count > SEARCH_DATA_MAX_ROWS:
+                        raise SearchDataLimitError
+                    for item in item_rows:
+                        items_by_receipt[item["receipt_id"]].append(item)
+                    if len(item_rows) < SEARCH_ITEM_PAGE_SIZE:
+                        break
+                    item_offset += SEARCH_ITEM_PAGE_SIZE
+
+                for receipt in receipt_rows:
+                    date = receipt.get("date")
+                    store = receipt.get("store_name")
+                    items = items_by_receipt[receipt["id"]]
+                    if items:
+                        for item in items:
+                            append_row(
+                                [
+                                    date,
+                                    store,
+                                    item.get("item_name", ""),
+                                    item.get("price", ""),
+                                ]
+                            )
+                    else:
+                        append_row([date, store, "合計", receipt.get("total_amount")])
+
+                if len(receipt_rows) < SEARCH_PAGE_SIZE:
+                    break
+                receipt_offset += SEARCH_PAGE_SIZE
 
         if data_type in ["all", "log"]:
-            csv_query = self.client.table("csv_transactions").select("*").order("date")
-            if start_date:
-                csv_query = csv_query.gte("date", start_date)
-            res = csv_query.execute()
-            for row in res.data:
-                date = row.get("date")
-                store = row.get("store")
-                price = row.get("price")
-                all_data.append(f"{date},{store},キャッシュレス決済,{price}")
+            csv_offset = 0
+            while True:
+                csv_query = (
+                    self.client.table("csv_transactions")
+                    .select("id,date,store,price")
+                    .order("date")
+                    .order("id")
+                    .range(csv_offset, csv_offset + SEARCH_PAGE_SIZE - 1)
+                )
+                if start_date:
+                    csv_query = csv_query.gte("date", start_date)
+                csv_rows = csv_query.execute().data or []
+                for row in csv_rows:
+                    append_row(
+                        [
+                            row.get("date"),
+                            row.get("store"),
+                            "キャッシュレス決済",
+                            row.get("price"),
+                        ]
+                    )
+                if len(csv_rows) < SEARCH_PAGE_SIZE:
+                    break
+                csv_offset += SEARCH_PAGE_SIZE
 
-        return "\n".join(all_data)
+        return "\n".join(output_rows)
 
     def get_available_months(self) -> dict:
         receipts_res = self.client.table("receipts").select("date").execute()

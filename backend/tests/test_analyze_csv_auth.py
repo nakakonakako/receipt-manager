@@ -92,7 +92,9 @@ class AnalyzeCsvAuthTests(unittest.TestCase):
             "store_col_index": 1,
             "price_col_index": 2,
         }
-        csv_text = "header\n" + ("x" * (main.MAX_CSV_MAPPING_SAMPLE_CHARACTERS + 100))
+        csv_text = "header1,header2,header3\n" + (
+            "x" * (main.MAX_CSV_MAPPING_SAMPLE_CHARACTERS + 100)
+        )
 
         with (
             patch.object(

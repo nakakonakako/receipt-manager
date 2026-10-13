@@ -3,15 +3,23 @@ import logging
 
 from app.schemas.csv import (
     CsvAnalysisRequest,
+    CsvMapping,
     CsvParseResponse,
     CsvSaveRequest,
 )
 from app.schemas.receipt import ReceiptData, SearchQuery
-from app.services.csv_service import CsvService
+from app.services.csv_service import CsvRowLimitError, CsvService
 from app.services.gemini_service import GeminiService
-from app.services.supabase_service import InvalidSupabaseTokenError, SupabaseService
+from app.services.supabase_service import (
+    InvalidSupabaseTokenError,
+    SearchDataLimitError,
+    SupabaseService,
+)
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 
 app = FastAPI()
 logger = logging.getLogger(__name__)
@@ -23,6 +31,19 @@ load_dotenv()
 gemini_service = GeminiService()
 csv_service = CsvService()
 MAX_CSV_MAPPING_SAMPLE_CHARACTERS = 10_000
+SAFE_VALIDATION_ERROR_DETAIL = "入力内容を確認してください。"
+SAFE_SEARCH_DATA_LIMIT_DETAIL = (
+    "検索対象のデータ量が上限を超えています。対象期間を短くして再度お試しください。"
+)
+SAFE_CSV_MAPPING_ERROR_DETAIL = "列マッピングを確認してください。CSVの列に合うプリセットを選択するか、AIで列を判定してください。"
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error_handler(_, __: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={"detail": SAFE_VALIDATION_ERROR_DETAIL},
+    )
 
 
 def _internal_server_error(operation: str) -> HTTPException:
@@ -111,7 +132,7 @@ async def search_receipts(
         data = supabase_service.get_all_data(
             data_type=search_query.data_type, period=search_query.period
         )
-        if not data or len(data.strip().split("\n")) <= 1:
+        if not data or data == "purchase_date,store_name,item_name,price":
             return {"answer": "合致するレシートデータが存在しません。"}
 
         answer = gemini_service.answer_question(search_query.query, data)
@@ -119,6 +140,10 @@ async def search_receipts(
 
     except HTTPException:
         raise
+    except SearchDataLimitError:
+        raise HTTPException(
+            status_code=422, detail=SAFE_SEARCH_DATA_LIMIT_DETAIL
+        ) from None
     except Exception:
         raise _internal_server_error("search") from None
 
@@ -171,17 +196,41 @@ async def analyze_csv(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
+        csv_service.validate_csv_limits(request.csv_text)
         if request.mapping is not None:
             mapping = request.mapping
         else:
             sample_text = _get_csv_mapping_sample(request.csv_text)
-            mapping = gemini_service.analyze_csv(sample_text)
+            try:
+                mapping = CsvMapping.model_validate(
+                    gemini_service.analyze_csv(sample_text)
+                )
+            except ValidationError:
+                raise HTTPException(
+                    status_code=422, detail=SAFE_CSV_MAPPING_ERROR_DETAIL
+                ) from None
+
+        try:
+            csv_service.validate_mapping_columns(request.csv_text, mapping)
+        except ValueError:
+            raise HTTPException(
+                status_code=422, detail=SAFE_CSV_MAPPING_ERROR_DETAIL
+            ) from None
 
         transactions = csv_service.parse_csv(request.csv_text, mapping)
 
         return CsvParseResponse(transactions=transactions, mapping=mapping)
     except HTTPException:
         raise
+    except CsvRowLimitError:
+        raise HTTPException(
+            status_code=422,
+            detail="CSVは20,000行以内にしてください。",
+        ) from None
+    except ValueError:
+        raise HTTPException(
+            status_code=422, detail="CSVの内容を確認してください。"
+        ) from None
     except Exception:
         raise _internal_server_error("analyze_csv") from None
 
