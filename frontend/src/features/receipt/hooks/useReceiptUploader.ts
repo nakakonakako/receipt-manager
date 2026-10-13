@@ -517,7 +517,7 @@ export const useReceiptUploader = () => {
         }
         setEditingStateWithCache(nextEditingState, context)
       }
-    } catch (error) {
+    } catch {
       if (
         !receiptUploaderStateCache.isCurrent(context) ||
         !sameEditingState(
@@ -527,7 +527,6 @@ export const useReceiptUploader = () => {
       ) {
         return
       }
-      console.error(error)
       toast.error('レシートの保存中にエラーが発生しました。')
     }
   }
