@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-13 |
+| ドキュメント最終更新 | 2026-10-15 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -183,6 +183,24 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - RPC 定義後に PostgREST schema cache の再読込を通知する。
 - 適用後の読み取り専用検証: `supabase/diagnostics/verify_s1_08_rpc_integrity.sql`。`pg_catalog` と `supabase_migrations` だけを見る。`20261010010000` が1件適用されていること、上記2関数の引数名・型・順序、戻り値（`public.price_stores` / `void`）、`SECURITY INVOKER`、空の `search_path`、`PUBLIC` と `anon` に実行権限がなく `authenticated` にはあることを満たさないとエラーになる。
 
+### 5.3 Gemini AI 利用枠（`ai_quota`、S1-06 PR 2A）
+
+バックエンド統合は別 PR。DB には private スキーマ `ai_quota` のみ追加する。
+
+| オブジェクト | 概要 |
+|--------------|------|
+| `ai_quota.settings` | シングルトン。日次上限（OCR/chat/CSV 推定）、同時実行、月次実測コスト上限（micro-JPY）、単価・FX・リース・緊急停止・未知利用ブレーカー |
+| `ai_quota.requests` | 冪等 `request_id` 単位の試行履歴（プロンプト・画像・CSV・モデル出力は保存しない）。未知利用の `unknown_at` を保持する |
+| RPC | `claim_ai_request` / `renew_ai_lease` / `finish_ai_request`（`ai_quota_backend` のみ `EXECUTE`） |
+
+- 正本: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`
+- 仕様: [spec-ai-quota-database.md](./spec-ai-quota-database.md)
+- 未知利用ブレーカーの初期閾値は 3。同一 JST 日の未解決 `unknown_usage` だけを数え、日付境界で解除する。行は残し、日次回数は claim 日のまま。緊急停止と計測済み月額 800 円上限は維持する
+- 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。`.github/workflows/preflight-ai-quota.yml` を `main` から手動実行し、同じ migration ロールの既存Secretsで確認する。preflight は migration 成功を保証しない。適用後は integrity verifier を使う
+- 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（`verify-production-rpcs.yml` で S1-08 と併走）
+- 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
+- `ai_quota_backend` のパスワードはリポジトリ外で手動設定
+
 ---
 
 ## 6. 技術スタック
@@ -269,7 +287,8 @@ npm run dev
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。
-- DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で同じ `supabase/diagnostics/verify_s1_08_rpc_integrity.sql` を実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
+- AI利用制御 migration の事前確認: `.github/workflows/preflight-ai-quota.yml` は `workflow_dispatch` のみで、`main` 以外ではDB接続前に失敗する。既存のSupabase Session Pooler設定を使って上記preflight SQLだけを実行し、SQL出力はActionsログへ出さない。migration・DB変更・deployは行わない。
+- DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で `verify_s1_08_rpc_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` を順に実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
 ### 7.4 認証フロー
 
@@ -300,6 +319,7 @@ receipt-manager/
 │       └── services/      # gemini, supabase, csv
 ├── supabase/migrations/
 ├── supabase/diagnostics/
+├── supabase/tests/ai_quota/
 ├── nginx-config/
 ├── docs/              # 本ドキュメント群
 └── docker-compose.production.yml
@@ -314,6 +334,7 @@ receipt-manager/
 | [README.md](./README.md) | docs 索引 |
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | A/B 分離・メモ削除・カテゴリ方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | 予定: 履歴の分類フィルタ構想 |
+| [spec-ai-quota-database.md](./spec-ai-quota-database.md) | S1-06: Gemini 利用枠 DB（`ai_quota`） |
 
 新規の仕様・設計メモを足したら、上記索引と本節にも行を追加する。
 
@@ -324,6 +345,10 @@ receipt-manager/
 | 日付 | 内容 |
 |------|------|
 | 2026-10-15 | AI利用制御 migration の本番DB権限を手動・読み取り専用で確認する workflow を追加 |
+| 2026-10-14 | AI 利用枠 migration の一時 SET membership 検証をSupabaseのPG17自動ADMIN membershipに合わせ、readonly preflightと仕様の制約説明を更新 |
+| 2026-10-14 | AI 利用枠 preflight を初回適用前に限定し、既存 `ai_quota` ロールがある場合は不足として止める。操作ごとの権限要件を仕様へ追記 |
+| 2026-10-14 | 未知利用ブレーカーを同一 JST 日・初期閾値 3 に限定し、マイグレーション権限の読み取り専用 preflight を追加 |
+| 2026-10-14 | S1-06 PR 2A: `ai_quota` スキーマ・利用枠 RPC・本番読み取り検証・隔離 SQL テスト（FastAPI 統合は別 PR） |
 | 2026-10-13 | レシート画像 `/analyze` の枚数・サイズ・形式検証（JPEG/PNG/WebP、HEIC/HEIF 拒否）を追加 |
 | 2026-10-12 | ログアウト・アカウント切替時にレシート登録の一時データとプレビュー URL を破棄 |
 | 2026-10-11 | S1-04: 予期しないAPI例外・認証エラーの詳細を応答やログに露出しないよう修正 |
