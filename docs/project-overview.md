@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-14 |
+| ドキュメント最終更新 | 2026-10-15 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -196,7 +196,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - 正本: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`
 - 仕様: [spec-ai-quota-database.md](./spec-ai-quota-database.md)
 - 未知利用ブレーカーの初期閾値は 3。同一 JST 日の未解決 `unknown_usage` だけを数え、日付境界で解除する。行は残し、日次回数は claim 日のまま。緊急停止と計測済み月額 800 円上限は維持する
-- 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。現行 CD は `db push` 前に未実行なので、同じ migration ロールで運用者が手動実行する。適用後は integrity verifier を使う
+- 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。`.github/workflows/preflight-ai-quota.yml` を `main` から手動実行し、同じ migration ロールの既存Secretsで確認する。preflight は migration 成功を保証しない。適用後は integrity verifier を使う
 - 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（`verify-production-rpcs.yml` で S1-08 と併走）
 - 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
 - `ai_quota_backend` のパスワードはリポジトリ外で手動設定
@@ -241,6 +241,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | Docker + Compose | 本番コンテナ |
 | Nginx | SPA + `/api` プロキシ（`client_max_body_size 20M`） |
 | GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
+| GitHub Actions 手動 workflow | main から本番DBのAI利用制御 migration 権限を読み取り専用で事前確認 |
 | 品質チェック | リポジトリルートで `npm run check` |
 | Supabase CLI | `npm run db:push` / `db:list` |
 
@@ -286,6 +287,7 @@ npm run dev
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。
+- AI利用制御 migration の事前確認: `.github/workflows/preflight-ai-quota.yml` は `workflow_dispatch` のみで、`main` 以外ではDB接続前に失敗する。既存のSupabase Session Pooler設定を使って上記preflight SQLだけを実行し、SQL出力はActionsログへ出さない。migration・DB変更・deployは行わない。
 - DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で `verify_s1_08_rpc_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` を順に実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
 ### 7.4 認証フロー
@@ -342,6 +344,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-15 | AI利用制御 migration の本番DB権限を手動・読み取り専用で確認する workflow を追加 |
 | 2026-10-14 | AI 利用枠 migration の一時 SET membership 検証をSupabaseのPG17自動ADMIN membershipに合わせ、readonly preflightと仕様の制約説明を更新 |
 | 2026-10-14 | AI 利用枠 preflight を初回適用前に限定し、既存 `ai_quota` ロールがある場合は不足として止める。操作ごとの権限要件を仕様へ追記 |
 | 2026-10-14 | 未知利用ブレーカーを同一 JST 日・初期閾値 3 に限定し、マイグレーション権限の読み取り専用 preflight を追加 |
