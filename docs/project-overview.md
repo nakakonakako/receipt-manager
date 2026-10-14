@@ -223,6 +223,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | Docker + Compose | 本番コンテナ |
 | Nginx | SPA + `/api` プロキシ（`client_max_body_size 20M`） |
 | GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
+| GitHub Actions 手動 workflow | main から本番DBのAI利用制御 migration 権限を読み取り専用で事前確認 |
 | 品質チェック | リポジトリルートで `npm run check` |
 | Supabase CLI | `npm run db:push` / `db:list` |
 
@@ -322,6 +323,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-15 | AI利用制御 migration の本番DB権限を手動・読み取り専用で確認する workflow を追加 |
 | 2026-10-13 | レシート画像 `/analyze` の枚数・サイズ・形式検証（JPEG/PNG/WebP、HEIC/HEIF 拒否）を追加 |
 | 2026-10-12 | ログアウト・アカウント切替時にレシート登録の一時データとプレビュー URL を破棄 |
 | 2026-10-11 | S1-04: 予期しないAPI例外・認証エラーの詳細を応答やログに露出しないよう修正 |
