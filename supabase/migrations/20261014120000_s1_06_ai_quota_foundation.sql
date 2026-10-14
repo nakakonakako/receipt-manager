@@ -1,24 +1,74 @@
 -- S1-06 PR 2A: private ai_quota schema, settings/requests tables, and claim/renew/finish RPCs.
 -- Backend connects as role ai_quota_backend (password configured out of band; not stored here).
+--
+-- One transaction. Existing ai_quota_owner / ai_quota_backend roles are refused.
+-- Attributes are set only on CREATE ROLE (no ALTER ROLE). PostgreSQL 17 does not
+-- grant the creator effective SET membership, so this migration grants it
+-- explicitly and revokes that grant before commit. Database CREATE is granted to ai_quota_owner only
+-- long enough to create the schema, then revoked. Tables and functions are
+-- created while SET LOCAL ROLE ai_quota_owner, so they do not need OWNER TO.
 
 begin;
 
--- Roles (idempotent for re-apply in dev)
 do $roles$
+declare
+  v_existing text;
 begin
-  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'ai_quota_owner') then
-    create role ai_quota_owner nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
+  if session_user is distinct from current_user then
+    raise exception using
+      errcode = '42501',
+      message = 'ai_quota migration must run as the session user, not under SET ROLE';
   end if;
-  if not exists (select 1 from pg_catalog.pg_roles where rolname = 'ai_quota_backend') then
-    create role ai_quota_backend login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
+
+  select pg_catalog.string_agg(existing.rolname, ', ' order by existing.rolname)
+    into v_existing
+  from pg_catalog.pg_roles as existing
+  where existing.rolname in ('ai_quota_owner', 'ai_quota_backend');
+
+  if v_existing is not null then
+    raise exception using
+      errcode = '42501',
+      message = 'ai_quota migration refused: role already exists ('
+        || v_existing
+        || '). Existing roles are not reused or altered.';
   end if;
 end
 $roles$;
 
-alter role ai_quota_owner nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
-alter role ai_quota_backend login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
+create role ai_quota_owner
+  nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
+create role ai_quota_backend
+  login noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
 
-create schema if not exists ai_quota authorization ai_quota_owner;
+-- CREATE ROLE already grants the creator ADMIN OPTION on this membership.
+-- SET allows SET ROLE. INHERIT stays false so owner rights are not implicit.
+grant ai_quota_owner to current_user with set true, inherit false;
+
+do $grant_db_create$
+begin
+  execute format(
+    'grant create on database %I to %I',
+    current_database(),
+    'ai_quota_owner'
+  );
+end
+$grant_db_create$;
+
+set local role ai_quota_owner;
+create schema ai_quota authorization ai_quota_owner;
+reset role;
+
+do $revoke_db_create$
+begin
+  execute format(
+    'revoke create on database %I from %I',
+    current_database(),
+    'ai_quota_owner'
+  );
+end
+$revoke_db_create$;
+
+set local role ai_quota_owner;
 
 revoke all on schema ai_quota from public;
 revoke all on schema ai_quota from anon, authenticated, service_role;
@@ -26,7 +76,7 @@ revoke all on schema ai_quota from anon, authenticated, service_role;
 create table ai_quota.settings (
   id smallint primary key,
   emergency_stop boolean not null default false,
-  unknown_usage_breaker_threshold integer not null default 1
+  unknown_usage_breaker_threshold integer not null default 3
     constraint unknown_usage_breaker_threshold_positive check (unknown_usage_breaker_threshold > 0),
   lease_duration_seconds integer not null default 240
     constraint lease_duration_seconds_positive check (lease_duration_seconds > 0),
@@ -82,6 +132,7 @@ create table ai_quota.requests (
   total_tokens bigint,
   estimated_cost_micro_jpy bigint,
   usage_available boolean,
+  unknown_at timestamptz,
   snapshot_model_id text not null,
   snapshot_input_price_usd_per_million bigint not null,
   snapshot_output_price_usd_per_million bigint not null,
@@ -95,7 +146,10 @@ create table ai_quota.requests (
     status in ('active', 'succeeded', 'failed', 'unknown_usage')
   ),
   constraint requests_terminal_usage_shape check (
-    (status = 'active')
+    (
+      status = 'active'
+      and unknown_at is null
+    )
     or (
       status in ('succeeded', 'failed')
       and usage_available is true
@@ -115,6 +169,7 @@ create table ai_quota.requests (
       and total_tokens is null
       and estimated_cost_micro_jpy is null
       and finished_at is not null
+      and unknown_at is not null
     )
   )
 );
@@ -132,8 +187,9 @@ create index requests_active_lease_idx
   on ai_quota.requests (lease_expires_at)
   where status = 'active';
 
-alter table ai_quota.settings owner to ai_quota_owner;
-alter table ai_quota.requests owner to ai_quota_owner;
+create index requests_unknown_usage_unknown_at_idx
+  on ai_quota.requests (unknown_at)
+  where status = 'unknown_usage';
 
 revoke all on table ai_quota.settings from public, anon, authenticated, service_role;
 revoke all on table ai_quota.requests from public, anon, authenticated, service_role;
@@ -152,7 +208,6 @@ as $function$
     )::date as jst_month;
 $function$;
 
-alter function ai_quota._jst_bounds(timestamptz) owner to ai_quota_owner;
 revoke all on function ai_quota._jst_bounds(timestamptz) from public;
 
 create or replace function ai_quota._daily_limits(
@@ -183,7 +238,6 @@ begin
 end;
 $function$;
 
-alter function ai_quota._daily_limits(ai_quota.settings, text) owner to ai_quota_owner;
 revoke all on function ai_quota._daily_limits(ai_quota.settings, text) from public;
 
 create or replace function ai_quota._compute_cost_micro_jpy(
@@ -209,9 +263,6 @@ as $function$
   )::bigint;
 $function$;
 
-alter function ai_quota._compute_cost_micro_jpy(
-  bigint, bigint, bigint, bigint, bigint, bigint, integer
-) owner to ai_quota_owner;
 revoke all on function ai_quota._compute_cost_micro_jpy(
   bigint, bigint, bigint, bigint, bigint, bigint, integer
 ) from public;
@@ -235,7 +286,6 @@ as $function$
     and r.status in ('active', 'succeeded', 'failed', 'unknown_usage');
 $function$;
 
-alter function ai_quota._count_daily(uuid, text, date) owner to ai_quota_owner;
 revoke all on function ai_quota._count_daily(uuid, text, date) from public;
 
 create or replace function ai_quota._count_active_leases(
@@ -255,7 +305,6 @@ as $function$
     and r.lease_expires_at > p_now;
 $function$;
 
-alter function ai_quota._count_active_leases(uuid, timestamptz) owner to ai_quota_owner;
 revoke all on function ai_quota._count_active_leases(uuid, timestamptz) from public;
 
 create or replace function ai_quota._measured_month_cost_micro_jpy(p_jst_month date)
@@ -273,23 +322,24 @@ as $function$
     and r.status in ('succeeded', 'failed');
 $function$;
 
-alter function ai_quota._measured_month_cost_micro_jpy(date) owner to ai_quota_owner;
 revoke all on function ai_quota._measured_month_cost_micro_jpy(date) from public;
 
-create or replace function ai_quota._unknown_usage_count()
+create or replace function ai_quota._unknown_usage_count(p_jst_day date)
 returns bigint
 language sql
 stable
 set search_path = ''
 as $function$
-  -- Unknown usage remains a global stop until an operator reconciles it.
+  -- Unresolved unknown_usage counts only on the JST day of unknown_at.
+  -- Older rows stay in requests and keep their claim-day quota consumption.
   select pg_catalog.count(*)
   from ai_quota.requests as r
-  where r.status = 'unknown_usage';
+  where r.status = 'unknown_usage'
+    and r.unknown_at >= (p_jst_day::timestamp without time zone at time zone 'Asia/Tokyo')
+    and r.unknown_at < ((p_jst_day + 1)::timestamp without time zone at time zone 'Asia/Tokyo');
 $function$;
 
-alter function ai_quota._unknown_usage_count() owner to ai_quota_owner;
-revoke all on function ai_quota._unknown_usage_count() from public;
+revoke all on function ai_quota._unknown_usage_count(date) from public;
 
 create or replace function ai_quota.claim_ai_request(
   p_request_id uuid,
@@ -385,7 +435,8 @@ begin
   end if;
 
   -- Expired workers may have consumed tokens before crashing. Record them as
-  -- unknown and trip the breaker instead of silently freeing only concurrency.
+  -- unknown. unknown_at is the lease expiry, so a lease that expired on an
+  -- earlier JST day does not count toward today's breaker.
   update ai_quota.requests as r
   set status = 'unknown_usage',
       usage_available = false,
@@ -394,11 +445,12 @@ begin
       thought_tokens = null,
       total_tokens = null,
       estimated_cost_micro_jpy = null,
-      finished_at = v_now
+      finished_at = v_now,
+      unknown_at = r.lease_expires_at
   where r.status = 'active'
     and r.lease_expires_at <= v_now;
 
-  v_unknown_count := ai_quota._unknown_usage_count();
+  v_unknown_count := ai_quota._unknown_usage_count(v_jst_day);
   if v_unknown_count >= v_settings.unknown_usage_breaker_threshold then
     outcome := 'rejected';
     reject_reason := 'unknown_usage_breaker';
@@ -695,7 +747,8 @@ begin
         thought_tokens = null,
         total_tokens = null,
         estimated_cost_micro_jpy = null,
-        finished_at = v_now
+        finished_at = v_now,
+        unknown_at = v_now
     where r.request_id = p_request_id
     returning r.status, r.estimated_cost_micro_jpy, r.finished_at
       into status, estimated_cost_micro_jpy, finished_at;
@@ -718,6 +771,9 @@ begin
   end if;
 
   v_total := p_input_tokens + p_output_tokens + p_thought_tokens;
+  -- A late measured finish settles unknown_usage to succeeded/failed.
+  -- unknown_at is intentionally left in place as history and drops out of
+  -- the breaker because the status is no longer unknown_usage.
   v_cost := ai_quota._compute_cost_micro_jpy(
     p_input_tokens,
     p_output_tokens,
@@ -748,10 +804,6 @@ begin
 end;
 $function$;
 
-alter function ai_quota.claim_ai_request(uuid, uuid, text) owner to ai_quota_owner;
-alter function ai_quota.renew_ai_lease(uuid) owner to ai_quota_owner;
-alter function ai_quota.finish_ai_request(uuid, boolean, boolean, bigint, bigint, bigint) owner to ai_quota_owner;
-
 revoke all on function ai_quota.claim_ai_request(uuid, uuid, text) from public;
 revoke all on function ai_quota.renew_ai_lease(uuid) from public;
 revoke all on function ai_quota.finish_ai_request(uuid, boolean, boolean, bigint, bigint, bigint) from public;
@@ -764,5 +816,113 @@ grant usage on schema ai_quota to ai_quota_backend;
 grant execute on function ai_quota.claim_ai_request(uuid, uuid, text) to ai_quota_backend;
 grant execute on function ai_quota.renew_ai_lease(uuid) to ai_quota_backend;
 grant execute on function ai_quota.finish_ai_request(uuid, boolean, boolean, bigint, bigint, bigint) to ai_quota_backend;
+
+-- Integrity verification reads the singleton after the temporary SET
+-- membership is revoked. A platform-created ADMIN-only membership may remain.
+-- No table writes and no RPC EXECUTE are granted to the migration role.
+grant usage on schema ai_quota to session_user;
+grant select on table ai_quota.settings to session_user;
+
+reset role;
+
+revoke ai_quota_owner from current_user;
+
+do $migration_privileges_cleared$
+begin
+  -- Supabase/PostgreSQL may create an immutable ADMIN-only membership for
+  -- the trusted migration user when CREATE ROLE runs. The explicit SET
+  -- membership above is revoked; only effective SET/INHERIT must be absent.
+  if exists (
+    select 1
+    from pg_catalog.pg_auth_members as m
+    join pg_catalog.pg_roles as granted on granted.oid = m.roleid
+    join pg_catalog.pg_roles as member on member.oid = m.member
+    where granted.rolname = 'ai_quota_owner'
+      and member.rolname = current_user
+      and (m.set_option or m.inherit_option)
+  ) then
+    raise exception using
+      errcode = '42501',
+      message = 'migration role retains effective SET or INHERIT access to ai_quota_owner';
+  end if;
+
+  if pg_catalog.has_database_privilege(
+    'ai_quota_owner',
+    current_database(),
+    'CREATE'
+  ) then
+    raise exception using
+      errcode = '42501',
+      message = 'ai_quota_owner still has CREATE on the current database';
+  end if;
+
+  if not exists (
+    select 1
+    from pg_catalog.pg_roles
+    where rolname = 'ai_quota_owner'
+      and rolcanlogin = false
+      and rolinherit = false
+      and rolsuper = false
+      and rolcreatedb = false
+      and rolcreaterole = false
+      and rolreplication = false
+      and rolbypassrls = false
+  ) or not exists (
+    select 1
+    from pg_catalog.pg_roles
+    where rolname = 'ai_quota_backend'
+      and rolcanlogin = true
+      and rolinherit = false
+      and rolsuper = false
+      and rolcreatedb = false
+      and rolcreaterole = false
+      and rolreplication = false
+      and rolbypassrls = false
+  ) then
+    raise exception using
+      errcode = '42501',
+      message = 'ai_quota role attributes do not match the least-privilege design';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_class as c
+    join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
+    join pg_catalog.pg_roles as r on r.oid = c.relowner
+    where n.nspname = 'ai_quota'
+      and c.relkind = 'r'
+      and r.rolname is distinct from 'ai_quota_owner'
+  ) or exists (
+    select 1
+    from pg_catalog.pg_proc as p
+    join pg_catalog.pg_namespace as n on n.oid = p.pronamespace
+    join pg_catalog.pg_roles as r on r.oid = p.proowner
+    where n.nspname = 'ai_quota'
+      and (
+        r.rolname is distinct from 'ai_quota_owner'
+        or p.proconfig is distinct from array['search_path=""']::text[]
+      )
+  ) or (
+    select r.rolname
+    from pg_catalog.pg_namespace as n
+    join pg_catalog.pg_roles as r on r.oid = n.nspowner
+    where n.nspname = 'ai_quota'
+  ) is distinct from 'ai_quota_owner' then
+    raise exception using
+      errcode = '42501',
+      message = 'ai_quota schema, tables, or functions are not owned by ai_quota_owner';
+  end if;
+
+  if (
+    select pg_catalog.count(*)
+    from ai_quota.settings
+    where id = 1
+  ) is distinct from 1 then
+    raise exception using
+      errcode = 'P0001',
+      message = 'ai_quota.settings singleton is missing';
+  end if;
+end
+$migration_privileges_cleared$;
 
 commit;

@@ -190,11 +190,13 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | オブジェクト | 概要 |
 |--------------|------|
 | `ai_quota.settings` | シングルトン。日次上限（OCR/chat/CSV 推定）、同時実行、月次実測コスト上限（micro-JPY）、単価・FX・リース・緊急停止・未知利用ブレーカー |
-| `ai_quota.requests` | 冪等 `request_id` 単位の試行履歴（プロンプト・画像・CSV・モデル出力は保存しない） |
+| `ai_quota.requests` | 冪等 `request_id` 単位の試行履歴（プロンプト・画像・CSV・モデル出力は保存しない）。未知利用の `unknown_at` を保持する |
 | RPC | `claim_ai_request` / `renew_ai_lease` / `finish_ai_request`（`ai_quota_backend` のみ `EXECUTE`） |
 
 - 正本: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`
 - 仕様: [spec-ai-quota-database.md](./spec-ai-quota-database.md)
+- 未知利用ブレーカーの初期閾値は 3。同一 JST 日の未解決 `unknown_usage` だけを数え、日付境界で解除する。行は残し、日次回数は claim 日のまま。緊急停止と計測済み月額 800 円上限は維持する
+- 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。現行 CD は `db push` 前に未実行なので、同じ migration ロールで運用者が手動実行する。適用後は integrity verifier を使う
 - 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（`verify-production-rpcs.yml` で S1-08 と併走）
 - 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
 - `ai_quota_backend` のパスワードはリポジトリ外で手動設定
@@ -340,6 +342,9 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-14 | AI 利用枠 migration の一時 SET membership 検証をSupabaseのPG17自動ADMIN membershipに合わせ、readonly preflightと仕様の制約説明を更新 |
+| 2026-10-14 | AI 利用枠 preflight を初回適用前に限定し、既存 `ai_quota` ロールがある場合は不足として止める。操作ごとの権限要件を仕様へ追記 |
+| 2026-10-14 | 未知利用ブレーカーを同一 JST 日・初期閾値 3 に限定し、マイグレーション権限の読み取り専用 preflight を追加 |
 | 2026-10-14 | S1-06 PR 2A: `ai_quota` スキーマ・利用枠 RPC・本番読み取り検証・隔離 SQL テスト（FastAPI 統合は別 PR） |
 | 2026-10-13 | レシート画像 `/analyze` の枚数・サイズ・形式検証（JPEG/PNG/WebP、HEIC/HEIF 拒否）を追加 |
 | 2026-10-12 | ログアウト・アカウント切替時にレシート登録の一時データとプレビュー URL を破棄 |

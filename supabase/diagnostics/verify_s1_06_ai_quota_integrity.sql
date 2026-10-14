@@ -48,13 +48,56 @@ BEGIN
       SELECT 1 FROM pg_catalog.pg_roles
       WHERE rolname = 'ai_quota_owner'
         AND rolcanlogin = false AND rolsuper = false AND rolinherit = false
+        AND rolcreatedb = false AND rolcreaterole = false
+        AND rolreplication = false AND rolbypassrls = false
     ) OR NOT EXISTS (
       SELECT 1 FROM pg_catalog.pg_roles
       WHERE rolname = 'ai_quota_backend'
         AND rolcanlogin = true AND rolsuper = false AND rolbypassrls = false
         AND rolinherit = false
+        AND rolcreatedb = false AND rolcreaterole = false
+        AND rolreplication = false
     ) THEN
     RAISE EXCEPTION 'ai_quota role attributes do not match the least-privilege design';
+  END IF;
+  IF EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_auth_members AS m
+      JOIN pg_catalog.pg_roles AS granted ON granted.oid = m.roleid
+      JOIN pg_catalog.pg_roles AS member ON member.oid = m.member
+      WHERE granted.rolname = 'ai_quota_owner'
+        AND member.rolname = current_user
+        AND (m.set_option OR m.inherit_option)
+    ) THEN
+    RAISE EXCEPTION 'migration role must not retain effective SET or INHERIT access to ai_quota_owner';
+  END IF;
+  IF pg_catalog.has_database_privilege(
+      'ai_quota_owner',
+      pg_catalog.current_database(),
+      'CREATE'
+    ) THEN
+    RAISE EXCEPTION 'ai_quota_owner must not have CREATE on the current database';
+  END IF;
+  IF EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_class AS c
+      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+      JOIN pg_catalog.pg_roles AS r ON r.oid = c.relowner
+      WHERE n.nspname = 'ai_quota'
+        AND c.relkind = 'r'
+        AND r.rolname IS DISTINCT FROM 'ai_quota_owner'
+    ) OR EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_proc AS p
+      JOIN pg_catalog.pg_namespace AS n ON n.oid = p.pronamespace
+      JOIN pg_catalog.pg_roles AS r ON r.oid = p.proowner
+      WHERE n.nspname = 'ai_quota'
+        AND (
+          r.rolname IS DISTINCT FROM 'ai_quota_owner'
+          OR p.proconfig IS DISTINCT FROM ARRAY['search_path=""']::text[]
+        )
+    ) THEN
+    RAISE EXCEPTION 'ai_quota tables and functions must be owned by ai_quota_owner with an empty search_path';
   END IF;
   IF EXISTS (
       SELECT 1
@@ -177,6 +220,67 @@ BEGIN
       FROM ai_quota.settings
       WHERE id = 1) IS DISTINCT FROM 1 THEN
     RAISE EXCEPTION 'ai_quota.settings singleton row is missing';
+  END IF;
+
+  IF (SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid)
+      FROM pg_catalog.pg_attrdef AS d
+      JOIN pg_catalog.pg_attribute AS a
+        ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+      JOIN pg_catalog.pg_class AS c ON c.oid = d.adrelid
+      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'ai_quota'
+        AND c.relname = 'settings'
+        AND a.attname = 'unknown_usage_breaker_threshold') IS DISTINCT FROM '3' THEN
+    RAISE EXCEPTION 'unknown_usage_breaker_threshold default must be 3';
+  END IF;
+
+  IF NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_attribute AS a
+      JOIN pg_catalog.pg_class AS c ON c.oid = a.attrelid
+      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'ai_quota'
+        AND c.relname = 'requests'
+        AND a.attname = 'unknown_at'
+        AND a.atttypid = 'pg_catalog.timestamptz'::pg_catalog.regtype
+        AND a.attnotnull IS FALSE
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+    ) THEN
+    RAISE EXCEPTION 'ai_quota.requests.unknown_at timestamptz column is missing';
+  END IF;
+
+  IF pg_catalog.to_regclass('ai_quota.requests_unknown_usage_unknown_at_idx') IS NULL THEN
+    RAISE EXCEPTION 'unknown_usage unknown_at index is missing';
+  END IF;
+  IF (SELECT pg_catalog.pg_get_indexdef(c.oid)
+      FROM pg_catalog.pg_class AS c
+      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'ai_quota'
+        AND c.relname = 'requests_unknown_usage_unknown_at_idx')
+     NOT LIKE '%(unknown_at)%'
+     OR (SELECT pg_catalog.pg_get_indexdef(c.oid)
+         FROM pg_catalog.pg_class AS c
+         JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+         WHERE n.nspname = 'ai_quota'
+           AND c.relname = 'requests_unknown_usage_unknown_at_idx')
+        NOT LIKE '%unknown_usage%' THEN
+    RAISE EXCEPTION 'unknown_at index must be limited to unknown_usage rows';
+  END IF;
+
+  IF (SELECT pg_catalog.pg_get_constraintdef(ct.oid)
+      FROM pg_catalog.pg_constraint AS ct
+      JOIN pg_catalog.pg_class AS c ON c.oid = ct.conrelid
+      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
+      WHERE n.nspname = 'ai_quota'
+        AND c.relname = 'requests'
+        AND ct.conname = 'requests_terminal_usage_shape')
+     NOT LIKE '%unknown_at%' THEN
+    RAISE EXCEPTION 'requests status check must constrain unknown_at';
+  END IF;
+
+  IF pg_catalog.to_regprocedure('ai_quota._unknown_usage_count(date)') IS NULL THEN
+    RAISE EXCEPTION 'ai_quota._unknown_usage_count(date) is missing';
   END IF;
 
   RAISE NOTICE 'PASS: S1-06 AI quota migration, schema, roles, RPC security, and grants';

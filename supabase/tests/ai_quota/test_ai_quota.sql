@@ -31,6 +31,12 @@ DECLARE
   r_status text;
   v_day date;
   v_month date;
+  v_lease timestamptz;
+  v_unknown_at timestamptz;
+  v_daily bigint;
+  v_unknown_rows bigint;
+  v_prev_jst_day date;
+  i integer;
 BEGIN
   SELECT jst_day, jst_month INTO v_day, v_month
   FROM ai_quota._jst_bounds(pg_catalog.now());
@@ -56,6 +62,7 @@ BEGIN
     'default_settings',
     (SELECT ocr_daily_limit_per_user FROM ai_quota.settings WHERE id = 1) = 20
     AND (SELECT monthly_cost_cap_micro_jpy FROM ai_quota.settings WHERE id = 1) = 800000000
+    AND (SELECT unknown_usage_breaker_threshold FROM ai_quota.settings WHERE id = 1) = 3
     AND (SELECT model_id FROM ai_quota.settings WHERE id = 1) = 'gemini-3-flash-preview',
     'singleton defaults'
   );
@@ -141,30 +148,204 @@ BEGIN
   PERFORM pg_temp.test_assert(
     'unknown_usage_finish',
     r_outcome = 'finished'
-    AND (SELECT status FROM ai_quota.requests WHERE request_id = r_id) = 'unknown_usage'
-    AND (SELECT estimated_cost_micro_jpy FROM ai_quota.requests WHERE request_id = r_id) IS NULL,
+    AND (SELECT status = 'unknown_usage'
+         AND estimated_cost_micro_jpy IS NULL
+         AND unknown_at IS NOT NULL
+         AND unknown_at = finished_at
+       FROM ai_quota.requests WHERE request_id = r_id),
     r_outcome
   );
 
-  UPDATE ai_quota.settings SET unknown_usage_breaker_threshold = 1 WHERE id = 1;
+  -- Two unresolved unknowns on the same JST day still allow a claim.
+  -- The claim that is later finished as the third unknown is itself allowed,
+  -- because the breaker counts rows already recorded as unknown_usage.
   r_id := gen_random_uuid();
   SELECT outcome, reject_reason INTO r_outcome, r_reason
   FROM ai_quota.claim_ai_request(r_id, u2, 'ocr');
+  PERFORM pg_temp.test_assert(
+    'unknown_one_allows_claim',
+    r_outcome = 'granted',
+    coalesce(r_reason, r_outcome)
+  );
+  PERFORM ai_quota.finish_ai_request(r_id, false, false, null, null, null);
+
+  r_id := gen_random_uuid();
+  SELECT outcome, reject_reason INTO r_outcome, r_reason
+  FROM ai_quota.claim_ai_request(r_id, u2, 'chat');
+  PERFORM pg_temp.test_assert(
+    'unknown_two_allows_claim',
+    r_outcome = 'granted',
+    coalesce(r_reason, r_outcome)
+  );
+  PERFORM ai_quota.finish_ai_request(r_id, false, false, null, null, null);
+
+  SELECT pg_catalog.count(*) INTO v_unknown_rows
+  FROM ai_quota.requests
+  WHERE status = 'unknown_usage';
+  PERFORM pg_temp.test_assert(
+    'unknown_three_recorded',
+    v_unknown_rows = 3
+    AND (SELECT ai_quota._unknown_usage_count(v_day)) = 3,
+    format('unknown rows=%s', v_unknown_rows)
+  );
+
+  SELECT outcome, reject_reason INTO r_outcome, r_reason
+  FROM ai_quota.claim_ai_request(gen_random_uuid(), u2, 'ocr');
   PERFORM pg_temp.test_assert(
     'unknown_usage_breaker',
     r_outcome = 'rejected' AND r_reason = 'unknown_usage_breaker',
     coalesce(r_reason, r_outcome)
   );
 
-  -- Unresolved usage still blocks after the month boundary.
+  -- Moving the accounting month does not clear a same-day breaker.
   UPDATE ai_quota.requests
-  SET jst_month = (date_trunc('month', (pg_catalog.now() AT TIME ZONE 'Asia/Tokyo'))::date - interval '1 month')::date
+  SET jst_month = (pg_catalog.date_trunc('month', v_day::timestamp) - interval '1 month')::date
   WHERE status = 'unknown_usage';
+  SELECT outcome, reject_reason INTO r_outcome, r_reason
+  FROM ai_quota.claim_ai_request(gen_random_uuid(), u1, 'ocr');
+  PERFORM pg_temp.test_assert(
+    'unknown_usage_same_jst_day_ignores_month',
+    r_outcome = 'rejected' AND r_reason = 'unknown_usage_breaker',
+    coalesce(r_reason, r_outcome)
+  );
+
+  SELECT c.user_count INTO v_daily
+  FROM ai_quota._count_daily(u1, 'chat', v_day) AS c;
+  v_prev_jst_day := v_day - 1;
+  UPDATE ai_quota.requests
+  SET unknown_at = (v_prev_jst_day::timestamp + interval '12 hours') AT TIME ZONE 'Asia/Tokyo'
+  WHERE status = 'unknown_usage';
+
+  PERFORM pg_temp.test_assert(
+    'unknown_history_retained_and_daily_consumption_kept',
+    (SELECT pg_catalog.count(*) FROM ai_quota.requests WHERE status = 'unknown_usage') = 3
+    AND (SELECT pg_catalog.bool_and(jst_day = v_day) FROM ai_quota.requests WHERE status = 'unknown_usage')
+    AND (SELECT c.user_count FROM ai_quota._count_daily(u1, 'chat', v_day) AS c) = v_daily
+    AND v_daily >= 1
+    AND (SELECT ai_quota._unknown_usage_count(v_day)) = 0
+    AND (SELECT ai_quota._unknown_usage_count(v_prev_jst_day)) = 3,
+    format('daily user chat count=%s', v_daily)
+  );
+
+  SELECT outcome, reject_reason INTO r_outcome, r_reason
+  FROM ai_quota.claim_ai_request(gen_random_uuid(), u3, 'ocr');
+  PERFORM pg_temp.test_assert(
+    'unknown_breaker_releases_next_jst_day',
+    r_outcome = 'granted',
+    coalesce(r_reason, r_outcome)
+  );
+  PERFORM pg_temp.test_assert(
+    'unknown_history_not_deleted_on_release',
+    (SELECT pg_catalog.count(*) FROM ai_quota.requests WHERE status = 'unknown_usage') = 3,
+    'previous unknown rows remain'
+  );
+
+  SELECT request_id, unknown_at INTO r_id, v_unknown_at
+  FROM ai_quota.requests
+  WHERE status = 'unknown_usage'
+  ORDER BY request_id
+  LIMIT 1;
+  SELECT outcome, status INTO r_outcome, r_status
+  FROM ai_quota.finish_ai_request(r_id, true, true, 4, 5, 6);
+  PERFORM pg_temp.test_assert(
+    'late_finish_releases_breaker_and_keeps_unknown_at',
+    r_outcome = 'finished'
+    AND r_status = 'succeeded'
+    AND (SELECT status = 'succeeded' AND unknown_at = v_unknown_at AND unknown_at IS NOT NULL
+         FROM ai_quota.requests WHERE request_id = r_id)
+    AND (SELECT ai_quota._unknown_usage_count(v_prev_jst_day)) = 2
+    AND (SELECT outcome FROM ai_quota.claim_ai_request(gen_random_uuid(), u1, 'chat')) = 'granted',
+    coalesce(r_outcome, 'no outcome')
+  );
+
+  DELETE FROM ai_quota.requests;
+
+  -- A lease that expired on an earlier JST day is unknown history, not today's outage.
+  v_lease := pg_catalog.clock_timestamp() - interval '3 days';
+  v_prev_jst_day := (v_lease AT TIME ZONE 'Asia/Tokyo')::date;
+  INSERT INTO ai_quota.requests (
+    request_id, user_id, kind, started_at, jst_day, jst_month, status, lease_expires_at,
+    snapshot_model_id, snapshot_input_price_usd_per_million,
+    snapshot_output_price_usd_per_million, snapshot_thought_price_usd_per_million,
+    snapshot_fx_jpy_per_usd
+  ) VALUES (
+    gen_random_uuid(), u1, 'ocr', v_lease, v_prev_jst_day,
+    pg_catalog.date_trunc('month', v_lease AT TIME ZONE 'Asia/Tokyo')::date,
+    'active', v_lease,
+    'gemini-3-flash-preview', 500000, 3000000, 3000000, 200
+  );
   SELECT outcome, reject_reason INTO r_outcome, r_reason
   FROM ai_quota.claim_ai_request(gen_random_uuid(), u2, 'ocr');
   PERFORM pg_temp.test_assert(
-    'unknown_usage_persists_across_month',
-    r_outcome = 'rejected' AND r_reason = 'unknown_usage_breaker',
+    'stale_expired_lease_does_not_trip_today',
+    r_outcome = 'granted'
+    AND (SELECT ai_quota._unknown_usage_count(v_day)) = 0
+    AND EXISTS (
+      SELECT 1 FROM ai_quota.requests
+      WHERE user_id = u1
+        AND status = 'unknown_usage'
+        AND unknown_at = v_lease
+        AND jst_day = v_prev_jst_day
+    )
+    AND (SELECT c.user_count FROM ai_quota._count_daily(u1, 'ocr', v_prev_jst_day) AS c) = 1,
+    coalesce(r_reason, r_outcome)
+  );
+
+  DELETE FROM ai_quota.requests;
+  FOR i IN 1..2 LOOP
+    v_lease := pg_catalog.clock_timestamp() - interval '1 second';
+    INSERT INTO ai_quota.requests (
+      request_id, user_id, kind, started_at, jst_day, jst_month, status, lease_expires_at,
+      snapshot_model_id, snapshot_input_price_usd_per_million,
+      snapshot_output_price_usd_per_million, snapshot_thought_price_usd_per_million,
+      snapshot_fx_jpy_per_usd
+    ) VALUES (
+      gen_random_uuid(), u1, 'chat', v_lease, v_day, v_month,
+      'active', v_lease,
+      'gemini-3-flash-preview', 500000, 3000000, 3000000, 200
+    );
+  END LOOP;
+  SELECT outcome, reject_reason INTO r_outcome, r_reason
+  FROM ai_quota.claim_ai_request(gen_random_uuid(), u2, 'chat');
+  PERFORM pg_temp.test_assert(
+    'two_same_day_expired_leases_allow_claim',
+    r_outcome = 'granted'
+    AND (SELECT pg_catalog.count(*) FROM ai_quota.requests WHERE status = 'unknown_usage') = 2
+    AND NOT EXISTS (
+      SELECT 1 FROM ai_quota.requests
+      WHERE status = 'unknown_usage'
+        AND unknown_at IS DISTINCT FROM lease_expires_at
+    ),
+    coalesce(r_reason, r_outcome)
+  );
+
+  DELETE FROM ai_quota.requests;
+  FOR i IN 1..3 LOOP
+    v_lease := pg_catalog.clock_timestamp() - interval '1 second';
+    INSERT INTO ai_quota.requests (
+      request_id, user_id, kind, started_at, jst_day, jst_month, status, lease_expires_at,
+      snapshot_model_id, snapshot_input_price_usd_per_million,
+      snapshot_output_price_usd_per_million, snapshot_thought_price_usd_per_million,
+      snapshot_fx_jpy_per_usd
+    ) VALUES (
+      gen_random_uuid(), u1, 'chat', v_lease, v_day, v_month,
+      'active', v_lease,
+      'gemini-3-flash-preview', 500000, 3000000, 3000000, 200
+    );
+  END LOOP;
+  SELECT outcome, reject_reason INTO r_outcome, r_reason
+  FROM ai_quota.claim_ai_request(gen_random_uuid(), u2, 'chat');
+  PERFORM pg_temp.test_assert(
+    'three_same_day_expired_leases_trip_breaker',
+    r_outcome = 'rejected'
+    AND r_reason = 'unknown_usage_breaker'
+    AND (SELECT pg_catalog.count(*) FROM ai_quota.requests WHERE status = 'unknown_usage') = 3
+    AND (SELECT pg_catalog.count(*) FROM ai_quota.requests WHERE status = 'active') = 0
+    AND NOT EXISTS (
+      SELECT 1 FROM ai_quota.requests
+      WHERE status = 'unknown_usage'
+        AND unknown_at IS DISTINCT FROM lease_expires_at
+    ),
     coalesce(r_reason, r_outcome)
   );
 
@@ -317,30 +498,23 @@ BEGIN
   );
 
   UPDATE ai_quota.requests
-  SET lease_expires_at = pg_catalog.now() - interval '1 second'
-  WHERE user_id = u1 AND status = 'active';
+  SET lease_expires_at = pg_catalog.clock_timestamp() - interval '1 second'
+  WHERE user_id = u1 AND status = 'active'
+  RETURNING lease_expires_at INTO v_lease;
 
   SELECT outcome INTO r_outcome
   FROM ai_quota.claim_ai_request(gen_random_uuid(), u1, 'chat');
   PERFORM pg_temp.test_assert(
-    'expired_lease_unknown_breaker',
-    r_outcome = 'rejected'
+    'expired_lease_records_unknown_and_releases_concurrency',
+    r_outcome = 'granted'
     AND EXISTS (
       SELECT 1 FROM ai_quota.requests
-      WHERE user_id = u1 AND status = 'unknown_usage'
+      WHERE user_id = u1
+        AND status = 'unknown_usage'
+        AND unknown_at = v_lease
     ),
     coalesce(r_outcome, 'no outcome')
   );
-
-  -- Resolve the test's unknown record to model explicit operator reconciliation.
-  UPDATE ai_quota.requests
-  SET status = 'succeeded', usage_available = true,
-      input_tokens = 0, output_tokens = 0, thought_tokens = 0, total_tokens = 0,
-      estimated_cost_micro_jpy = 0
-  WHERE status = 'unknown_usage';
-  SELECT outcome INTO r_outcome
-  FROM ai_quota.claim_ai_request(gen_random_uuid(), u1, 'chat');
-  PERFORM pg_temp.test_assert('expired_lease_releases_concurrency', r_outcome = 'granted', r_outcome);
 
   SELECT request_id INTO r_id
   FROM ai_quota.requests

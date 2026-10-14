@@ -8,7 +8,7 @@ if [[ "${AI_QUOTA_TEST_ALLOW_DISPOSABLE_DB:-}" != "YES" ]]; then
 fi
 
 if [[ -z "${AI_QUOTA_TEST_DATABASE_URL:-}" ]]; then
-  echo "AI_QUOTA_TEST_DATABASE_URL must point to a fresh local ai_quota_test database." >&2
+  echo "AI_QUOTA_TEST_DATABASE_URL must point to a fresh local ai_quota_test database in a dedicated disposable cluster." >&2
   return 1 2>/dev/null || exit 1
 fi
 
