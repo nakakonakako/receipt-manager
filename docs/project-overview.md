@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-13 |
+| ドキュメント最終更新 | 2026-10-14 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -183,6 +183,22 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - RPC 定義後に PostgREST schema cache の再読込を通知する。
 - 適用後の読み取り専用検証: `supabase/diagnostics/verify_s1_08_rpc_integrity.sql`。`pg_catalog` と `supabase_migrations` だけを見る。`20261010010000` が1件適用されていること、上記2関数の引数名・型・順序、戻り値（`public.price_stores` / `void`）、`SECURITY INVOKER`、空の `search_path`、`PUBLIC` と `anon` に実行権限がなく `authenticated` にはあることを満たさないとエラーになる。
 
+### 5.3 Gemini AI 利用枠（`ai_quota`、S1-06 PR 2A）
+
+バックエンド統合は別 PR。DB には private スキーマ `ai_quota` のみ追加する。
+
+| オブジェクト | 概要 |
+|--------------|------|
+| `ai_quota.settings` | シングルトン。日次上限（OCR/chat/CSV 推定）、同時実行、月次実測コスト上限（micro-JPY）、単価・FX・リース・緊急停止・未知利用ブレーカー |
+| `ai_quota.requests` | 冪等 `request_id` 単位の試行履歴（プロンプト・画像・CSV・モデル出力は保存しない） |
+| RPC | `claim_ai_request` / `renew_ai_lease` / `finish_ai_request`（`ai_quota_backend` のみ `EXECUTE`） |
+
+- 正本: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`
+- 仕様: [spec-ai-quota-database.md](./spec-ai-quota-database.md)
+- 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（`verify-production-rpcs.yml` で S1-08 と併走）
+- 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
+- `ai_quota_backend` のパスワードはリポジトリ外で手動設定
+
 ---
 
 ## 6. 技術スタック
@@ -268,7 +284,7 @@ npm run dev
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。
-- DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で同じ `supabase/diagnostics/verify_s1_08_rpc_integrity.sql` を実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
+- DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で `verify_s1_08_rpc_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` を順に実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
 ### 7.4 認証フロー
 
@@ -299,6 +315,7 @@ receipt-manager/
 │       └── services/      # gemini, supabase, csv
 ├── supabase/migrations/
 ├── supabase/diagnostics/
+├── supabase/tests/ai_quota/
 ├── nginx-config/
 ├── docs/              # 本ドキュメント群
 └── docker-compose.production.yml
@@ -313,6 +330,7 @@ receipt-manager/
 | [README.md](./README.md) | docs 索引 |
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | A/B 分離・メモ削除・カテゴリ方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | 予定: 履歴の分類フィルタ構想 |
+| [spec-ai-quota-database.md](./spec-ai-quota-database.md) | S1-06: Gemini 利用枠 DB（`ai_quota`） |
 
 新規の仕様・設計メモを足したら、上記索引と本節にも行を追加する。
 
@@ -322,6 +340,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-14 | S1-06 PR 2A: `ai_quota` スキーマ・利用枠 RPC・本番読み取り検証・隔離 SQL テスト（FastAPI 統合は別 PR） |
 | 2026-10-13 | レシート画像 `/analyze` の枚数・サイズ・形式検証（JPEG/PNG/WebP、HEIC/HEIF 拒否）を追加 |
 | 2026-10-12 | ログアウト・アカウント切替時にレシート登録の一時データとプレビュー URL を破棄 |
 | 2026-10-11 | S1-04: 予期しないAPI例外・認証エラーの詳細を応答やログに露出しないよう修正 |
