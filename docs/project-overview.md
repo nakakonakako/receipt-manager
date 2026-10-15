@@ -203,6 +203,14 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 - 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
 - `ai_quota_backend` のパスワードは、認可された Supabase データベース管理者の psql で `\password ai_quota_backend` を実行し、エコーなしプロンプトで設定する。入力した値はセキュアなエディタで VPS の `.env.ai-quota`（`0600`）へ直接書き写す。シェルコマンド、SQL 履歴、ログ、リポジトリ、GitHub または VPS のデプロイ用環境変数には置かない。手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)
 
+### 5.4 S1 F-01 テーブル権限
+
+`20261015120000_s1_f01_revoke_excess_table_privileges.sql` は、既存9テーブルと `postgres` が `public` で作成する今後のテーブルについて、`anon`・`authenticated` の `TRUNCATE`、`REFERENCES`、`TRIGGER`、`MAINTAIN` を取り消す。CRUD、RLS、RPC、`service_role`、関数・シーケンスの権限は変更しない。migrationは実行ロール、対象テーブルの所有者・付与元、global default ACLを事前確認し、実効権限とCRUDを事後確認する。
+
+- 読み取り専用検証: `supabase/diagnostics/verify_s1_f01_acl_integrity.sql`。既存の `verify-production-rpcs.yml` から S1-06/S1-08 と併せて実行する。
+- `supabase_admin` の `public` default privilegesは変更しない。Supabase管理ロールが将来 `public` に作るテーブルには対象権限が残る可能性がある。検証SQLは残存する直接付与数を表示する。
+- migrationを含むmainへのマージは既存CDから本番DBへの `supabase db push` を起動する。
+
 ---
 
 ## 6. 技術スタック
@@ -356,6 +364,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-15 | S1 F-01: APIロールのテーブル過大権限を既存表と `postgres` の `public` default privilegesから取り消し、読み取り専用検証を本番workflowへ追加 |
 | 2026-10-15 | レシート解析の HTTP 429 を日次上限・同時実行上限・未知の利用制限に分類し、未知の応答本文は表示しない |
 | 2026-10-15 | レシートのまとめて解析を登録順の逐次実行にし、世代が変わった未開始分は始めない |
 | 2026-10-15 | `ai_quota_backend` のパスワード設定を、対話式 psql `\password` と保護された `.env.ai-quota` への直接記入に限定 |

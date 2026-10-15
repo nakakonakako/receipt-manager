@@ -1,4 +1,4 @@
-name: Verify production RPC integrity
+name: Verify production database integrity
 
 on:
   workflow_call:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   verify:
-    name: Verify production RPC and AI quota definitions
+    name: Verify production RPC, AI quota, and F-01 table ACLs
     runs-on: ubuntu-latest
     env:
       PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
@@ -69,3 +69,4 @@ jobs:
           set -euo pipefail
           psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_08_rpc_integrity.sql
           psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_f01_acl_integrity.sql
