@@ -67,6 +67,26 @@ MAX_DIAGNOSTIC_LINES = 12
 MAX_DIAGNOSTIC_BYTES = 8192
 MAX_DIAGNOSTIC_AGE_SECONDS = 7 * 24 * 60 * 60
 MAX_DIAGNOSTIC_FILES = 20
+MAX_REPORT_BYTES = 4096
+MAX_STORED_RESULT_BYTES = 65536
+_MIN_ENV_SECRET_LENGTH = 8
+_REPORT_BEGIN = "[delegate-cursor] ----- worker completion report begin -----"
+_REPORT_END = "[delegate-cursor] ----- worker completion report end -----"
+_REPORT_PREFIX = "[delegate-cursor] report: "
+_REPORT_TRUNCATED = "[delegate-cursor] report: [truncated]"
+_REPORT_OMITTED = "[delegate-cursor] report: omitted (result text absent)"
+_REPORT_UNTRUSTED = (
+    "[delegate-cursor] report: untrusted free-form result text; review the diff"
+)
+_SECRET_ENV_NAME = re.compile(
+    r"(?i)(?:api[_-]?key|access[_-]?key|service[_-]?role[_-]?key|"
+    r"(?:^|_)[a-z0-9]*_key(?:_|$)|secret|token|password|passwd|credential|"
+    r"private[_-]?key|database[_-]?url)"
+)
+_ANSI_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-_]"
+)
+_UNSAFE_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x0d\x0e-\x1f\x7f-\x9f\u2028\u2029]")
 ERROR_PATTERNS = {
     "resource_exhausted": re.compile(
         r"resource[_ -]?exhausted|insufficient (?:model )?capacity", re.IGNORECASE
@@ -238,8 +258,8 @@ def set_status(path: Path, data: dict[str, object]) -> None:
     temporary.replace(path)
 
 
-def scrub_stderr_line(line: str) -> str:
-    scrubbed = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+def _redact_known_secrets(text: str) -> str:
+    scrubbed = text
     for pattern in SECRET_PATTERNS:
         if pattern.groups:
             if "https?://" in pattern.pattern:
@@ -256,7 +276,177 @@ def scrub_stderr_line(line: str) -> str:
                 scrubbed = pattern.sub("[REDACTED]", scrubbed)
         else:
             scrubbed = pattern.sub("[REDACTED]", scrubbed)
+    return scrubbed
+
+
+def scrub_stderr_line(line: str) -> str:
+    scrubbed = _redact_known_secrets(re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line))
     return scrubbed.encode("utf-8")[:512].decode("utf-8", errors="ignore")
+
+
+def _section_pattern(title: str) -> re.Pattern[str]:
+    return re.compile(rf"(?i)^(?:#+\s+|\d+[.)]\s+)?(?:{title})\s*(?::\s*(.*))?$")
+
+
+_REPORT_SECTIONS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "intent",
+        _section_pattern(
+            r"root cause(?:\s*/\s*(?:implementation\s+)?intent)?|implementation intent"
+        ),
+    ),
+    ("changed files", _section_pattern(r"changed files")),
+    (
+        "verification",
+        _section_pattern(
+            r"verification(?:\s+performed(?:\s+and\s+results)?|\s+results)?"
+        ),
+    ),
+    ("risks", _section_pattern(r"(?:remaining\s+)?risks")),
+    (
+        "supervisor decisions",
+        _section_pattern(
+            r"supervisor decisions(?:\s+required)?"
+            r"|supervisor review"
+            r"|anything requiring supervisor review"
+        ),
+    ),
+)
+
+
+def capture_result_text(raw_result: object) -> tuple[str | None, bool]:
+    """Keep only a bounded copy of the final result string."""
+    if not isinstance(raw_result, str):
+        return None, False
+    raw_bytes = raw_result.encode("utf-8")
+    if len(raw_bytes) <= MAX_STORED_RESULT_BYTES:
+        return raw_result, False
+    clipped = raw_bytes[:MAX_STORED_RESULT_BYTES].decode("utf-8", errors="ignore")
+    return clipped, True
+
+
+def _redact_env_secrets(text: str) -> str:
+    values = [
+        value
+        for name, value in os.environ.items()
+        if _SECRET_ENV_NAME.search(name) and len(value) >= _MIN_ENV_SECRET_LENGTH
+    ]
+    for value in sorted(set(values), key=len, reverse=True):
+        text = text.replace(value, "[REDACTED]")
+    return text
+
+
+def _sanitize_report_text(text: str) -> str:
+    scrubbed = _redact_env_secrets(text)
+    scrubbed = _ANSI_RE.sub("", scrubbed)
+    scrubbed = _UNSAFE_CONTROL_RE.sub("", scrubbed)
+    scrubbed = _redact_env_secrets(scrubbed)
+    scrubbed = _redact_known_secrets(scrubbed)
+    scrubbed = scrubbed.replace(_REPORT_BEGIN, "[report delimiter removed]")
+    scrubbed = scrubbed.replace(_REPORT_END, "[report delimiter removed]")
+    return scrubbed
+
+
+def _normalize_header_line(line: str) -> str:
+    return re.sub(r"[*_`]+", "", line).strip()
+
+
+def _extract_report_sections(text: str) -> list[tuple[str, list[str]]] | None:
+    sections: list[tuple[str, list[str]]] = []
+    current_name: str | None = None
+    current_lines: list[str] = []
+    for line in text.split("\n"):
+        normalized = _normalize_header_line(line)
+        matched: tuple[str, str] | None = None
+        for name, pattern in _REPORT_SECTIONS:
+            found = pattern.fullmatch(normalized)
+            if found:
+                inline = found.group(1) or ""
+                matched = (name, inline.strip())
+                break
+        if matched is None:
+            if current_name is not None:
+                current_lines.append(line)
+            continue
+        if current_name is not None:
+            sections.append((current_name, current_lines))
+        current_name, inline_text = matched
+        current_lines = [inline_text] if inline_text else []
+    if current_name is not None:
+        sections.append((current_name, current_lines))
+    if len(sections) < 2:
+        return None
+    return sections
+
+
+def _report_nbytes(parts: list[str]) -> int:
+    return len(("\n".join(parts) + "\n").encode("utf-8"))
+
+
+def _shrink_report_line(line: str, kept: list[str]) -> str | None:
+    if not line.startswith(_REPORT_PREFIX):
+        return None
+    prefix_len = len(_REPORT_PREFIX)
+    best: str | None = None
+    low = prefix_len
+    high = len(line)
+    while low <= high:
+        mid = (low + high) // 2
+        candidate = line[:mid]
+        trial = [_REPORT_BEGIN, *kept, candidate, _REPORT_TRUNCATED, _REPORT_END]
+        if _report_nbytes(trial) <= MAX_REPORT_BYTES:
+            best = candidate
+            low = mid + 1
+        else:
+            high = mid - 1
+    return best
+
+
+def _fit_report_lines(body_lines: list[str], *, force_truncated: bool) -> list[str]:
+    if not force_truncated:
+        full = [_REPORT_BEGIN, *body_lines, _REPORT_END]
+        if _report_nbytes(full) <= MAX_REPORT_BYTES:
+            return full
+    kept: list[str] = []
+    for line in body_lines:
+        trial = [_REPORT_BEGIN, *kept, line, _REPORT_TRUNCATED, _REPORT_END]
+        if _report_nbytes(trial) <= MAX_REPORT_BYTES:
+            kept.append(line)
+            continue
+        shrunk = _shrink_report_line(line, kept)
+        if shrunk is not None:
+            kept.append(shrunk)
+        break
+    return [_REPORT_BEGIN, *kept, _REPORT_TRUNCATED, _REPORT_END]
+
+
+def _report_body(text: str) -> list[str]:
+    sections = _extract_report_sections(text)
+    if sections is None:
+        body = [_REPORT_UNTRUSTED]
+        body.extend(f"{_REPORT_PREFIX}{line}" for line in text.split("\n"))
+        return body
+    body = []
+    for name, content in sections:
+        body.append(f"{_REPORT_PREFIX}section: {name}")
+        body.extend(f"{_REPORT_PREFIX}{line}" for line in content)
+    return body
+
+
+def emit_worker_report(text: str | None, *, input_truncated: bool) -> None:
+    """Print a bounded completion report. The text is not retained elsewhere."""
+    sanitized = _sanitize_report_text(text) if text else ""
+    if not sanitized.strip():
+        parts = [_REPORT_BEGIN, _REPORT_OMITTED]
+        if input_truncated:
+            parts.append(_REPORT_TRUNCATED)
+        parts.append(_REPORT_END)
+    else:
+        parts = _fit_report_lines(
+            _report_body(sanitized), force_truncated=input_truncated
+        )
+    for line in parts:
+        print(line, flush=True)
 
 
 class StderrDiagnostics:
@@ -425,7 +615,8 @@ def main() -> int:
     session_id: str | None = None
     result_status: str | None = None
     result_is_error: bool | None = None
-    worker_response_chars: int | None = None
+    worker_result_text: str | None = None
+    worker_result_truncated = False
     active_call_ids: set[str] = set()
     anonymous_active = 0
     active_tool_count = 0
@@ -591,8 +782,9 @@ def main() -> int:
                                 result_status = "error" if event["is_error"] else "completed"
                             raw_is_error = event.get("is_error")
                             result_is_error = raw_is_error if isinstance(raw_is_error, bool) else None
-                            raw_result = event.get("result")
-                            worker_response_chars = len(raw_result) if isinstance(raw_result, str) else None
+                            worker_result_text, worker_result_truncated = capture_result_text(
+                                event.get("result")
+                            )
                         if phase is not None:
                             if phase == TOOL_PHASE_STARTED:
                                 note_tool_start(extract_call_id(event))
@@ -704,8 +896,7 @@ def main() -> int:
         print(f"[delegate-cursor] stderr bytes read: {stderr_bytes}", flush=True)
         if stderr_diagnostic_log:
             print(f"[delegate-cursor] sanitized stderr diagnostics: {stderr_diagnostic_log}", flush=True)
-        if worker_response_chars is not None:
-            print(f"[delegate-cursor] worker_response_chars: {worker_response_chars}", flush=True)
+        emit_worker_report(worker_result_text, input_truncated=worker_result_truncated)
         return (128 + interrupted_signal) if interrupted_signal is not None else (0 if outcome == "succeeded" else (exit_code or 1))
     finally:
         for sig, handler in old_handlers.items():
