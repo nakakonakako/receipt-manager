@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import signal
 import stat
 import subprocess
@@ -91,15 +92,15 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             "THINKING_SENTINEL",
             "TOOL_ARG_SENTINEL",
             "TOOL_RESULT_SENTINEL",
+            "RESULT_SENTINEL",
             "STDERR_SENTINEL",
         ):
             self.assertNotIn(sentinel, combined)
         self.assertGreater(status["stderr_bytes_read"], 0)
         self.assertIn("event: system/init", result.stdout)
         self.assertIn("event: result/success", result.stdout)
-        self.assertIn("worker response (not saved by monitor)", result.stdout)
-        self.assertIn("RESULT_SENTINEL", result.stdout)
-        self.assertNotIn("RESULT_SENTINEL", json.dumps(status))
+        self.assertNotIn("worker response", result.stdout)
+        self.assertIn("worker_response_chars: 15", result.stdout)
         self.assertIsNone(status["stderr_diagnostic_log"])
         self.assertEqual(status["stderr_error_events"], [])
         self.assertEqual(
@@ -225,7 +226,10 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         )
         result = self.run_agent(agent, "--heartbeat-seconds", "1")
         self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn("稼働中、最終イベントから", result.stdout)
+        self.assertIn("稼働中、最終操作: なし、", result.stdout)
+        self.assertIn("秒無出力", result.stdout)
+        self.assertIn("heartbeatはworkerの進捗を保証しません", result.stdout)
+        self.assertNotIn("thinking", result.stdout.lower())
         self.assertEqual(self.status()["outcome"], "succeeded")
 
     def test_interrupt_is_forwarded_and_recorded(self) -> None:
@@ -331,6 +335,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertIn("--trust", argv)
         self.assertIn("--output-format", argv)
         self.assertIn("stream-json", argv)
+        self.assertNotIn("--stream-partial-output", argv)
         self.assertIn("composer-2.5", argv)
         self.assertNotIn("PROMPT_SENTINEL", result.stdout + result.stderr)
 
@@ -378,6 +383,400 @@ class DelegateCursorMonitorTests(unittest.TestCase):
                 self.assertEqual("--trust" in argv, should_trust)
                 self.assertIn("--output-format", argv)
                 self.assertIn("stream-json", argv)
+                self.assertNotIn("--stream-partial-output", argv)
+
+    def test_tool_progress_reports_safe_categories_without_payloads(self) -> None:
+        events = [
+            {
+                "type": "system",
+                "subtype": "init",
+                "session_id": "session-tools",
+                "secret": "TOKEN_SENTINEL",
+            },
+            {
+                "type": "assistant",
+                "subtype": "delta",
+                "text": "ASSISTANT_SENTINEL",
+                "thinking": "THINKING_SENTINEL",
+            },
+            {
+                "type": "assistant",
+                "message": {"content": "ASSISTANT_SENTINEL"},
+            },
+            {"type": "thinking", "text": "THINKING_SENTINEL"},
+            {
+                "type": "tool_call",
+                "subtype": "delta",
+                "tool_call": {
+                    "shellToolCall": {"args": {"command": "SHELL_TEXT_SENTINEL"}}
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "CALL_ID_SENTINEL",
+                "tool_call": {
+                    "readToolCall": {
+                        "args": {
+                            "path": "/secret/PATH_SENTINEL",
+                            "name": "TOOL_NAME_SENTINEL",
+                        }
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "call-shell",
+                "tool_call": {
+                    "shellToolCall": {
+                        "args": {"command": "echo SHELL_TEXT_SENTINEL"},
+                        "name": "TOOL_NAME_SENTINEL",
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "CALL_ID_SENTINEL",
+                "tool_call": {
+                    "readToolCall": {
+                        "result": {
+                            "success": {
+                                "content": "FILE_CONTENT_SENTINEL TOOL_RESULT_SENTINEL"
+                            }
+                        }
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "call-shell",
+                "tool_call": {
+                    "shellToolCall": {
+                        "result": {"error": {"message": "ERROR_VALUE_SENTINEL"}}
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "call-edit",
+                "tool_call": {"editToolCall": {"args": {"path": "PATH_SENTINEL"}}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "failed",
+                "call_id": "call-edit",
+                "tool_call": {"editToolCall": {"error": "ERROR_VALUE_SENTINEL"}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "call-write",
+                "tool_call": {"writeToolCall": {"args": {"path": "PATH_SENTINEL"}}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "call-write",
+                "tool_call": {
+                    "writeToolCall": {
+                        "result": {"success": {"content": "FILE_CONTENT_SENTINEL"}}
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "call-delete",
+                "tool_call": {"delete_tool_call": {"args": {"path": "PATH_SENTINEL"}}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "call-delete",
+                "tool_call": {
+                    "delete_tool_call": {"failure": {"detail": "ERROR_VALUE_SENTINEL"}}
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "call-mcp",
+                "tool_call": {
+                    "mcpToolCall": {
+                        "args": {
+                            "name": "TOOL_NAME_SENTINEL",
+                            "payload": "TOOL_ARG_SENTINEL",
+                        }
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "error",
+                "call_id": "call-mcp",
+                "tool_call": {"mcpToolCall": {"failure": "ERROR_VALUE_SENTINEL"}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "call-other",
+                "tool_call": {
+                    "TOOL_NAME_SENTINEL": {"args": {"path": "PATH_SENTINEL"}}
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "call-other",
+                "tool_call": {"TOOL_NAME_SENTINEL": {"result": "TOOL_RESULT_SENTINEL"}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "tool_call": {"read_tool_call": {"args": {"path": "PATH_SENTINEL"}}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "tool_call": {"edit_tool_call": {"args": {"path": "PATH_SENTINEL"}}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "tool_call": {"read_tool_call": {"result": {"success": True}}},
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "tool_call": {"edit_tool_call": {"result": {"success": True}}},
+            },
+            {"type": "tool_call", "subtype": "completed", "tool_call": None},
+            {"type": "tool_call", "subtype": "started"},
+            {"type": "tool_call", "subtype": "completed"},
+            {
+                "type": "tool_call",
+                "subtype": "not-a-real-phase",
+                "tool_call": {"readToolCall": {"args": {"path": "PATH_SENTINEL"}}},
+            },
+            {
+                "type": "result",
+                "subtype": "success",
+                "result": "RESULT_SENTINEL",
+            },
+        ]
+        agent = self.fake_agent(
+            "import json\n"
+            f"events = {events!r}\n"
+            "for event in events:\n"
+            "    print(json.dumps(event), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        status = self.status()
+        combined = (
+            result.stdout + result.stderr + json.dumps(status, ensure_ascii=False)
+        )
+        for sentinel in (
+            "TOKEN_SENTINEL",
+            "ASSISTANT_SENTINEL",
+            "THINKING_SENTINEL",
+            "TOOL_ARG_SENTINEL",
+            "TOOL_RESULT_SENTINEL",
+            "TOOL_NAME_SENTINEL",
+            "PATH_SENTINEL",
+            "SHELL_TEXT_SENTINEL",
+            "ERROR_VALUE_SENTINEL",
+            "CALL_ID_SENTINEL",
+            "FILE_CONTENT_SENTINEL",
+            "RESULT_SENTINEL",
+            "call-shell",
+            "call-edit",
+            "call-write",
+            "call-delete",
+            "call-mcp",
+            "call-other",
+        ):
+            self.assertNotIn(sentinel, combined)
+        for raw_shape in (
+            "readToolCall",
+            "read_tool_call",
+            "shellToolCall",
+            "editToolCall",
+            "edit_tool_call",
+            "writeToolCall",
+            "delete_tool_call",
+            "mcpToolCall",
+        ):
+            self.assertNotIn(raw_shape, combined)
+        self.assertNotIn("event: assistant", result.stdout)
+        self.assertNotIn("event: thinking", result.stdout)
+        self.assertEqual(result.stdout.count("assistant_updates:"), 1)
+        self.assertIn("[delegate-cursor] assistant_updates: 4", result.stdout)
+        self.assertEqual(status["assistant_update_count"], 4)
+        self.assertEqual(status["session_id"], "session-tools")
+        self.assertEqual(status["active_tool_count"], 0)
+        self.assertEqual(status["last_operation_category"], "その他")
+        self.assertEqual(status["last_operation_status"], "completed")
+        self.assertNotIn("worker response", result.stdout)
+        self.assertIn("worker_response_chars: 15", result.stdout)
+
+        pattern = re.compile(
+            r"^\[delegate-cursor\] tool: (?P<category>.+?) "
+            r"(?P<phase>started|completed|failed) at "
+            r"(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00) "
+            r"active=(?P<active>\d+)$"
+        )
+        parsed: list[tuple[str, str, int, str]] = []
+        for line in result.stdout.splitlines():
+            match = pattern.fullmatch(line)
+            if match:
+                parsed.append(
+                    (
+                        match.group("category"),
+                        match.group("phase"),
+                        int(match.group("active")),
+                        match.group("ts"),
+                    )
+                )
+        expected = [
+            ("ファイル読み取り", "started", 1),
+            ("Shellコマンド", "started", 2),
+            ("ファイル読み取り", "completed", 1),
+            ("Shellコマンド", "failed", 0),
+            ("ファイル作成・編集", "started", 1),
+            ("ファイル作成・編集", "failed", 0),
+            ("ファイル作成・編集", "started", 1),
+            ("ファイル作成・編集", "completed", 0),
+            ("ファイル作成・編集", "started", 1),
+            ("ファイル作成・編集", "failed", 0),
+            ("MCPツール", "started", 1),
+            ("MCPツール", "failed", 0),
+            ("その他", "started", 1),
+            ("その他", "completed", 0),
+            ("ファイル読み取り", "started", 1),
+            ("ファイル作成・編集", "started", 2),
+            ("ファイル読み取り", "completed", 1),
+            ("ファイル作成・編集", "completed", 0),
+            ("その他", "completed", 0),
+            ("その他", "started", 1),
+            ("その他", "completed", 0),
+        ]
+        self.assertEqual([(item[0], item[1], item[2]) for item in parsed], expected)
+        self.assertEqual(status["last_operation_at"], parsed[-1][3])
+        self.assertNotIn("call_id", json.dumps(status))
+
+    def test_bash_tool_call_shape_is_shell_command_without_payload(self) -> None:
+        events = [
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "BASH_CALL_ID_SENTINEL",
+                "tool_call": {
+                    "bashToolCall": {
+                        "args": {
+                            "command": "echo BASH_COMMAND_SENTINEL",
+                            "name": "BASH_TOOL_NAME_SENTINEL",
+                        }
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "BASH_CALL_ID_SENTINEL",
+                "tool_call": {
+                    "bashToolCall": {
+                        "result": {"success": {"stdout": "BASH_RESULT_SENTINEL"}}
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "started",
+                "call_id": "BASH_CALL_ID_SENTINEL",
+                "tool_call": {
+                    "bash_tool_call": {
+                        "args": {
+                            "command": "echo BASH_COMMAND_SENTINEL",
+                            "name": "BASH_TOOL_NAME_SENTINEL",
+                        }
+                    }
+                },
+            },
+            {
+                "type": "tool_call",
+                "subtype": "completed",
+                "call_id": "BASH_CALL_ID_SENTINEL",
+                "tool_call": {
+                    "bash_tool_call": {
+                        "result": {"success": {"stdout": "BASH_RESULT_SENTINEL"}}
+                    }
+                },
+            },
+            {
+                "type": "result",
+                "subtype": "success",
+                "result": "BASH_RESULT_SENTINEL",
+            },
+        ]
+        agent = self.fake_agent(
+            "import json\n"
+            f"events = {events!r}\n"
+            "for event in events:\n"
+            "    print(json.dumps(event), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        status = self.status()
+        combined = (
+            result.stdout + result.stderr + json.dumps(status, ensure_ascii=False)
+        )
+        for sentinel in (
+            "BASH_COMMAND_SENTINEL",
+            "BASH_RESULT_SENTINEL",
+            "BASH_TOOL_NAME_SENTINEL",
+            "BASH_CALL_ID_SENTINEL",
+            "bashToolCall",
+            "bash_tool_call",
+        ):
+            self.assertNotIn(sentinel, combined)
+        self.assertEqual(status["active_tool_count"], 0)
+        self.assertEqual(status["last_operation_category"], "Shellコマンド")
+        self.assertEqual(status["last_operation_status"], "completed")
+
+        pattern = re.compile(
+            r"^\[delegate-cursor\] tool: (?P<category>.+?) "
+            r"(?P<phase>started|completed|failed) at "
+            r"(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00) "
+            r"active=(?P<active>\d+)$"
+        )
+        parsed: list[tuple[str, str, int, str]] = []
+        for line in result.stdout.splitlines():
+            match = pattern.fullmatch(line)
+            if match:
+                parsed.append(
+                    (
+                        match.group("category"),
+                        match.group("phase"),
+                        int(match.group("active")),
+                        match.group("ts"),
+                    )
+                )
+        self.assertEqual(
+            [(item[0], item[1], item[2]) for item in parsed],
+            [
+                ("Shellコマンド", "started", 1),
+                ("Shellコマンド", "completed", 0),
+                ("Shellコマンド", "started", 1),
+                ("Shellコマンド", "completed", 0),
+            ],
+        )
+        self.assertEqual(status["last_operation_at"], parsed[-1][3])
+        self.assertNotIn("call_id", json.dumps(status))
 
 
 if __name__ == "__main__":
