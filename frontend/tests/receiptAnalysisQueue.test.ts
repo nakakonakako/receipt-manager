@@ -3,6 +3,8 @@ import { describe, it } from 'node:test'
 import axios from 'axios'
 import {
   classifyReceiptAnalysisError,
+  RECEIPT_ANALYSIS_CONCURRENCY_LIMIT_MESSAGE,
+  RECEIPT_ANALYSIS_DAILY_LIMIT_MESSAGE,
   RECEIPT_ANALYSIS_RATE_LIMIT_MESSAGE,
 } from '../src/features/receipt/hooks/receiptAnalysisError.ts'
 import {
@@ -226,14 +228,66 @@ describe('receipt uploader cache analysis queue', () => {
   })
 })
 
+const DAILY_LIMIT_DETAIL =
+  '本日のAI利用回数の上限に達しました。明日再度お試しください。'
+const CONCURRENCY_LIMIT_DETAIL =
+  'ほかのAI処理が実行中です。時間をおいて再度お試しください。'
+
 describe('receipt analysis error classification', () => {
-  it('describes HTTP 429 as a concurrent analysis limit', () => {
-    const failure = classifyReceiptAnalysisError(axiosError(429))
+  it('classifies an exact daily-limit detail without echoing it', () => {
+    const failure = classifyReceiptAnalysisError(
+      axiosError(429, { detail: DAILY_LIMIT_DETAIL })
+    )
     assert.deepEqual(failure, {
       kind: 'rate_limit',
-      message: RECEIPT_ANALYSIS_RATE_LIMIT_MESSAGE,
+      message: RECEIPT_ANALYSIS_DAILY_LIMIT_MESSAGE,
     })
-    assert.match(RECEIPT_ANALYSIS_RATE_LIMIT_MESSAGE, /同時/)
+    assert.equal(failure.kind === 'rate_limit' && failure.message.includes('本日'), true)
+    assert.notEqual(
+      failure.kind === 'rate_limit' ? failure.message : '',
+      DAILY_LIMIT_DETAIL
+    )
+  })
+
+  it('classifies an exact concurrency-limit detail without echoing it', () => {
+    const failure = classifyReceiptAnalysisError(
+      axiosError(429, { detail: CONCURRENCY_LIMIT_DETAIL })
+    )
+    assert.deepEqual(failure, {
+      kind: 'rate_limit',
+      message: RECEIPT_ANALYSIS_CONCURRENCY_LIMIT_MESSAGE,
+    })
+    assert.match(RECEIPT_ANALYSIS_CONCURRENCY_LIMIT_MESSAGE, /同時/)
+    assert.notEqual(
+      failure.kind === 'rate_limit' ? failure.message : '',
+      CONCURRENCY_LIMIT_DETAIL
+    )
+  })
+
+  it('hides unknown, missing, and non-string 429 details behind a fixed message', () => {
+    const leaked = '内部情報: db.internal の資格情報 leaked-token'
+    const cases: unknown[] = [
+      {},
+      { detail: leaked },
+      { detail: `${DAILY_LIMIT_DETAIL} ` },
+      { detail: DAILY_LIMIT_DETAIL.slice(0, -1) },
+      { detail: null },
+      { detail: 429 },
+      { detail: ['rate limited'] },
+      { detail: { message: leaked } },
+      'plain text',
+      null,
+    ]
+
+    for (const data of cases) {
+      const failure = classifyReceiptAnalysisError(axiosError(429, data))
+      assert.deepEqual(failure, {
+        kind: 'rate_limit',
+        message: RECEIPT_ANALYSIS_RATE_LIMIT_MESSAGE,
+      })
+      assert.equal(JSON.stringify(failure).includes(leaked), false)
+      assert.equal(JSON.stringify(failure).includes('db.internal'), false)
+    }
   })
 
   it('keeps validation and auth failures distinct from other errors', () => {
