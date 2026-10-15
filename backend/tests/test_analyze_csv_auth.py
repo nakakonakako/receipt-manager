@@ -6,6 +6,8 @@ os.environ.setdefault("GEMINI_API_KEY", "test-only-placeholder")
 
 from fastapi.testclient import TestClient
 
+from tests.support_ai_quota import ensure_user_id, install_granting_quota
+
 from app import main
 from app.schemas.csv import CsvAnalysisRequest, MAX_CSV_TEXT_CHARACTERS
 from app.services.supabase_service import InvalidSupabaseTokenError
@@ -16,10 +18,13 @@ class AnalyzeCsvAuthTests(unittest.TestCase):
         self.client = TestClient(main.app)
         main.app.dependency_overrides.clear()
         self.addCleanup(main.app.dependency_overrides.clear)
+        self.quota = install_granting_quota(self)
 
     def _allow_authenticated_user(self):
+        service = ensure_user_id(object())
+
         async def authenticated_service():
-            return object()
+            return service
 
         main.app.dependency_overrides[main.get_supabase_service] = authenticated_service
 

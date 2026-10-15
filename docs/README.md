@@ -10,4 +10,4 @@
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | レシート管理（A）と厳密単価比較（B）の分離方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | **予定** — 履歴の大分類・サブを候補選択で絞る構想 |
 | [cursor-delegation.md](./cursor-delegation.md) | Codex supervisor から Cursor worker へ実装を委譲する手順 |
-| [spec-ai-quota-database.md](./spec-ai-quota-database.md) | **S1-06** — Gemini 利用枠 DB（`ai_quota` スキーマ・RPC・ロール） |
+| [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と、`/analyze`・`/search`・`/analyze_csv` の FastAPI 統合 |

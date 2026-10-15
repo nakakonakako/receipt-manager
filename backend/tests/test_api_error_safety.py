@@ -16,6 +16,7 @@ from app.services.supabase_service import (
     InvalidSupabaseTokenError,
     SupabaseService,
 )
+from tests.support_ai_quota import ensure_user_id, install_granting_quota
 
 
 class ApiErrorSafetyTests(unittest.TestCase):
@@ -49,7 +50,8 @@ class ApiErrorSafetyTests(unittest.TestCase):
 
     def test_gemini_failure_returns_fixed_500_without_exception_details(self):
         secret = "gemini-api-key-and-prompt-content"
-        self._allow_authenticated_user(object())
+        install_granting_quota(self)
+        self._allow_authenticated_user(ensure_user_id(object()))
 
         with patch.object(
             main.gemini_service,
