@@ -15,8 +15,19 @@ services:
     container_name: receipt-backend
     expose:
       - "8000"
+    # Optional quota file. Compose 2.24+ treats required: false as skip-if-missing.
+    # GitHub Actions rewrites .env and does not upload or rewrite .env.ai-quota.
     env_file:
-      - ./.env
+      - path: ./.env
+        required: true
+      - path: ./.env.ai-quota
+        required: false
+    # Host directory of the Supabase root CA. Compose creates an empty
+    # directory when it is absent, so the backend still starts. Mount the
+    # directory, not the certificate file: a missing file bind is created as
+    # a directory and blocks placing the CA later.
+    volumes:
+      - ./secrets/ai-quota-ca:/app/secrets/ai-quota-ca:ro
 
 networks:
   edge:

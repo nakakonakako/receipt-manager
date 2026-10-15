@@ -12,6 +12,11 @@ from app.schemas.receipt_image import (
     MAX_RECEIPT_IMAGES_TOTAL_BYTES,
     worst_case_split_base64_char_count,
 )
+from app.services.ai_usage import (
+    GeminiInvalidOutput,
+    ModelResult,
+    token_usage_from_response,
+)
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -81,10 +86,16 @@ class GeminiService:
                 contents=contents,
                 config=config,
             )
-            return json.loads(response.text)
         except Exception:
             logger.error("Gemini receipt analysis failed")
             raise
+        usage = token_usage_from_response(response)
+        try:
+            parsed = json.loads(response.text)
+        except Exception:
+            logger.error("Gemini receipt analysis failed")
+            raise GeminiInvalidOutput(usage) from None
+        return ModelResult(parsed, usage)
 
     def answer_question(self, question: str, context_data: str) -> str:
         today = datetime.date.today().strftime("%Y-%m-%d")
@@ -121,10 +132,19 @@ class GeminiService:
                     ),
                 ),
             )
-            return response.text
         except Exception:
             logger.error("Gemini question answering failed")
             raise
+        usage = token_usage_from_response(response)
+        try:
+            answer = response.text
+        except Exception:
+            logger.error("Gemini question answering failed")
+            raise GeminiInvalidOutput(usage) from None
+        if not isinstance(answer, str):
+            logger.error("Gemini question answering failed")
+            raise GeminiInvalidOutput(usage)
+        return ModelResult(answer, usage)
 
     def analyze_csv(self, csv_sample: str) -> dict:
         prompt = "Analyze the provided CSV sample lines and determine the column indices according to the schema."
@@ -142,9 +162,13 @@ class GeminiService:
                     ),
                 ),
             )
-
-            return json.loads(response.text)
-
         except Exception:
             logger.error("Gemini CSV mapping failed")
             raise
+        usage = token_usage_from_response(response)
+        try:
+            parsed = json.loads(response.text)
+        except Exception:
+            logger.error("Gemini CSV mapping failed")
+            raise GeminiInvalidOutput(usage) from None
+        return ModelResult(parsed, usage)

@@ -1,5 +1,9 @@
 import asyncio
 import logging
+import uuid
+from collections.abc import Callable
+from contextlib import asynccontextmanager
+from typing import Any
 
 from app.schemas.csv import (
     CsvAnalysisRequest,
@@ -8,6 +12,19 @@ from app.schemas.csv import (
     CsvSaveRequest,
 )
 from app.schemas.receipt import ReceiptData, SearchQuery
+from app.services.ai_quota_config import (
+    AiQuotaConfigError,
+    load_ai_quota_config,
+    load_ai_quota_env_file,
+)
+from app.services.ai_quota_db import AiQuotaDatabase
+from app.services.ai_quota_guard import DETAIL_UNAVAILABLE, AiQuotaDenied, AiQuotaGuard
+from app.services.ai_usage import (
+    GeminiInvalidOutput,
+    GeminiSchemaRejected,
+    TokenUsage,
+    unwrap_model_result,
+)
 from app.services.csv_service import CsvRowLimitError, CsvService
 from app.services.gemini_service import GeminiService
 from app.services.receipt_image_service import (
@@ -15,6 +32,7 @@ from app.services.receipt_image_service import (
     ReceiptImageValidationError,
 )
 from app.services.supabase_service import (
+    SEARCH_DATA_HEADER,
     InvalidSupabaseTokenError,
     SearchDataLimitError,
     SupabaseService,
@@ -25,12 +43,37 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
-app = FastAPI()
 logger = logging.getLogger(__name__)
-SAFE_INTERNAL_ERROR_DETAIL = "Internal Server Error"
-SAFE_AUTH_ERROR_DETAIL = "Invalid authentication credentials."
 
 load_dotenv()
+load_ai_quota_env_file()
+
+
+def _load_quota_database() -> AiQuotaDatabase:
+    try:
+        config = load_ai_quota_config()
+    except AiQuotaConfigError:
+        config = None
+    return AiQuotaDatabase(config)
+
+
+ai_quota_database = _load_quota_database()
+ai_quota_guard = AiQuotaGuard(ai_quota_database)
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    await ai_quota_database.start()
+    try:
+        yield
+    finally:
+        await ai_quota_guard.drain()
+        await ai_quota_database.close()
+
+
+app = FastAPI(lifespan=lifespan)
+SAFE_INTERNAL_ERROR_DETAIL = "Internal Server Error"
+SAFE_AUTH_ERROR_DETAIL = "Invalid authentication credentials."
 
 gemini_service = GeminiService()
 csv_service = CsvService()
@@ -54,6 +97,49 @@ async def request_validation_error_handler(_, __: RequestValidationError):
 def _internal_server_error(operation: str) -> HTTPException:
     logger.error("Unexpected error while processing endpoint %s", operation)
     return HTTPException(status_code=500, detail=SAFE_INTERNAL_ERROR_DETAIL)
+
+
+def _quota_denied(exc: AiQuotaDenied) -> HTTPException:
+    return HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+
+def _user_id(supabase_service: SupabaseService) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(supabase_service.user_id))
+    except (AttributeError, TypeError, ValueError):
+        raise AiQuotaDenied(
+            503,
+            DETAIL_UNAVAILABLE,
+        ) from None
+
+
+async def _run_model(func: Callable[..., Any], *args: Any) -> tuple[Any, TokenUsage]:
+    result = await asyncio.to_thread(func, *args)
+    return unwrap_model_result(result)
+
+
+async def _run_ocr(images: list[tuple[bytes, str]]) -> tuple[Any, TokenUsage]:
+    return await _run_model(gemini_service.analyze_receipt, images)
+
+
+async def _run_chat(question: str, context_data: str) -> tuple[Any, TokenUsage]:
+    return await _run_model(gemini_service.answer_question, question, context_data)
+
+
+async def _run_csv_estimate(csv_text: str, sample_text: str) -> tuple[Any, TokenUsage]:
+    try:
+        value, usage = await _run_model(gemini_service.analyze_csv, sample_text)
+    except GeminiInvalidOutput:
+        raise
+    try:
+        mapping = CsvMapping.model_validate(value)
+    except ValidationError:
+        raise GeminiSchemaRejected(usage) from None
+    try:
+        csv_service.validate_mapping_columns(csv_text, mapping)
+    except ValueError:
+        raise GeminiSchemaRejected(usage) from None
+    return mapping, usage
 
 
 @app.get("/")
@@ -81,9 +167,11 @@ async def analyze_receipt(
 ):
     try:
         validated_images = await receipt_image_service.read_and_validate_uploads(files)
-        result = await asyncio.to_thread(
-            gemini_service.analyze_receipt,
-            [(image.data, image.mime_type) for image in validated_images],
+        images = [(image.data, image.mime_type) for image in validated_images]
+        result = await ai_quota_guard.execute(
+            _user_id(supabase_service),
+            "ocr",
+            lambda: _run_ocr(images),
         )
 
         item_names = []
@@ -110,6 +198,12 @@ async def analyze_receipt(
 
     except HTTPException:
         raise
+    except AiQuotaDenied as exc:
+        raise _quota_denied(exc) from None
+    except GeminiInvalidOutput:
+        raise HTTPException(
+            status_code=500, detail=SAFE_INTERNAL_ERROR_DETAIL
+        ) from None
     except ReceiptImageValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.detail) from None
     except Exception:
@@ -137,17 +231,29 @@ async def search_receipts(
     supabase_service: SupabaseService = Depends(get_supabase_service),
 ):
     try:
-        data = supabase_service.get_all_data(
-            data_type=search_query.data_type, period=search_query.period
+        data = await asyncio.to_thread(
+            supabase_service.get_all_data,
+            data_type=search_query.data_type,
+            period=search_query.period,
         )
-        if not data or data == "purchase_date,store_name,item_name,price":
+        if not data or data == SEARCH_DATA_HEADER:
             return {"answer": "合致するレシートデータが存在しません。"}
 
-        answer = gemini_service.answer_question(search_query.query, data)
+        answer = await ai_quota_guard.execute(
+            _user_id(supabase_service),
+            "chat",
+            lambda: _run_chat(search_query.query, data),
+        )
         return {"answer": answer}
 
     except HTTPException:
         raise
+    except AiQuotaDenied as exc:
+        raise _quota_denied(exc) from None
+    except GeminiInvalidOutput:
+        raise HTTPException(
+            status_code=500, detail=SAFE_INTERNAL_ERROR_DETAIL
+        ) from None
     except SearchDataLimitError:
         raise HTTPException(
             status_code=422, detail=SAFE_SEARCH_DATA_LIMIT_DETAIL
@@ -209,14 +315,11 @@ async def analyze_csv(
             mapping = request.mapping
         else:
             sample_text = _get_csv_mapping_sample(request.csv_text)
-            try:
-                mapping = CsvMapping.model_validate(
-                    gemini_service.analyze_csv(sample_text)
-                )
-            except ValidationError:
-                raise HTTPException(
-                    status_code=422, detail=SAFE_CSV_MAPPING_ERROR_DETAIL
-                ) from None
+            mapping = await ai_quota_guard.execute(
+                _user_id(supabase_service),
+                "csv_estimate",
+                lambda: _run_csv_estimate(request.csv_text, sample_text),
+            )
 
         try:
             csv_service.validate_mapping_columns(request.csv_text, mapping)
@@ -230,6 +333,16 @@ async def analyze_csv(
         return CsvParseResponse(transactions=transactions, mapping=mapping)
     except HTTPException:
         raise
+    except AiQuotaDenied as exc:
+        raise _quota_denied(exc) from None
+    except GeminiSchemaRejected:
+        raise HTTPException(
+            status_code=422, detail=SAFE_CSV_MAPPING_ERROR_DETAIL
+        ) from None
+    except GeminiInvalidOutput:
+        raise HTTPException(
+            status_code=500, detail=SAFE_INTERNAL_ERROR_DETAIL
+        ) from None
     except CsvRowLimitError:
         raise HTTPException(
             status_code=422,

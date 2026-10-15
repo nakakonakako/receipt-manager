@@ -7,6 +7,8 @@ os.environ.setdefault("GEMINI_API_KEY", "test-only-placeholder")
 
 from fastapi.testclient import TestClient
 
+from tests.support_ai_quota import ensure_user_id, install_granting_quota
+
 from app import main
 from app.schemas.csv import MAX_CSV_ROWS
 from app.services.csv_service import CsvRowLimitError, CsvService
@@ -72,8 +74,11 @@ class S106ApiInputLimitTests(unittest.TestCase):
         self.client = TestClient(main.app)
         main.app.dependency_overrides.clear()
         self.addCleanup(main.app.dependency_overrides.clear)
+        self.quota = install_granting_quota(self)
 
     def allow_authenticated_user(self, service):
+        service = ensure_user_id(service)
+
         async def authenticated_service():
             return service
 

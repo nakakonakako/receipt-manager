@@ -9,6 +9,8 @@ from unittest.mock import patch
 os.environ.setdefault("GEMINI_API_KEY", "test-only-placeholder")
 
 from fastapi.testclient import TestClient
+
+from tests.support_ai_quota import ensure_user_id, install_granting_quota
 from PIL import Image
 
 from app import main
@@ -119,8 +121,11 @@ class S106ReceiptImageLimitTests(unittest.TestCase):
         main.app.dependency_overrides.clear()
         self.addCleanup(main.app.dependency_overrides.clear)
         self.service = ReceiptImageService()
+        self.quota = install_granting_quota(self)
 
     def allow_authenticated_user(self, service):
+        service = ensure_user_id(service)
+
         async def authenticated_service():
             return service
 
