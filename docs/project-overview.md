@@ -211,6 +211,13 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 - `supabase_admin` の `public` default privilegesは変更しない。Supabase管理ロールが将来 `public` に作るテーブルには対象権限が残る可能性がある。検証SQLは残存する直接付与数を表示する。
 - migrationを含むmainへのマージは既存CDから本番DBへの `supabase db push` を起動する。
 
+### 5.5 price-memo のユーザー自身による全データ削除
+
+`20261016100000_delete_my_price_memo_data.sql` は `public.delete_my_price_memo_data()` を追加する。引数を受け取らず `auth.uid()` がNULLなら拒否し、`SECURITY INVOKER` と既存RLSのもとで本人の `price_memo_items`、`price_records`、`price_folders`、`price_stores` だけを1回のRPC内で削除する。Authアカウント、レシート関連テーブル、他ユーザーの行は対象外。`PUBLIC`、`anon`、`service_role` の実行権限を取り消し、`authenticated` のみに付与する。
+
+- 隔離SQLテスト: `scripts/run-price-memo-data-deletion-sql-tests.sh`。名前が指定条件に一致するlocalhost上の新規使い捨てPostgreSQL DBだけで実行する。ユーザー分離、未認証拒否、途中失敗のロールバック、Auth/receiptデータの維持、空データの成功、関数権限を確認する。
+- 本マイグレーションを含む `main` へのマージは既存CDから本番DBへ自動適用される。price-memo側のUIを利用する前に、このmigrationが反映済みであることを確認する。
+
 ---
 
 ## 6. 技術スタック
@@ -364,6 +371,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-16 | price-memoに本人の4テーブルだけを削除する認証済みSECURITY INVOKER RPCと隔離SQLテストを追加 |
 | 2026-10-15 | S1 F-01: APIロールのテーブル過大権限を既存表と `postgres` の `public` default privilegesから取り消し、読み取り専用検証を本番workflowへ追加 |
 | 2026-10-15 | レシート解析の HTTP 429 を日次上限・同時実行上限・未知の利用制限に分類し、未知の応答本文は表示しない |
 | 2026-10-15 | レシートのまとめて解析を登録順の逐次実行にし、世代が変わった未開始分は始めない |
