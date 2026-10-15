@@ -72,7 +72,7 @@ Supabase（Auth + Postgres + RLS）
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
 | PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build/test、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
-| main後CD | `.github/workflows/deploy.yml` | `main` push 後に quality を実行し、マイグレーション変更時は migrate → 読み取り専用RPC検証、その後 GHCR build → VPS deploy。変更がなければ migrate と検証をスキップ。手動検証は `verify-production-rpcs.yml` |
+| main後CD | `.github/workflows/deploy.yml` | `main` push 後に quality を実行し、マイグレーション変更時は migrate → 読み取り専用RPC検証、その後 GHCR build → VPS deploy。VPSの `.env` は umask 077 で0600を確認した同一ディレクトリの一時ファイルから原子的に置換する。変更がなければ migrate と検証をスキップ。手動検証は `verify-production-rpcs.yml` |
 | ドキュメント | `docs/` | 本ファイルおよび仕様メモ |
 
 ---
