@@ -126,39 +126,60 @@ Escalate early for:
 
 Do not escalate routine UI/CSS, local bugs with an understood cause, normal
 feature implementation, lint/test work, or small refactors to Sol. Keep those
-on the Luna supervisor's normal routing path and delegate their bounded
-implementation to Cursor under the rules below. "Handle those in the Luna
-supervisor" means Luna owns classification, scope, routing, and review; it does
-not mean Luna implements them herself.
+on the Luna supervisor's normal routing path. "Handle those in the Luna
+supervisor" means Luna owns classification, scope, routing, and review.
 
 The `sol_supervisor` is a design and investigation adviser. It returns evidence,
 the required decision, tradeoffs, and a bounded implementation plan to the Luna
-supervisor. It must not implement routine changes or spawn agents. The Luna
-supervisor owns final decisions and delegates only the bounded implementation
-work to Cursor with `scripts/delegate-cursor.sh`; keep the existing Cursor
-worker rules and review its completion report and diff.
+supervisor. It must not implement changes or spawn agents. Luna owns the final
+design decision. Sol review is mandatory before design decisions and before
+implementation for every escalation trigger above, including when Luna
+implements that work directly.
 
 After a Sol handoff, do not start another Sol subagent for the same decision.
 If the scope changes materially and a new independent high-risk decision arises,
 the Luna supervisor may make a fresh escalation decision.
 
-When Codex CLI is acting as Luna, Luna is the supervisor and Cursor is the
-bounded implementation worker. Unless the user explicitly assigns
-implementation to Luna or the task is delegation-infrastructure maintenance,
-Luna must delegate bounded code implementation, UI fixes, bug fixes, test/lint
-fixes, and small refactors to Cursor with `scripts/delegate-cursor.sh`.
+### Implementation ownership
 
-Sol escalation and Cursor delegation are separate decisions: not escalating to
-Sol does not route implementation to Luna. Routine UI/CSS, understood local
-bugs, normal features, lint/test work, and small refactors need no Sol advice by
-default, but their implementation still goes to Cursor.
+When Codex CLI is acting as Luna, Luna is the supervisor. Cursor is the default
+implementation owner for ordinary UI/UX, features, localized bugs, routine
+test/lint fixes, and other bounded work with independently verifiable
+completion criteria. Luna classifies and routes that work, provides design and
+supervision, prepares the work order, and reviews Cursor's completion report
+and diff.
 
-Luna's direct work is primarily requirement clarification, initial
-investigation and task classification, Sol escalation decisions, implementation
-approach decisions, Cursor work-order preparation, review of Cursor's results
-and diff, and maintenance of delegation infrastructure itself. Do not take
-ordinary implementation over just because delegation takes setup or the
-checkout is dirty.
+Delegate that default work with `scripts/delegate-cursor.sh`. Sol escalation
+and implementation ownership are separate decisions: not escalating to Sol does
+not route implementation to Luna. Routine UI/CSS, understood local bugs, normal
+features, lint/test work, and small refactors need no Sol advice by default,
+and Cursor still implements them.
+
+Luna may implement directly when the work is high-risk or spans multiple areas
+and needs repeated short implementation and verification cycles, or when Cursor
+delegation is clearly less efficient for that task. State the concrete reason.
+Dirty checkout or delegation setup overhead alone is not a sufficient reason.
+Luna also implements directly when the user explicitly assigns the
+implementation to Luna, and when maintaining the delegation infrastructure
+itself.
+
+Do not take ordinary implementation over just because delegation takes setup or
+the checkout is dirty. If Cursor CLI is unavailable, the delegate script is
+broken, or another tooling failure prevents delegation, report the concrete
+failure. Do one bounded repair or retry only when that is efficient; otherwise
+Luna may take over only if the independent direct-implementation conditions
+above are met. Tooling failure alone does not justify takeover, skipping Sol
+review or quality checks, or changing the model family.
+
+Quality checks, security review, tests, final diff review, and Git/worktree
+safety apply regardless of who implements.
+
+These instructions describe the supervisor's delegation process; they do not
+authorize Cursor, when acting as the implementation worker, to invoke the
+delegation script or re-delegate. Cursor must follow the repository rules above
+and the worker instructions in `.cursor/rules/worker.mdc`.
+
+### Cursor tiers, checkout, and retries
 
 Use the fixed tier mapping through the script, with `normal` by default:
 
@@ -166,38 +187,21 @@ Use the fixed tier mapping through the script, with `normal` by default:
 - `normal` -> `grok-4.7-medium`
 - `hard` -> `grok-4.7-high`
 
-Use direct checkout only when it is clean and there is no concurrent work. If
-the checkout is dirty or isolation is needed, use `--worktree <name>` rather
-than implementing directly in Luna. Do not use `--allow-dirty` as a shortcut;
-it is only appropriate when mixing changes is intentional and explicitly
-approved by the supervisor/user.
+Do not use `fast`, `xhigh`, or other model families by default. Do not change
+the model family as a workaround for an environment or tooling failure. Repair
+or retry and resume delegation at the appropriate tier when delegation remains
+appropriate under the ownership conditions. If Luna's independent
+direct-implementation conditions are met, follow that route instead.
 
-If Cursor CLI is unavailable, the delegate script is broken, or another tooling
-failure prevents delegation, report the specific failure and repair the
-environment or delegation infrastructure, then resume delegation. Do not
-silently replace Cursor implementation with Luna implementation as a workaround.
-An explicit user request for Luna to implement a task overrides this default.
+Use direct checkout only when one worker is running, the checkout is clean, and
+there is no concurrent work. Use `--worktree <name>` when workers run in
+parallel, the checkout is dirty, edits are concurrent, or a large or risky
+change needs isolation. Do not use `--allow-dirty` as a shortcut; it is only
+appropriate when mixing changes is intentional and explicitly approved by the
+supervisor or user.
 
-These instructions describe the supervisor's delegation process; they do not
-authorize Cursor, when acting as the implementation worker, to invoke the
-delegation script or re-delegate. Cursor must follow the repository rules above
-and the worker instructions in `.cursor/rules/worker.mdc`.
-
-Model tiers are fixed: `light` uses `composer-2.5`, `normal` uses
-`grok-4.7-medium`, and `hard` uses `grok-4.7-high`. Use `normal` by default.
-Do not use `fast`, `xhigh`, or other model families by default.
-
-For database/schema, auth/security, public API contract, CI/CD, deployment,
-Docker/nginx, cross-repository, and undocumented architecture work, Sol advises
-before design decisions, Luna makes the final design decision, and bounded
-implementation is then delegated to Cursor as usual.
-
-Use direct checkout for one worker when the checkout is clean and there are no
-concurrent edits. Use `--worktree` for parallel workers, a dirty checkout,
-concurrent edits, or a large/risky change that needs isolation.
-
-If Cursor encounters a tooling/environment failure, fix the environment rather
-than escalating the model. Retry an implementation difficulty at the next tier
-after clarifying the work order. If a `hard` attempt still fails and redesign is
-needed, use the Sol escalation above before another implementation attempt.
-Review high-risk work in Codex even after a successful worker run.
+If an implementation attempt is unproductive, clarify the work order and retry
+at the next tier. Do not repeat unproductive retries at the same tier. If a
+`hard` attempt still fails and redesign is needed, use the Sol escalation above
+before another implementation attempt. Review high-risk work in Codex even
+after a successful worker run.
