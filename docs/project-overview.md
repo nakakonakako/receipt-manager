@@ -109,12 +109,12 @@ Supabase（Auth + Postgres + RLS）
 | Method | Path | 認証 | 用途 | ステータス |
 |--------|------|------|------|------------|
 | GET | `/` | 不要 | ヘルスチェック | 現行 |
-| POST | `/analyze` | 要 | レシート画像の Gemini 解析 + 学習カテゴリ適用。1回10枚・1枚10MiB・合計12MiB・JPEG/PNG/WebPのみ（実データ判定）。HEIC/HEIFは明示拒否。全検証後にのみ Gemini | 現行 |
+| POST | `/analyze` | 要 | レシート画像の Gemini 解析 + 学習カテゴリ適用。1回10枚・1枚10MiB・合計12MiB・JPEG/PNG/WebPのみ（実データ判定）。HEIC/HEIFは明示拒否。全検証後に AI 利用枠を claim してから Gemini | 現行 |
 | POST | `/save` | 要 | レシート・明細の保存 | 現行 |
-| POST | `/search` | 要 | 家計 Q&A | 現行 |
+| POST | `/search` | 要 | 家計 Q&A。データ取得・空結果・サイズ上限のあとに、Gemini が必要なときだけ AI 利用枠を claim | 現行 |
 | GET | `/available_months` | 要 | データがある月一覧 | 現行 |
 | GET | `/transactions` | 要 | 指定月のレシート + CSV | 現行 |
-| POST | `/analyze_csv` | 要 | CSV 列推定・パース（マッピング未指定時は Gemini で列推定）。論理行20,000行または20MiB文字を超える入力は、解析と Gemini 呼び出しの前に拒否 | 現行 |
+| POST | `/analyze_csv` | 要 | CSV 列推定・パース（マッピング未指定時は Gemini で列推定）。論理行20,000行または20MiB文字を超える入力は、解析と Gemini 呼び出しの前に拒否。AI 推定が必要なときだけ利用枠を claim | 現行 |
 | POST | `/save_csv` | 要 | CSV 行保存。月ごとの分割送信はフロントの既存経路 | 現行 |
 | PUT/DELETE | `/receipts/{id}` | 要 | レシート更新・削除 | 現行 |
 | PUT/DELETE | `/csv_transactions/{id}` | 要 | CSV 行更新・削除 | 現行 |
@@ -128,6 +128,8 @@ CSVの上限はヘッダーを含む論理行20,000行、および `csv_text` 20
 検索の質問は500文字までです。対象データが検索用の行数・文字数上限に収まらない場合は、Geminiを呼ばず、期間を短くする固定の日本語 `422` を返します。チャット画面はその固定案内だけを表示し、サーバーの例外文は出しません。
 
 GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions.timeout` はミリ秒で `120000`）で、`retry_options` 未指定は1回だけ試行します。
+
+`/analyze`、`/search`、`/analyze_csv` は Gemini の直前に `ai_quota` の `claim_ai_request` が `granted` になったときだけモデルを呼びます。日次・同時実行の拒否は日本語の `429`、緊急停止・月次予算・DB 障害などは日本語の `503` です。成功時の応答形は変えません。設定または DB が使えなくても、AI 以外の API は起動したままです。詳細は [spec-ai-quota-database.md](./spec-ai-quota-database.md) です。
 
 リクエスト本体の上限は、フロントのファイルサイズ20MiB、バックエンドの文字数20MiB、nginxの `client_max_body_size 20M` です。開発時のViteプロキシに追加の本体上限はありません。JSON化で引用符や改行、Shift-JISからUTF-8への展開が20MiBを超える場合、フロントは送信前に拒否し、本番nginxは413を返します。nginxの本体上限を20Mより大きくするかは未変更です。
 
@@ -183,9 +185,9 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - RPC 定義後に PostgREST schema cache の再読込を通知する。
 - 適用後の読み取り専用検証: `supabase/diagnostics/verify_s1_08_rpc_integrity.sql`。`pg_catalog` と `supabase_migrations` だけを見る。`20261010010000` が1件適用されていること、上記2関数の引数名・型・順序、戻り値（`public.price_stores` / `void`）、`SECURITY INVOKER`、空の `search_path`、`PUBLIC` と `anon` に実行権限がなく `authenticated` にはあることを満たさないとエラーになる。
 
-### 5.3 Gemini AI 利用枠（`ai_quota`、S1-06 PR 2A）
+### 5.3 Gemini AI 利用枠（`ai_quota`）
 
-バックエンド統合は別 PR。DB には private スキーマ `ai_quota` のみ追加する。
+DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_quota_backend` の Session Pooler 接続から3つの RPC だけを呼ぶ。接続設定は `.env` とは別の `.env.ai-quota` に置く。
 
 | オブジェクト | 概要 |
 |--------------|------|
@@ -199,7 +201,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 - 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。`.github/workflows/preflight-ai-quota.yml` を `main` から手動実行し、同じ migration ロールの既存Secretsで確認する。preflight は migration 成功を保証しない。適用後は integrity verifier を使う
 - 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（`verify-production-rpcs.yml` で S1-08 と併走）
 - 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
-- `ai_quota_backend` のパスワードはリポジトリ外で手動設定
+- `ai_quota_backend` のパスワードは、認可された Supabase データベース管理者の psql で `\password ai_quota_backend` を実行し、エコーなしプロンプトで設定する。入力した値はセキュアなエディタで VPS の `.env.ai-quota`（`0600`）へ直接書き写す。シェルコマンド、SQL 履歴、ログ、リポジトリ、GitHub または VPS のデプロイ用環境変数には置かない。手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)
 
 ---
 
@@ -228,6 +230,7 @@ RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー
 | FastAPI | >=0.124 |
 | Uvicorn | >=0.38 |
 | google-genai | >=1.53（モデル例: `gemini-3-flash-preview`） |
+| psycopg | >=3.3（`psycopg[binary]` と `psycopg-pool`。AI 利用枠 RPC の非同期プール） |
 | Pillow | >=11.0（レシート画像の形式・破損・画素数検証） |
 | supabase (Python) | >=2.28 |
 | Ruff | フォーマット・lint |
@@ -279,14 +282,23 @@ npm run dev
 - `SUPABASE_URL` または `VITE_SUPABASE_URL`
 - `SUPABASE_KEY` または `VITE_SUPABASE_PUBLISHABLE_KEY`
 
-`.env` および `service_account.json` は gitignore 対象。
+AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-quota` に置く。
+
+- `AI_QUOTA_DB_HOST`
+- `AI_QUOTA_DB_PORT`（`5432`）
+- `AI_QUOTA_DB_NAME`（`postgres`）
+- `AI_QUOTA_DB_USER`（`ai_quota_backend.<project-ref>`）
+- `AI_QUOTA_DB_PASSWORD`（対話式 `\password` で入力した値を、`0600` の `.env.ai-quota` へ直接記入する。デプロイ用環境変数には置かない）
+- `AI_QUOTA_DB_SSLROOTCERT`（本番コンテナ内は `/app/secrets/ai-quota-ca/supabase-root.crt`）
+
+`.env`、`.env.ai-quota`、`secrets/ai-quota-ca/`、および `service_account.json` は gitignore 対象。パスワードと CA はコミットしない。本番 compose はホストの `~/receipt-manager/secrets/ai-quota-ca` をコンテナの `/app/secrets/ai-quota-ca` へ読み取り専用でマウントする。ディレクトリが無くても API プロセスは起動し、AI エンドポイントだけが 503 になる。手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)。
 
 ### 7.3 本番
 
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
-- mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。
+- mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。deploy は VPS の `.env` を書き換え、`.env.ai-quota` は転送も書き換えもしない。Compose 2.24.0 以降ではそのファイルが無くてもバックエンドは起動し、AI 利用枠だけが 503 になる。運用手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)。
 - AI利用制御 migration の事前確認: `.github/workflows/preflight-ai-quota.yml` は `workflow_dispatch` のみで、`main` 以外ではDB接続前に失敗する。既存のSupabase Session Pooler設定を使って上記preflight SQLだけを実行し、SQL出力はActionsログへ出さない。migration・DB変更・deployは行わない。
 - DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で `verify_s1_08_rpc_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` を順に実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
 
@@ -334,7 +346,7 @@ receipt-manager/
 | [README.md](./README.md) | docs 索引 |
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | A/B 分離・メモ削除・カテゴリ方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | 予定: 履歴の分類フィルタ構想 |
-| [spec-ai-quota-database.md](./spec-ai-quota-database.md) | S1-06: Gemini 利用枠 DB（`ai_quota`） |
+| [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と FastAPI の3エンドポイント統合 |
 
 新規の仕様・設計メモを足したら、上記索引と本節にも行を追加する。
 
@@ -345,6 +357,9 @@ receipt-manager/
 | 日付 | 内容 |
 |------|------|
 | 2026-10-15 | レシートのまとめて解析を登録順の逐次実行にし、世代が変わった未開始分は始めない |
+| 2026-10-15 | `ai_quota_backend` のパスワード設定を、対話式 psql `\password` と保護された `.env.ai-quota` への直接記入に限定 |
+| 2026-10-15 | 本番 compose に AI 利用枠 CA ディレクトリの読み取り専用マウントを追加。欠ける場合もバックエンドは起動し、AI だけ 503 |
+| 2026-10-15 | `/analyze`、`/search`、`/analyze_csv` を `ai_quota` RPC と専用 `.env.ai-quota` 接続に統合。設定が無いときは AI だけ 503 |
 | 2026-10-15 | AI利用制御 migration の本番DB権限を手動・読み取り専用で確認する workflow を追加 |
 | 2026-10-14 | AI 利用枠 migration の一時 SET membership 検証をSupabaseのPG17自動ADMIN membershipに合わせ、readonly preflightと仕様の制約説明を更新 |
 | 2026-10-14 | AI 利用枠 preflight を初回適用前に限定し、既存 `ai_quota` ロールがある場合は不足として止める。操作ごとの権限要件を仕様へ追記 |

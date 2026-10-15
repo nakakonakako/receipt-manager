@@ -1,6 +1,6 @@
-# Gemini AI 利用枠データベース（S1-06 PR 2A）
+# Gemini AI 利用枠（データベースと FastAPI 統合）
 
-FastAPI 統合は別 PR。本 PR は `ai_quota` スキーマのマイグレーション、RPC、診断 SQL、隔離 SQL テストのみ。
+DB の正本は `ai_quota` スキーマのマイグレーション、RPC、診断 SQL、隔離 SQL テストである。FastAPI は `POST /analyze`、`POST /search`、`POST /analyze_csv` からのみ、専用ロール `ai_quota_backend` で `claim_ai_request` / `renew_ai_lease` / `finish_ai_request` を呼ぶ。
 
 ## 目的
 
@@ -13,7 +13,7 @@ FastAPI 統合は別 PR。本 PR は `ai_quota` スキーマのマイグレー�
 | `ai_quota.settings` | シングルトン（`id = 1`）。日次上限（種別ごと user/global）、同時実行上限、月次実測コスト上限（micro-JPY）、単価スナップショット元、FX、リース秒数、未知利用ブレーカー、緊急停止 |
 | `ai_quota.requests` | 1 回の AI 試行。`request_id` はサーバ発行の冪等キー。JST 日/月、状態、リース、トークン（測定時のみ）、micro-JPY コスト、請求時点の単価・モデルスナップショット、`unknown_at`（未知利用になった時刻。明示 finish では finish 時刻、期限切れ sweep では `lease_expires_at`） |
 | `ai_quota_owner` | NOLOGIN。スキーマ・表・関数の所有者 |
-| `ai_quota_backend` | LOGIN（**パスワードはリポジトリ外で手動設定**）。`USAGE` on `ai_quota` と 3 RPC の `EXECUTE` のみ。表への直接権限なし |
+| `ai_quota_backend` | LOGIN（**パスワードは運用手順の対話式 `\password` でリポジトリ外に設定**）。`USAGE` on `ai_quota` と 3 RPC の `EXECUTE` のみ。表への直接権限なし |
 
 `PUBLIC` / `anon` / `authenticated` / `service_role` からはスキーマ・表・RPC を剥奪。
 
@@ -138,12 +138,90 @@ FastAPI 統合は別 PR。本 PR は `ai_quota` スキーマのマイグレー�
 3. 例外、`insufficient`、表示の欠落、または判断できない結果なら、マイグレーション適用とデプロイを止める。
 4. 現行の `.github/workflows/deploy.yml` は `supabase db push` の前に preflight を実行しない。`migrate` ジョブは link のあと `supabase db push --yes --linked` のみである。運用者が同じ migration ロールで手動実行する。隔離 SQL テスト以外で secrets や本番接続を使わない。
 
+## FastAPI ランタイム統合
+
+対象は次の3つだけである。成功時の応答形、モデル、プロンプト、`thinking_level`、画像処理、最大出力トークン、出力スキーマは変えない。Gemini の HTTP タイムアウトは 120 秒のままである。
+
+| API | kind | claim の直前条件 |
+|-----|------|------------------|
+| `POST /analyze` | `ocr` | 画像検証がすべて成功したあと |
+| `POST /search` | `chat` | 家計データの取得が成功し、空結果でも件数・文字数の上限エラーでもないとき |
+| `POST /analyze_csv` | `csv_estimate` | CSV の検証後、マッピング未指定で AI 推定が必要なとき。指定済みマッピングは claim しない |
+
+`user_id` は認証済み `SupabaseService.user_id` だけを使う。`request_id` はサーバの `uuid4` である。`outcome=granted` のときだけ Gemini を呼ぶ。`rejected`、`idempotent`、想定外の outcome、DB エラーは fail closed で、Python 側に枠や予算の再実装はない。
+
+接続は Supabase Session Pooler のポート 5432、ユーザー `ai_quota_backend.<project-ref>`、データベース `postgres`、`sslmode=verify-full` と明示した `sslrootcert` だけである。`service_role` や `postgres` へのフォールバックはない。プールは小さく、接続・プール取得・RPC は有限時間で打ち切る。RPC のあいだだけ接続を借り、Gemini 実行中は保持しない。アプリの lifespan でプールを開き、終了時に閉じる。設定欠落や DB エラーでもプロセス全体は起動し、AI 以外の API は動く。AI だけが安全な 503 になる。
+
+モデル実行中は約 30 秒ごとに `renew_ai_lease` する。DB のリースは 240 秒である。完了時に renew を止める。クライアント切断で Gemini を二度呼ばず、付与済み claim は必ず `finish_ai_request` する。finish の失敗は同じ `request_id` と同じ引数だけを、最大 3 回まで再試行する。モデルは再実行しない。モデル呼び出し、`/search` のデータ取得、`/analyze_csv` の Gemini 呼び出しはイベントループを塞がない。
+
+利用量は `GenerateContentResponse.usage_metadata` を、`response.text` の JSON 解釈や Pydantic 検証より前に読む。`prompt_token_count` を入力、`candidates_token_count` を出力、`thoughts_token_count` を思考に対応させる。`total_tokens` は請求に加えない。google-genai 1.53 では `thoughts_token_count` は「該当する場合」の任意項目で、`total_token_count` は入力・候補・tool-use・思考の合計と定義されている。SDK は JSON に無い項目をコピーしないため、省略された思考数は 0 として finish する。メタデータ自体が無い、または入力・出力が欠ける、負数、整数でない場合は `usage_available=false` と null 件数で finish する。Gemini のエラーやタイムアウトで応答が無いときは未知利用にする。応答を受け取ったあとの JSON 検証失敗、および CSV 列推定でスキーマまたは列範囲の検証に失敗した場合は、取れた利用量つきで `succeeded=false` の finish にする。その HTTP は従来どおり 422 で、指定済みマッピングは claim しない。
+
+| 条件 | HTTP | 本文 |
+|------|------|------|
+| 日次上限 | 429 | 本日のAI利用回数の上限に達しました。明日再度お試しください。 |
+| 同時実行上限 | 429 | ほかのAI処理が実行中です。時間をおいて再度お試しください。 |
+| 緊急停止、月次予算、未知利用ブレーカー、DB 不可、その他の拒否 | 503 | 現在AI機能を利用できません。時間をおいて再度お試しください。 |
+
+応答とログに例外本文、DSN、プロンプト、画像、CSV、トークン、資格情報は出さない。
+
+### 環境変数（専用名）
+
+プロセス環境、またはリポジトリに含めない `.env.ai-quota` から読む。値と CA ファイルはコミットしない。
+
+| 変数 | 値 |
+|------|----|
+| `AI_QUOTA_DB_HOST` | Session Pooler のホスト名 |
+| `AI_QUOTA_DB_PORT` | `5432` のみ |
+| `AI_QUOTA_DB_NAME` | `postgres` |
+| `AI_QUOTA_DB_USER` | `ai_quota_backend.<project-ref>` |
+| `AI_QUOTA_DB_PASSWORD` | 対話式 `\password` で入力し、このファイルへ直接記入したパスワード |
+| `AI_QUOTA_DB_SSLROOTCERT` | コンテナから見える Supabase ルート CA。本番は `/app/secrets/ai-quota-ca/supabase-root.crt` |
+
+GitHub Actions の deploy は VPS の `.env` を書き換える。`.env.ai-quota` は gitignore し、Actions の転送対象にも書き換え処理にも入れない。`docker-compose.production.yml` は `.env` を必須、`.env.ai-quota` を `required: false` で読む。この `required` 属性には Docker Compose 2.24.0 以降が必要である。それより古い Compose はファイルを解釈できず、バックエンド全体が起動しない。その場合の代替は Compose を 2.24.0 以上へ上げることである。ファイルが無い、または中身が不正でも、コンテナと AI 以外の API は起動する。AI エンドポイントだけが 503 になる。
+
+CA は証明書ファイル単体をマウントしない。欠けるファイルを bind すると Docker がそのパスをディレクトリとして作り、後からファイルを置けなくなる。`docker-compose.production.yml` はホストのディレクトリ `~/receipt-manager/secrets/ai-quota-ca` を、コンテナの `/app/secrets/ai-quota-ca` へ読み取り専用でマウントする。ホストディレクトリが無いとき Compose は空ディレクトリを作ってバックエンドを起動する。証明書ファイルがまだ無くても、AI 以外の API は動く。CA のバイト列は git に置かず、`secrets/ai-quota-ca/` を gitignore する。deploy の転送対象にも含めない。
+
+| 場所 | パス |
+|------|------|
+| VPS ホストのディレクトリ | `~/receipt-manager/secrets/ai-quota-ca` |
+| VPS ホストのファイル | `~/receipt-manager/secrets/ai-quota-ca/supabase-root.crt` |
+| コンテナのディレクトリ | `/app/secrets/ai-quota-ca` |
+| コンテナのファイル（`AI_QUOTA_DB_SSLROOTCERT`） | `/app/secrets/ai-quota-ca/supabase-root.crt` |
+
+ディレクトリは deploy ユーザー所有の `0700`、証明書ファイルは同じ所有者の `0600` にする。マウントは読み取り専用である。バックエンドイメージは root で動くため、この所有者と権限のままコンテナから読める。
+
+### 運用手順
+
+1. マイグレーション適用後、認可された Supabase データベース管理者の psql セッションで、パスワードだけを設定する。既存ロールの他の属性は変えない。マイグレーション SQL、Supabase SQL エディタ、`ALTER ROLE ... PASSWORD` の文字通りの値にはパスワードを書かない。管理者セッションの psql プロンプトで次だけを実行する。
+
+   ```text
+   \password ai_quota_backend
+   ```
+
+   psql はエコーなしのプロンプトで新しいパスワードを二度入力させる。入力した値はシェルコマンド、SQL 履歴、ログ、リポジトリ、GitHub Actions、VPS のデプロイ用環境変数には置かない。
+2. Supabase のルート CA を、deploy ユーザー所有の `~/receipt-manager/secrets/ai-quota-ca/supabase-root.crt` として置く。ディレクトリは `0700`、ファイルは `0600`。リポジトリへ入れない。Compose が先に空ディレクトリを root 所有で作っていた場合は、書く前に deploy ユーザーへ `chown` し、ディレクトリを `0700` に戻す。
+3. deploy ユーザーが所有する `~/receipt-manager/.env.ai-quota` を作る。権限は `0600`。上表の6変数を書く。`AI_QUOTA_DB_SSLROOTCERT` はホストパスではなく `/app/secrets/ai-quota-ca/supabase-root.crt` にする。パスワードは手順 1 で入力した値を、セキュアなエディタで `AI_QUOTA_DB_PASSWORD` としてファイルへ直接書き写す。シェルの代入、ヒアドキュメント、コマンド置換、履歴に残る一行では書かない。具体的な秘密の例は置かない。パスワードと CA の中身はログやシェル履歴に残さない。
+4. バックエンドコンテナだけ再作成する。`docker compose -f docker-compose.production.yml up -d receipt-backend`
+5. ホスト側の接続確認は、アプリの RPC を増やさず、`SELECT current_user` だけを実行する。ロールのメタデータ、表の直接参照、追加の RPC は使わない。パスワードは psql の対話式プロンプトで入力し、接続 URI、コマンド引数、`PGPASSWORD`、`.pgpass`、シェル履歴には置かない。`.env.ai-quota` はシェルへ読み込まない。DSN と秘密は表示しない（`\conninfo` や接続文字列の表示をしない）。失敗時の `psql` のエラー文は DSN を含み得るので、運用ログへ残さない。
+
+   接続パラメータは Session Pooler のホスト、ポート `5432`、データベース `postgres`、ユーザー `ai_quota_backend.<project-ref>`、`sslmode=verify-full`、および `sslrootcert` である。`sslrootcert` はホスト上の `~/receipt-manager/secrets/ai-quota-ca/supabase-root.crt` を指す。`.env.ai-quota` の `AI_QUOTA_DB_SSLROOTCERT` はコンテナ内パスなので、ホストの `psql` には渡さない。次の例にパスワードは含めない。ホームディレクトリはシェルが展開する。
+
+   ```text
+   psql "host=<session-pooler-host> port=5432 dbname=postgres user=ai_quota_backend.<project-ref> sslmode=verify-full sslrootcert=$HOME/receipt-manager/secrets/ai-quota-ca/supabase-root.crt" -c "SELECT current_user"
+   ```
+
+   表示が `ai_quota_backend` で始まれば接続できている。アプリ自身が呼ぶ SQL は3つの RPC だけである。
+
+6. `missing-or-invalid` または `failed` のときは `.env.ai-quota` と CA のパス、所有者、権限を直し、バックエンドを再起動する。マイグレーションや他 API の設定は変えない。直るまで AI は 503、AI 以外は利用できる。
+7. ロールバックは `.env.ai-quota` を外し、必要なら compose の任意 env 指定も外して再デプロイする。ファイルが無い状態でこの compose のまま再デプロイしても、AI は 503 のまま、AI 以外は動く。CA を外すときは証明書ファイルを削除し、環境変数を空にしてバックエンドを再作成する。ディレクトリ自体を消すときは、先に `receipt-backend` を止め、`~/receipt-manager/secrets/ai-quota-ca` を削除する。次の `up` は空ディレクトリを作り直し、AI 以外は起動する。証明書ファイルだけを bind していたために Docker がディレクトリを作ってしまった場合は、コンテナを止めてその誤ったパスを削除し、上のディレクトリとファイルを作り直す。
+8. この統合をマージした時点で設定ファイルが無くても、同じように AI だけが 503 になり、AI 以外のエンドポイントは動く。CA ディレクトリが無い場合も同じである。
+
 ## 本番セットアップ（手動・リポジトリ外）
 
 1. 上記の適用前 preflight を、マイグレーションと同じロールで実行する。
 2. preflight が失敗した、例外になった、または結果を判断できない場合は、適用とデプロイを止める。
-3. マイグレーション適用後、Supabase SQL または運用手順で `ai_quota_backend` に強力なパスワードを設定（マイグレーションには含めない）。
-4. FastAPI（別 PR）からはこのロール専用の接続文字列を使い、3 RPC のみ呼び出す。
+3. マイグレーション適用後、認可された管理者の psql で `\password ai_quota_backend` を実行し、エコーなしプロンプトでパスワードを設定する（マイグレーションには含めない）。入力した値はセキュアなエディタで VPS の `.env.ai-quota`（`0600`）へ直接書き写す。シェルコマンド、SQL 履歴、ログ、リポジトリ、GitHub または VPS のデプロイ用環境変数には置かない。詳細は「運用手順」を参照する。
+4. FastAPI はこのロール専用の `.env.ai-quota` 接続で、3 RPC のみ呼び出す。手順は「FastAPI ランタイム統合」を参照する。
 5. `settings` の調整はスーパーユーザーまたは運用ロールで直接更新（バックエンドに表権限を付けない）。
 
 ## 検証
