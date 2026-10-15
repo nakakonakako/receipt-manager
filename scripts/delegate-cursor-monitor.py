@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 
 
 HEARTBEAT_SECONDS = 30
-MAX_WORKER_RESPONSE_CHARS = 20_000
 EVENT_TYPES = {"system", "assistant", "tool_call", "result"}
 EVENT_SUBTYPES = {
     "init",
@@ -27,16 +26,67 @@ EVENT_SUBTYPES = {
     "error",
     "delta",
     "start",
+    "started",
     "complete",
     "completed",
     "failed",
     "running",
 }
+FILE_READ_CATEGORY = "ファイル読み取り"
+FILE_EDIT_CATEGORY = "ファイル作成・編集"
+SHELL_CATEGORY = "Shellコマンド"
+MCP_CATEGORY = "MCPツール"
+OTHER_CATEGORY = "その他"
+TOOL_PHASE_STARTED = "started"
+TOOL_PHASE_COMPLETED = "completed"
+TOOL_PHASE_FAILED = "failed"
+# Category comes only from these shape keys, never from tool names or payloads.
+_TOOL_CATEGORY_BY_SHAPE = {
+    "shellToolCall": SHELL_CATEGORY,
+    "shell_tool_call": SHELL_CATEGORY,
+    "bashToolCall": SHELL_CATEGORY,
+    "bash_tool_call": SHELL_CATEGORY,
+    "mcpToolCall": MCP_CATEGORY,
+    "mcp_tool_call": MCP_CATEGORY,
+    "editToolCall": FILE_EDIT_CATEGORY,
+    "edit_tool_call": FILE_EDIT_CATEGORY,
+    "writeToolCall": FILE_EDIT_CATEGORY,
+    "write_tool_call": FILE_EDIT_CATEGORY,
+    "deleteToolCall": FILE_EDIT_CATEGORY,
+    "delete_tool_call": FILE_EDIT_CATEGORY,
+    "readToolCall": FILE_READ_CATEGORY,
+    "read_tool_call": FILE_READ_CATEGORY,
+}
+_TOOL_SHAPE_PRIORITY = tuple(_TOOL_CATEGORY_BY_SHAPE)
+_FAILURE_KEYS = {"error", "failure", "failed"}
+_CALL_ID_KEYS = ("call_id", "callId", "tool_call_id", "toolCallId")
+_COALESCED_EVENT_TYPES = {"assistant", "thinking"}
+_MAX_TRACKED_CALLS = 1000
 MAX_STDERR_LINE_BYTES = 4096
 MAX_DIAGNOSTIC_LINES = 12
 MAX_DIAGNOSTIC_BYTES = 8192
 MAX_DIAGNOSTIC_AGE_SECONDS = 7 * 24 * 60 * 60
 MAX_DIAGNOSTIC_FILES = 20
+MAX_REPORT_BYTES = 4096
+MAX_STORED_RESULT_BYTES = 65536
+_MIN_ENV_SECRET_LENGTH = 8
+_REPORT_BEGIN = "[delegate-cursor] ----- worker completion report begin -----"
+_REPORT_END = "[delegate-cursor] ----- worker completion report end -----"
+_REPORT_PREFIX = "[delegate-cursor] report: "
+_REPORT_TRUNCATED = "[delegate-cursor] report: [truncated]"
+_REPORT_OMITTED = "[delegate-cursor] report: omitted (result text absent)"
+_REPORT_UNTRUSTED = (
+    "[delegate-cursor] report: untrusted free-form result text; review the diff"
+)
+_SECRET_ENV_NAME = re.compile(
+    r"(?i)(?:api[_-]?key|access[_-]?key|service[_-]?role[_-]?key|"
+    r"(?:^|_)[a-z0-9]*_key(?:_|$)|secret|token|password|passwd|credential|"
+    r"private[_-]?key|database[_-]?url)"
+)
+_ANSI_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?|\x1b[@-_]"
+)
+_UNSAFE_CONTROL_RE = re.compile(r"[\x00-\x08\x0b-\x0d\x0e-\x1f\x7f-\x9f\u2028\u2029]")
 ERROR_PATTERNS = {
     "resource_exhausted": re.compile(
         r"resource[_ -]?exhausted|insufficient (?:model )?capacity", re.IGNORECASE
@@ -102,6 +152,103 @@ def safe_event_name(event: object) -> tuple[str, str | None]:
     return safe_type, safe_subtype
 
 
+def _is_coalesced_event(event: object, subtype: str | None) -> bool:
+    if subtype == "delta":
+        return True
+    return isinstance(event, dict) and event.get("type") in _COALESCED_EVENT_TYPES
+
+
+def _tool_shape_containers(event: dict[str, object]) -> list[dict[str, object]]:
+    containers: list[dict[str, object]] = [event]
+    for key in ("tool_call", "toolCall"):
+        value = event.get(key)
+        if isinstance(value, dict):
+            containers.append(value)
+        elif isinstance(value, list):
+            containers.extend(item for item in value if isinstance(item, dict))
+    return containers
+
+
+def tool_category(event: object) -> str:
+    if not isinstance(event, dict):
+        return OTHER_CATEGORY
+    found: set[str] = set()
+    for container in _tool_shape_containers(event):
+        for key in container:
+            if isinstance(key, str) and key in _TOOL_CATEGORY_BY_SHAPE:
+                found.add(key)
+    for key in _TOOL_SHAPE_PRIORITY:
+        if key in found:
+            return _TOOL_CATEGORY_BY_SHAPE[key]
+    return OTHER_CATEGORY
+
+
+def _has_failure_marker(node: object, depth: int = 0, budget: int = 200) -> bool:
+    """True when a known failure key is present. Values are never read for output."""
+    if budget <= 0 or depth > 8:
+        return False
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(key, str) and key in _FAILURE_KEYS:
+                return True
+            if isinstance(value, (dict, list)) and _has_failure_marker(value, depth + 1, budget - 1):
+                return True
+    elif isinstance(node, list):
+        for item in node[:50]:
+            if isinstance(item, (dict, list)) and _has_failure_marker(item, depth + 1, budget - 1):
+                return True
+    return False
+
+
+def tool_payload_failed(event: dict[str, object]) -> bool:
+    if event.get("is_error") is True:
+        return True
+    for key in ("tool_call", "toolCall"):
+        if key in event and _has_failure_marker(event.get(key)):
+            return True
+    return False
+
+
+def tool_phase(event: object, subtype: str | None) -> str | None:
+    if not isinstance(event, dict) or event.get("type") != "tool_call":
+        return None
+    if subtype == "delta":
+        return None
+    if subtype == TOOL_PHASE_STARTED:
+        return TOOL_PHASE_STARTED
+    failed = subtype in {"failed", "error"} or tool_payload_failed(event)
+    if failed and subtype in {None, "completed", "failed", "error"}:
+        return TOOL_PHASE_FAILED
+    if subtype == "completed":
+        return TOOL_PHASE_COMPLETED
+    return None
+
+
+def _call_id_value(value: object) -> str | None:
+    if isinstance(value, str) and 1 <= len(value) <= 256:
+        return value
+    return None
+
+
+def extract_call_id(event: dict[str, object]) -> str | None:
+    containers: list[dict[str, object]] = [event]
+    for key in ("tool_call", "toolCall"):
+        value = event.get(key)
+        if isinstance(value, dict):
+            containers.append(value)
+            for nested_key, nested in value.items():
+                if nested_key in {"args", "arguments", "parameters", "input", "result", "output"}:
+                    continue
+                if isinstance(nested, dict):
+                    containers.append(nested)
+    for container in containers:
+        for key in _CALL_ID_KEYS:
+            found = _call_id_value(container.get(key))
+            if found is not None:
+                return found
+    return None
+
+
 def set_status(path: Path, data: dict[str, object]) -> None:
     temporary = path.with_suffix(".tmp")
     with temporary.open("w", encoding="utf-8") as handle:
@@ -111,8 +258,8 @@ def set_status(path: Path, data: dict[str, object]) -> None:
     temporary.replace(path)
 
 
-def scrub_stderr_line(line: str) -> str:
-    scrubbed = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line)
+def _redact_known_secrets(text: str) -> str:
+    scrubbed = text
     for pattern in SECRET_PATTERNS:
         if pattern.groups:
             if "https?://" in pattern.pattern:
@@ -129,7 +276,177 @@ def scrub_stderr_line(line: str) -> str:
                 scrubbed = pattern.sub("[REDACTED]", scrubbed)
         else:
             scrubbed = pattern.sub("[REDACTED]", scrubbed)
+    return scrubbed
+
+
+def scrub_stderr_line(line: str) -> str:
+    scrubbed = _redact_known_secrets(re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", line))
     return scrubbed.encode("utf-8")[:512].decode("utf-8", errors="ignore")
+
+
+def _section_pattern(title: str) -> re.Pattern[str]:
+    return re.compile(rf"(?i)^(?:#+\s+|\d+[.)]\s+)?(?:{title})\s*(?::\s*(.*))?$")
+
+
+_REPORT_SECTIONS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    (
+        "intent",
+        _section_pattern(
+            r"root cause(?:\s*/\s*(?:implementation\s+)?intent)?|implementation intent"
+        ),
+    ),
+    ("changed files", _section_pattern(r"changed files")),
+    (
+        "verification",
+        _section_pattern(
+            r"verification(?:\s+performed(?:\s+and\s+results)?|\s+results)?"
+        ),
+    ),
+    ("risks", _section_pattern(r"(?:remaining\s+)?risks")),
+    (
+        "supervisor decisions",
+        _section_pattern(
+            r"supervisor decisions(?:\s+required)?"
+            r"|supervisor review"
+            r"|anything requiring supervisor review"
+        ),
+    ),
+)
+
+
+def capture_result_text(raw_result: object) -> tuple[str | None, bool]:
+    """Keep only a bounded copy of the final result string."""
+    if not isinstance(raw_result, str):
+        return None, False
+    raw_bytes = raw_result.encode("utf-8")
+    if len(raw_bytes) <= MAX_STORED_RESULT_BYTES:
+        return raw_result, False
+    clipped = raw_bytes[:MAX_STORED_RESULT_BYTES].decode("utf-8", errors="ignore")
+    return clipped, True
+
+
+def _redact_env_secrets(text: str) -> str:
+    values = [
+        value
+        for name, value in os.environ.items()
+        if _SECRET_ENV_NAME.search(name) and len(value) >= _MIN_ENV_SECRET_LENGTH
+    ]
+    for value in sorted(set(values), key=len, reverse=True):
+        text = text.replace(value, "[REDACTED]")
+    return text
+
+
+def _sanitize_report_text(text: str) -> str:
+    scrubbed = _redact_env_secrets(text)
+    scrubbed = _ANSI_RE.sub("", scrubbed)
+    scrubbed = _UNSAFE_CONTROL_RE.sub("", scrubbed)
+    scrubbed = _redact_env_secrets(scrubbed)
+    scrubbed = _redact_known_secrets(scrubbed)
+    scrubbed = scrubbed.replace(_REPORT_BEGIN, "[report delimiter removed]")
+    scrubbed = scrubbed.replace(_REPORT_END, "[report delimiter removed]")
+    return scrubbed
+
+
+def _normalize_header_line(line: str) -> str:
+    return re.sub(r"[*_`]+", "", line).strip()
+
+
+def _extract_report_sections(text: str) -> list[tuple[str, list[str]]] | None:
+    sections: list[tuple[str, list[str]]] = []
+    current_name: str | None = None
+    current_lines: list[str] = []
+    for line in text.split("\n"):
+        normalized = _normalize_header_line(line)
+        matched: tuple[str, str] | None = None
+        for name, pattern in _REPORT_SECTIONS:
+            found = pattern.fullmatch(normalized)
+            if found:
+                inline = found.group(1) or ""
+                matched = (name, inline.strip())
+                break
+        if matched is None:
+            if current_name is not None:
+                current_lines.append(line)
+            continue
+        if current_name is not None:
+            sections.append((current_name, current_lines))
+        current_name, inline_text = matched
+        current_lines = [inline_text] if inline_text else []
+    if current_name is not None:
+        sections.append((current_name, current_lines))
+    if len(sections) < 2:
+        return None
+    return sections
+
+
+def _report_nbytes(parts: list[str]) -> int:
+    return len(("\n".join(parts) + "\n").encode("utf-8"))
+
+
+def _shrink_report_line(line: str, kept: list[str]) -> str | None:
+    if not line.startswith(_REPORT_PREFIX):
+        return None
+    prefix_len = len(_REPORT_PREFIX)
+    best: str | None = None
+    low = prefix_len
+    high = len(line)
+    while low <= high:
+        mid = (low + high) // 2
+        candidate = line[:mid]
+        trial = [_REPORT_BEGIN, *kept, candidate, _REPORT_TRUNCATED, _REPORT_END]
+        if _report_nbytes(trial) <= MAX_REPORT_BYTES:
+            best = candidate
+            low = mid + 1
+        else:
+            high = mid - 1
+    return best
+
+
+def _fit_report_lines(body_lines: list[str], *, force_truncated: bool) -> list[str]:
+    if not force_truncated:
+        full = [_REPORT_BEGIN, *body_lines, _REPORT_END]
+        if _report_nbytes(full) <= MAX_REPORT_BYTES:
+            return full
+    kept: list[str] = []
+    for line in body_lines:
+        trial = [_REPORT_BEGIN, *kept, line, _REPORT_TRUNCATED, _REPORT_END]
+        if _report_nbytes(trial) <= MAX_REPORT_BYTES:
+            kept.append(line)
+            continue
+        shrunk = _shrink_report_line(line, kept)
+        if shrunk is not None:
+            kept.append(shrunk)
+        break
+    return [_REPORT_BEGIN, *kept, _REPORT_TRUNCATED, _REPORT_END]
+
+
+def _report_body(text: str) -> list[str]:
+    sections = _extract_report_sections(text)
+    if sections is None:
+        body = [_REPORT_UNTRUSTED]
+        body.extend(f"{_REPORT_PREFIX}{line}" for line in text.split("\n"))
+        return body
+    body = []
+    for name, content in sections:
+        body.append(f"{_REPORT_PREFIX}section: {name}")
+        body.extend(f"{_REPORT_PREFIX}{line}" for line in content)
+    return body
+
+
+def emit_worker_report(text: str | None, *, input_truncated: bool) -> None:
+    """Print a bounded completion report. The text is not retained elsewhere."""
+    sanitized = _sanitize_report_text(text) if text else ""
+    if not sanitized.strip():
+        parts = [_REPORT_BEGIN, _REPORT_OMITTED]
+        if input_truncated:
+            parts.append(_REPORT_TRUNCATED)
+        parts.append(_REPORT_END)
+    else:
+        parts = _fit_report_lines(
+            _report_body(sanitized), force_truncated=input_truncated
+        )
+    for line in parts:
+        print(line, flush=True)
 
 
 class StderrDiagnostics:
@@ -298,7 +615,16 @@ def main() -> int:
     session_id: str | None = None
     result_status: str | None = None
     result_is_error: bool | None = None
-    worker_response: str | None = None
+    worker_result_text: str | None = None
+    worker_result_truncated = False
+    active_call_ids: set[str] = set()
+    anonymous_active = 0
+    active_tool_count = 0
+    last_operation_category: str | None = None
+    last_operation_status: str | None = None
+    last_operation_at: str | None = None
+    assistant_update_count = 0
+    assistant_updates_reported = 0
     stderr_bytes = 0
     stderr_diagnostics = StderrDiagnostics()
     stderr_diagnostic_log: Path | None = None
@@ -321,6 +647,11 @@ def main() -> int:
         "process_exit_code": None,
         "result_status": None,
         "result_is_error": None,
+        "active_tool_count": 0,
+        "last_operation_category": None,
+        "last_operation_status": None,
+        "last_operation_at": None,
+        "assistant_update_count": 0,
         "outcome": outcome,
         "stderr_bytes_read": 0,
         "stderr_error_events": [],
@@ -331,6 +662,32 @@ def main() -> int:
     def update(**changes: object) -> None:
         data.update(changes)
         set_status(status_path, data)
+
+    def current_active() -> int:
+        return len(active_call_ids) + anonymous_active
+
+    def note_tool_start(call_id: str | None) -> None:
+        nonlocal anonymous_active
+        if call_id is not None:
+            if len(active_call_ids) < _MAX_TRACKED_CALLS or call_id in active_call_ids:
+                active_call_ids.add(call_id)
+            return
+        anonymous_active += 1
+
+    def note_tool_finish(call_id: str | None) -> None:
+        nonlocal anonymous_active
+        if call_id is not None:
+            active_call_ids.discard(call_id)
+            return
+        if anonymous_active > 0:
+            anonymous_active -= 1
+
+    def flush_assistant_summary() -> None:
+        nonlocal assistant_updates_reported
+        if assistant_update_count == assistant_updates_reported:
+            return
+        print(f"[delegate-cursor] assistant_updates: {assistant_update_count}", flush=True)
+        assistant_updates_reported = assistant_update_count
 
     update()
     print(f"[delegate-cursor] started_at: {started_at}", flush=True)
@@ -408,6 +765,8 @@ def main() -> int:
                     last_event_type, last_event_subtype = safe_event_name(event)
                     last_event_at = utc_now()
                     last_event_mono = time.monotonic()
+                    quiet = _is_coalesced_event(event, last_event_subtype)
+                    phase = None if quiet else tool_phase(event, last_event_subtype)
                     if isinstance(event, dict):
                         if event.get("type") == "system" and event.get("subtype") == "init":
                             raw_session_id = event.get("session_id")
@@ -423,12 +782,20 @@ def main() -> int:
                                 result_status = "error" if event["is_error"] else "completed"
                             raw_is_error = event.get("is_error")
                             result_is_error = raw_is_error if isinstance(raw_is_error, bool) else None
-                            raw_result = event.get("result")
-                            worker_response = (
-                                raw_result[:MAX_WORKER_RESPONSE_CHARS]
-                                if isinstance(raw_result, str)
-                                else None
+                            worker_result_text, worker_result_truncated = capture_result_text(
+                                event.get("result")
                             )
+                        if phase is not None:
+                            if phase == TOOL_PHASE_STARTED:
+                                note_tool_start(extract_call_id(event))
+                            else:
+                                note_tool_finish(extract_call_id(event))
+                            active_tool_count = current_active()
+                            last_operation_category = tool_category(event)
+                            last_operation_status = phase
+                            last_operation_at = last_event_at
+                    if quiet:
+                        assistant_update_count += 1
                     update(
                         session_id=session_id,
                         last_event_type=last_event_type,
@@ -437,24 +804,50 @@ def main() -> int:
                         last_event_idle_seconds=0,
                         result_status=result_status,
                         result_is_error=result_is_error,
+                        active_tool_count=active_tool_count,
+                        last_operation_category=last_operation_category,
+                        last_operation_status=last_operation_status,
+                        last_operation_at=last_operation_at,
+                        assistant_update_count=assistant_update_count,
                         stderr_bytes_read=stderr_bytes,
                         unparsed_line_count=malformed_lines,
                     )
-                    print(
-                        f"[delegate-cursor] event: {last_event_type}"
-                        f"{('/' + last_event_subtype) if last_event_subtype else ''} at {last_event_at}",
-                        flush=True,
-                    )
+                    if phase is not None:
+                        flush_assistant_summary()
+                        print(
+                            f"[delegate-cursor] tool: {last_operation_category} {phase} at {last_event_at} active={active_tool_count}",
+                            flush=True,
+                        )
+                    elif not quiet:
+                        if last_event_type in {"system", "result"}:
+                            flush_assistant_summary()
+                        print(
+                            f"[delegate-cursor] event: {last_event_type}"
+                            f"{('/' + last_event_subtype) if last_event_subtype else ''} at {last_event_at}",
+                            flush=True,
+                        )
 
             now = time.monotonic()
             if now >= next_heartbeat and child.poll() is None:
                 idle = int(now - last_event_mono)
+                operation = last_operation_category or "なし"
                 update(
                     last_event_idle_seconds=idle,
+                    active_tool_count=active_tool_count,
+                    last_operation_category=last_operation_category,
+                    last_operation_status=last_operation_status,
+                    last_operation_at=last_operation_at,
+                    assistant_update_count=assistant_update_count,
                     stderr_bytes_read=stderr_bytes,
                     unparsed_line_count=malformed_lines,
                 )
-                print(f"[delegate-cursor] 稼働中、最終イベントから{idle}秒無出力（heartbeatはworkerの進捗を保証しません）", flush=True)
+                assistant_note = (
+                    f"、assistant_updates={assistant_update_count}" if assistant_update_count else ""
+                )
+                print(
+                    f"[delegate-cursor] 稼働中、最終操作: {operation}、{idle}秒無出力{assistant_note}（heartbeatはworkerの進捗を保証しません）",
+                    flush=True,
+                )
                 next_heartbeat = now + args.heartbeat_seconds
 
             if child.poll() is not None and not selector.get_map():
@@ -484,6 +877,11 @@ def main() -> int:
             process_exit_code=exit_code,
             result_status=result_status,
             result_is_error=result_is_error,
+            active_tool_count=active_tool_count,
+            last_operation_category=last_operation_category,
+            last_operation_status=last_operation_status,
+            last_operation_at=last_operation_at,
+            assistant_update_count=assistant_update_count,
             outcome=outcome,
             last_event_idle_seconds=int(time.monotonic() - last_event_mono),
             stderr_bytes_read=stderr_bytes,
@@ -491,17 +889,14 @@ def main() -> int:
             stderr_diagnostic_log=str(stderr_diagnostic_log) if stderr_diagnostic_log else None,
             unparsed_line_count=malformed_lines,
         )
+        flush_assistant_summary()
         print(f"[delegate-cursor] exit_code: {exit_code}", flush=True)
         print(f"[delegate-cursor] result_status: {result_status or 'missing'}", flush=True)
         print(f"[delegate-cursor] outcome: {outcome}", flush=True)
         print(f"[delegate-cursor] stderr bytes read: {stderr_bytes}", flush=True)
         if stderr_diagnostic_log:
             print(f"[delegate-cursor] sanitized stderr diagnostics: {stderr_diagnostic_log}", flush=True)
-        if worker_response:
-            print("[delegate-cursor] worker response (not saved by monitor):", flush=True)
-            print(worker_response, flush=True)
-            if len(worker_response) == MAX_WORKER_RESPONSE_CHARS:
-                print("[delegate-cursor] worker response truncated at 20000 characters", flush=True)
+        emit_worker_report(worker_result_text, input_truncated=worker_result_truncated)
         return (128 + interrupted_signal) if interrupted_signal is not None else (0 if outcome == "succeeded" else (exit_code or 1))
     finally:
         for sig, handler in old_handlers.items():
