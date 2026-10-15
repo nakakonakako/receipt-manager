@@ -162,11 +162,36 @@ jobs:
             set -euo pipefail
             cd ~/receipt-manager
 
-            cat <<'EOF' > .env
+            umask 077
+            if [[ -L .env || ( -e .env && ! -f .env ) ]]; then
+              echo ".env must be a regular file" >&2
+              exit 1
+            fi
+            if [[ -e .env ]]; then
+              chmod 600 -- .env
+              if [[ "$(stat -c '%a' -- .env)" != 600 ]]; then
+                echo ".env permissions are not 0600" >&2
+                exit 1
+              fi
+            fi
+
+            env_tmp="$(mktemp ./.env.tmp.XXXXXX)"
+            trap 'rm -f -- "$env_tmp"' EXIT
+            cat > "$env_tmp" <<'EOF'
             GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}
             SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}
             SUPABASE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
             EOF
+            chmod 600 -- "$env_tmp"
+            if [[ "$(stat -c '%a' -- "$env_tmp")" != 600 ]]; then
+              echo "temporary .env permissions are not 0600" >&2
+              exit 1
+            fi
+            mv -fT -- "$env_tmp" .env
+            if [[ "$(stat -c '%a' -- .env)" != 600 ]]; then
+              echo ".env permissions are not 0600" >&2
+              exit 1
+            fi
 
             docker compose -f docker-compose.production.yml pull
             docker compose -f docker-compose.production.yml up -d
