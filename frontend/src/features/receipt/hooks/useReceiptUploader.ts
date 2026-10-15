@@ -1,5 +1,4 @@
 import React, { useState, useSyncExternalStore } from 'react'
-import axios from 'axios'
 import { toast } from 'sonner'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import { useAuth } from '@/contexts/AuthContext'
@@ -9,6 +8,8 @@ import {
   formatReceiptImagePreflightToast,
   validateReceiptImageSelection,
 } from '../utils/receiptImageLimits'
+import { classifyReceiptAnalysisError } from './receiptAnalysisError'
+import { selectIdleTaskIds } from './receiptAnalysisQueue'
 import {
   receiptUploaderStateCache,
   revokeReceiptUploaderPreviewUrls,
@@ -315,7 +316,7 @@ export const useReceiptUploader = () => {
     if (!context) return
     const startingState = getOwnedSnapshot(context)
     const startingTask = startingState?.tasks.find((task) => task.id === taskId)
-    if (!startingTask) return
+    if (!startingTask || startingTask.status !== 'idle') return
 
     try {
       const headers = await getHeaders()
@@ -324,7 +325,13 @@ export const useReceiptUploader = () => {
       const currentTask = receiptUploaderStateCache
         .getSnapshot()
         .tasks.find((task) => task.id === taskId)
-      if (!currentTask || currentTask.files !== startingTask.files) return
+      if (
+        !currentTask ||
+        currentTask.status !== 'idle' ||
+        currentTask.files !== startingTask.files
+      ) {
+        return
+      }
 
       if (
         !updateTasks(
@@ -384,12 +391,9 @@ export const useReceiptUploader = () => {
       }
     } catch (error) {
       if (!receiptUploaderStateCache.isCurrent(context)) return
-      if (
-        axios.isAxiosError(error) &&
-        error.response?.status === 422 &&
-        typeof error.response.data?.detail === 'string'
-      ) {
-        toast.error(error.response.data.detail)
+      const failure = classifyReceiptAnalysisError(error)
+      if (failure.kind === 'validation') {
+        toast.error(failure.message)
         updateTasks(
           (previous) =>
             previous.map((task) =>
@@ -398,10 +402,8 @@ export const useReceiptUploader = () => {
           context
         )
         return
-      } else if (
-        axios.isAxiosError(error) &&
-        (error.response?.status === 401 || error.response?.status === 403)
-      ) {
+      }
+      if (failure.kind === 'auth') {
         toast.error(
           '認証エラーが発生しました。ログイン状態を確認してください。'
         )
@@ -417,18 +419,21 @@ export const useReceiptUploader = () => {
       )
       if (didUpdate) {
         toast.error(
-          'レシートの解析中にエラーが発生しました。もう一度お試しください。'
+          failure.kind === 'rate_limit'
+            ? failure.message
+            : 'レシートの解析中にエラーが発生しました。もう一度お試しください。'
         )
       }
     }
   }
 
   const handleStartAll = () => {
-    tasks.forEach((task) => {
-      if (task.status === 'idle') {
-        void processTask(task.id, requestContext)
-      }
-    })
+    if (!requestContext) return
+    receiptUploaderStateCache.startAnalysisQueue(
+      requestContext,
+      selectIdleTaskIds(tasks),
+      (taskId, context) => processTask(taskId, context)
+    )
   }
 
   const handleStartEdit = (taskId: string) => {

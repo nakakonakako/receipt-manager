@@ -1,4 +1,8 @@
 import type { UploadTask } from '../types/index.ts'
+import {
+  createReceiptAnalysisQueue,
+  type ReceiptAnalysisRunTask,
+} from './receiptAnalysisQueue.ts'
 
 export type ReceiptUploaderEditingState = {
   taskId: string
@@ -35,6 +39,11 @@ export interface ReceiptUploaderStateCache {
     context: ReceiptUploaderRequestContext,
     updater: (state: ReceiptUploaderState) => ReceiptUploaderState
   ) => boolean
+  startAnalysisQueue: (
+    context: ReceiptUploaderRequestContext,
+    taskIds: readonly string[],
+    runTask: ReceiptAnalysisRunTask
+  ) => void
 }
 
 const emptyState = (): ReceiptUploaderState => ({
@@ -76,6 +85,10 @@ export const createReceiptUploaderStateCache = (
     generation: 0,
   }
   const listeners = new Set<Listener>()
+  const isCurrentContext = (context: ReceiptUploaderRequestContext) =>
+    snapshot.ownerUserId === context.userId &&
+    snapshot.generation === context.generation
+  const analysisQueue = createReceiptAnalysisQueue(isCurrentContext)
 
   const publish = (nextSnapshot: ReceiptUploaderSnapshot) => {
     snapshot = nextSnapshot
@@ -91,6 +104,7 @@ export const createReceiptUploaderStateCache = (
     setOwner: (userId) => {
       if (snapshot.ownerUserId === userId) return
 
+      analysisQueue.cancel()
       releaseRemovedPreviewUrls(snapshot.tasks, [], revokeObjectURL)
       publish({
         ...emptyState(),
@@ -102,9 +116,7 @@ export const createReceiptUploaderStateCache = (
       snapshot.ownerUserId === userId
         ? { userId, generation: snapshot.generation }
         : null,
-    isCurrent: (context) =>
-      snapshot.ownerUserId === context.userId &&
-      snapshot.generation === context.generation,
+    isCurrent: (context) => isCurrentContext(context),
     update: (context, updater) => {
       if (
         snapshot.ownerUserId !== context.userId ||
@@ -126,6 +138,9 @@ export const createReceiptUploaderStateCache = (
         generation: previousSnapshot.generation,
       })
       return true
+    },
+    startAnalysisQueue: (context, taskIds, runTask) => {
+      analysisQueue.start(context, taskIds, runTask)
     },
   }
 }
@@ -163,7 +178,8 @@ const isReceiptUploaderStateCache = (
     typeof cache.setOwner === 'function' &&
     typeof cache.getRequestContext === 'function' &&
     typeof cache.isCurrent === 'function' &&
-    typeof cache.update === 'function'
+    typeof cache.update === 'function' &&
+    typeof cache.startAnalysisQueue === 'function'
   )
 }
 
