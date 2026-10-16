@@ -68,18 +68,12 @@ Prefer creating/reviewing migrations separately from applying them to a linked p
 - Do not silently change API contracts.
 - When changing an API contract, inspect both frontend and backend consumers.
 
-## Commit and pull request titles
+## Commit subjects
 
-Use the same format for new git commit subjects and GitHub pull request titles:
-
-`<type>: <変更内容>`
-
-- **type**: lowercase English; one of `feat`, `fix`, `refactor`, `perf`, `chore`,
-  `docs`, `test`, `ci`, `build`.
-- **変更内容**: a specific description of the change. Japanese is acceptable.
-- Do not put custom task or phase identifiers in commit subjects or PR titles
-  (for example `S1-06`, `PR 1A`).
-- Apply this rule to new commits and PRs only; do not rewrite existing history.
+- Follow Conventional Commits format: `<type>: <変更内容>`.
+- Use lowercase English types and concise Japanese descriptions.
+- Do not include custom task or phase identifiers.
+- Do not rewrite existing commit history.
 
 ## UI verification
 
