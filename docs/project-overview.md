@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-15 |
+| ドキュメント最終更新 | 2026-10-18 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -218,6 +218,16 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 - 隔離SQLテスト: `scripts/run-price-memo-data-deletion-sql-tests.sh`。名前が指定条件に一致するlocalhost上の新規使い捨てPostgreSQL DBだけで実行する。ユーザー分離、未認証拒否、途中失敗のロールバック、Auth/receiptデータの維持、空データの成功、関数権限を確認する。
 - 本マイグレーションを含む `main` へのマージは既存CDから本番DBへ自動適用される。price-memo側のUIを利用する前に、このmigrationが反映済みであることを確認する。
 
+### 5.6 price-memo Private Broadcast 通知
+
+`20261018120000_price_memo_private_broadcast.sql` は `price_folders`、`price_records`、`price_memo_items`、`price_stores` の変更を、ユーザー専用Private Broadcast `price-memo:user:<user_id>` へ通知する。payloadは対象表と操作種別のみ。price-memoクライアントがRLS付きAPIで再取得するための無効化通知であり、レコード同期や同時編集CASではない。
+
+- `realtime.messages` に `authenticated` / `extension='broadcast'` / `auth.uid()` とtopic完全一致のSELECTポリシーのみ追加。クライアント送信権限、対象表Publication、既存RLS変更、Realtimeの全体Public access設定変更は行わない
+- 4表の行triggerはINSERT/UPDATE/DELETEを処理し、所有者変更では旧・新ユーザーへ通知。フォルダCASCADEと `delete_my_price_memo_data()` の削除も子表を含め通知
+- `realtime.send()` の失敗はSQLSTATEを警告記録して元のDMLを継続。切断・欠落時の再取得はprice-memo側の責務
+- 隔離SQLテスト: `scripts/run-price-memo-private-broadcast-sql-tests.sh`。実Supabase RealtimeサーバーとのWebSocket結合テストではない
+- 本マイグレーションを含む `main` へのマージは既存CDから本番DBへ自動適用される。本番適用前にRealtime設定・既存policy・権限とprice-memo側private購読を確認する。ロールバックは通知trigger・関数・policyを削除するforward migrationで行う
+
 ---
 
 ## 6. 技術スタック
@@ -362,6 +372,7 @@ receipt-manager/
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | A/B 分離・メモ削除・カテゴリ方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | 予定: 履歴の分類フィルタ構想 |
 | [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と FastAPI の3エンドポイント統合 |
+| [spec-price-memo-realtime.md](./spec-price-memo-realtime.md) | price-memo向けPrivate Broadcast通知のtopic・認可・trigger契約 |
 
 新規の仕様・設計メモを足したら、上記索引と本節にも行を追加する。
 
@@ -371,6 +382,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-18 | price-memo 4表のPrivate Broadcast無効化通知と本人topic限定の受信policyを追加 |
 | 2026-10-16 | price-memoに本人の4テーブルだけを削除する認証済みSECURITY INVOKER RPCと隔離SQLテストを追加 |
 | 2026-10-15 | S1 F-01: APIロールのテーブル過大権限を既存表と `postgres` の `public` default privilegesから取り消し、読み取り専用検証を本番workflowへ追加 |
 | 2026-10-15 | レシート解析の HTTP 429 を日次上限・同時実行上限・未知の利用制限に分類し、未知の応答本文は表示しない |
