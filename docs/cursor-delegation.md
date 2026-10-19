@@ -103,20 +103,17 @@ direct-implementation conditions are met, follow that route instead.
 
 ## Checkout and worktrees
 
-Do **not** use a worktree for every task.
+The standard checkout is `~/web/receipt-manager`; additional worktrees are
+stored at `~/worktrees/receipt-manager/<task-name>`. Environment files live
+outside Git under `~/.config/receipt-manager/<environment>/`. Follow
+[worktree-development.md](./worktree-development.md) for create, list, reuse,
+setup, removal, and Cursor delegation commands.
 
-Use direct checkout only when:
-
-- one worker is running
-- the checkout is clean
-- there is no concurrent work
-
-Use `--worktree <name>` when:
-
-- workers run in parallel
-- Codex or the user is concurrently editing the repo
-- the checkout is dirty and Cursor's edits should be isolated
-- a large or risky change needs isolation
+Use a direct checkout only when one worker is running, the checkout is clean,
+and there is no concurrent work. Use the standard Git worktree flow when workers
+run in parallel, the checkout is dirty, edits are concurrent, or a large or
+risky change needs isolation. Existing worktrees in other locations are not
+moved or removed automatically.
 
 Do not use `--allow-dirty` as a shortcut. It is only appropriate when mixing
 changes is intentional and explicitly approved by the supervisor or user.
