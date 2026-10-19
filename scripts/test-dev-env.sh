@@ -85,10 +85,10 @@ fi
 [[ "$(cat "$test_root/missing.log")" == *'VITE_SUPABASE_URL'* ]]
 
 if [[ "$repository_name" == price-memo || "$repository_name" == receipt-manager ]]; then
-  rg -q 'port: 5173' "$source_root/frontend/vite.config.ts"
-  rg -q 'strictPort: true' "$source_root/frontend/vite.config.ts"
+  grep -Eq 'port: 5173' "$source_root/frontend/vite.config.ts"
+  grep -Eq 'strictPort: true' "$source_root/frontend/vite.config.ts"
   if [[ "$repository_name" == price-memo ]]; then
-    rg -q 'vite --port 5273 --strictPort' "$source_root/frontend/package.json"
+    grep -Eq 'vite --port 5273 --strictPort' "$source_root/frontend/package.json"
   fi
 fi
 
