@@ -11,8 +11,10 @@ fixture_repo="$fixture_home/web/$repository_name"
 fixture_config="$fixture_home/.config/$repository_name/development"
 mkdir -p "$fixture_repo/scripts" "$fixture_repo/frontend" "$fixture_repo/backend"
 cp "$source_root/scripts/dev-env.sh" "$fixture_repo/scripts/dev-env.sh"
+cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
+cp "$source_root/scripts/supabase-target.py" "$fixture_repo/scripts/supabase-target.py"
 chmod +x "$fixture_repo/scripts/dev-env.sh"
-printf 'VITE_SUPABASE_URL=https://safe.invalid\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
+printf 'VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
 printf 'VITE_SUPABASE_URL=https://override.invalid\nOVERRIDE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env.local"
 printf 'BACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
 printf 'ROOT_MARKER=must-not-print\n' > "$fixture_repo/.env"
@@ -22,7 +24,7 @@ touch "$fixture_repo/frontend/.keep" "$fixture_repo/backend/.keep"
 git -C "$fixture_repo" init -b main >/dev/null
 git -C "$fixture_repo" config user.name 'Dev Env Test'
 git -C "$fixture_repo" config user.email 'dev-env-test@example.invalid'
-git -C "$fixture_repo" add scripts/dev-env.sh .gitignore frontend/.keep backend/.keep
+git -C "$fixture_repo" add scripts/dev-env.sh scripts/lib-backend-runtime.sh .gitignore frontend/.keep backend/.keep
 git -C "$fixture_repo" commit -m 'development environment fixture' >/dev/null
 export HOME="$fixture_home"
 
@@ -59,6 +61,40 @@ rm "$fixture_repo/frontend/.env.local"
 "$fixture_repo/scripts/dev-env.sh" prepare >/dev/null
 [[ -f "$fixture_repo/frontend/.env" && ! -L "$fixture_repo/frontend/.env" ]]
 
+printf 'VITE_SUPABASE_URL=https://zyxwvutsrqponmlkjihg.supabase.co\n' > "$fixture_repo/frontend/.env"
+if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst zyxwvutsrqponmlkjihg >"$test_root/register-url-mismatch.log" 2>&1; then
+  echo 'Expected development ref registration to match the frontend Supabase URL.' >&2
+  exit 1
+fi
+[[ ! -e "$fixture_config/supabase-project-refs" ]]
+printf 'VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
+printf 'abcdefghijklmnopqrst\n' > "$fixture_config/supabase-development-project-ref"
+if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst zyxwvutsrqponmlkjihg >"$test_root/register-legacy.log" 2>&1; then
+  echo 'Expected legacy single-ref settings to require manual review.' >&2
+  exit 1
+fi
+[[ ! -e "$fixture_config/supabase-project-refs" ]]
+rm "$fixture_config/supabase-development-project-ref"
+
+if ! printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst zyxwvutsrqponmlkjihg >"$test_root/register.log"; then
+  echo 'Expected explicit development and production project ref registration to succeed.' >&2
+  exit 1
+fi
+registered_ref_path="$fixture_config/supabase-project-refs"
+[[ "$(cat "$registered_ref_path")" == $'development=abcdefghijklmnopqrst\nproduction=zyxwvutsrqponmlkjihg' ]]
+[[ "$(stat -c '%a' "$registered_ref_path")" == 600 ]]
+[[ "$(stat -c '%a' "$fixture_config")" == 700 ]]
+[[ "$(cat "$test_root/register.log")" != *'abcdefghijklmnopqrst'* ]]
+if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst abcdefghijklmnopqrst >"$test_root/register-same.log" 2>&1; then
+  echo 'Expected identical development and production refs to be rejected.' >&2
+  exit 1
+fi
+if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs zyxwvutsrqponmlkjihg abcdefghijklmnopqrst >"$test_root/register-conflict.log" 2>&1; then
+  echo 'Expected existing development and production refs to be immutable.' >&2
+  exit 1
+fi
+[[ "$(cat "$registered_ref_path")" == $'development=abcdefghijklmnopqrst\nproduction=zyxwvutsrqponmlkjihg' ]]
+
 worktree="$fixture_home/worktrees/$repository_name/new-task"
 mkdir -p "$(dirname "$worktree")"
 git -C "$fixture_repo" worktree add -b env-test "$worktree" HEAD >/dev/null
@@ -77,6 +113,8 @@ missing_home="$test_root/missing-home"
 missing_repo="$missing_home/web/$repository_name"
 mkdir -p "$missing_repo/scripts" "$missing_repo/frontend"
 cp "$source_root/scripts/dev-env.sh" "$missing_repo/scripts/dev-env.sh"
+cp "$source_root/scripts/lib-backend-runtime.sh" "$missing_repo/scripts/lib-backend-runtime.sh"
+cp "$source_root/scripts/supabase-target.py" "$missing_repo/scripts/supabase-target.py"
 if HOME="$missing_home" "$missing_repo/scripts/dev-env.sh" prepare >"$test_root/missing.log" 2>&1; then
   echo 'Expected missing development settings to block startup.' >&2
   exit 1

@@ -13,6 +13,7 @@ environment_name="development"
 config_root="${HOME:?HOME must be set}/.config/$repo_name/$environment_name"
 standard_checkout="$HOME/web/$repo_name"
 env_paths=(.env frontend/.env frontend/.env.local backend/.env)
+supabase_project_refs_relative='supabase-project-refs'
 
 die() { printf '%s\n' "$1" >&2; exit 2; }
 mode_of() { stat -c '%a' -- "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
@@ -147,7 +148,26 @@ link_configured_file() {
   fi
 }
 
+register_supabase_project_ref() {
+  [[ $# -eq 2 ]] || die 'register-supabase-project-refs requires development and production project refs confirmed in Supabase Dashboard.'
+  local development_ref="$1" production_ref="$2"
+  local destination="$config_root/$supabase_project_refs_relative"
+  if [[ -e "$config_root/supabase-development-project-ref" || -L "$config_root/supabase-development-project-ref" ]]; then
+    die "Legacy single-ref settings exist at $config_root/supabase-development-project-ref; review them manually before registering both refs."
+  fi
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    die "Development and production Supabase refs are already registered at $destination; refusing to overwrite."
+  fi
+  printf 'Confirm both refs were read from Supabase Dashboard and development is not production. Type register to continue: '
+  read -r answer
+  [[ "$answer" == register ]] || die 'Registration cancelled.'
+  python3 "$script_dir/supabase-target.py" register "$repo_root" "$config_root" "$development_ref" "$production_ref"
+  printf '[dev-env] Registered development and production Supabase project refs at %s (values hidden).\n' "$destination"
+}
+
 prepare() {
+  # shellcheck source=lib-backend-runtime.sh
+  source "$script_dir/lib-backend-runtime.sh"
   for relative_path in "${env_paths[@]}"; do link_configured_file "$relative_path"; done
   local env_file="$repo_root/frontend/.env" local_file="$repo_root/frontend/.env.local"
   if [[ -f "$env_file" && -f "$local_file" ]]; then
@@ -163,10 +183,12 @@ prepare() {
       exit 2
     fi
   done
+  check_backend_python_runtime_preflight "$repo_root" || exit 2
 }
 
 case "${1:-}" in
   migrate) shift; migrate_env "$@" ;;
   prepare) [[ $# -eq 1 ]] || die 'prepare takes no arguments.'; prepare ;;
-  *) die 'Usage: scripts/dev-env.sh prepare | migrate --preview | migrate --apply <explicit-relative-file> [...]' ;;
+  register-supabase-project-refs) shift; register_supabase_project_ref "$@" ;;
+  *) die 'Usage: scripts/dev-env.sh prepare | migrate --preview | migrate --apply <explicit-relative-file> [...] | register-supabase-project-refs <development-ref> <production-ref>' ;;
 esac

@@ -59,6 +59,14 @@ Do not run:
 unless the user explicitly requests a database push.
 
 Prefer creating/reviewing migrations separately from applying them to a linked project.
+Use `npm run db:plan` after explicitly registering development and production
+project refs. An unlinked worktree may be linked after interactive confirmation.
+The local command validates the registered refs, frontend Supabase URL, and
+worktree link; it runs only migration list and
+`db push --dry-run`. Local `npm run db:push` has the same target guard, displays
+the dry-run plan, and requires interactive development-ref confirmation.
+Production CI migration execution remains separate. Never run a local DB push
+unless the user explicitly requests it.
 
 ## Git worktree and environment files
 
@@ -79,8 +87,28 @@ Prefer creating/reviewing migrations separately from applying them to a linked p
   Migration copies into new mode-0600 files under mode-0700 directories,
   retains every source, and never prints values or replaces a destination.
   Existing `.env.local` files and Vite key overlaps are reported by name only.
-  Daily `npm run dev` validates required Supabase settings and prepares missing
-  links without installing dependencies or replacing local files.
+  Daily `npm run dev` validates required Supabase settings, checks backend
+  `uvicorn` when `backend/.venv` is present without running `npm ci` or
+  `uv sync` when healthy, and prepares missing links without replacing local
+  files. It checks the configured Vite/API ports before launch and supervises
+  only the process groups it starts; occupied ports are never reassigned or
+  killed.
+  Worktree setup manages `backend/.venv` with relocation detection and safe
+  repair; see `docs/spec-worktree-runtime.md`.
+  Register development and production refs once, using values confirmed in
+  Supabase Dashboard, with
+  `bash scripts/dev-env.sh register-supabase-project-refs <development-ref> <production-ref>`.
+  The values are stored outside Git in
+  `~/.config/receipt-manager/development/supabase-project-refs`; existing
+  settings cannot be overwritten. `npm run db:plan` checks this registration,
+  the effective frontend URL, and the current worktree link; ambiguous Vite
+  overrides fail closed. It only lists migrations and runs a dry-run. An
+  unlinked worktree requires interactive confirmation before linking to the
+  registered development ref. Local `npm run db:push` repeats the checks,
+  displays the dry-run plan, and requires the development ref to be typed in an
+  interactive terminal. Production CI migration execution is unchanged. Outside
+  these explicit DB commands, setup, `npm run dev`, and `npm run check` do not
+  link to Supabase or access a remote database.
   A symlink makes its target readable to any worker trusted with that workspace,
   so provide only the development credentials required by the task.
 - `.env.ai-quota`, `secrets/ai-quota-ca/`, `service_account.json`, and
