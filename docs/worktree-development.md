@@ -75,6 +75,12 @@ alongside price-memo on `5173`. The separate Cursor Playwright server remains
 on `5273`. If Tailscale Serve forwards to the receipt-manager development
 server, verify its local target and update it from `5173` to `5174` when needed;
 this repository change does not alter the machine's Tailscale configuration.
+Before `npm run dev` starts, an owned-process supervisor checks frontend `5174`
+and backend `8000`. Occupied ports stop startup with listener PID, command, and
+working directory where available; ports are never reassigned and existing
+owners are never stopped. Ctrl+C, SIGTERM, and either server's startup failure
+stop only the isolated process groups started by that command. Shutdown releases
+the ports for a later run.
 
 `frontend/src/components/Auth.tsx` sends the browser's current origin as the
 Supabase Auth redirect target. For local receipt-manager development, verify
@@ -98,9 +104,9 @@ worktrees are reused without fetch or branch changes.
 Use `--workspace <path>` to continue work in a listed worktree. Cursor's own
 `--worktree` option is not used because it controls a separate storage root.
 
-`npm run dev` continues to start the same services, with the receipt-manager
-frontend on `5174`. Worktree setup does not start or stop services or apply
-database migrations.
+`npm run dev` starts the same services with the receipt-manager frontend on
+`5174`, supervised backend on `8000`, and explicit port-conflict handling.
+Worktree setup does not start or stop services or apply database migrations.
 
 ## Development database planning
 

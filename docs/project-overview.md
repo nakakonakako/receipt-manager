@@ -279,7 +279,7 @@ npm run dev
 # BACK:  uv run uvicorn app.main:app --reload（backend）
 ```
 
-- 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ
+- 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ。`npm run dev` は起動前に両ポートを検査し、競合時は所有プロセス情報を表示できる範囲で表示して停止。別ポートへの自動切替や既存プロセスの終了は行わず、Ctrl+C・SIGTERM・片側起動失敗時はこの起動が作成したプロセス群だけを終了
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - DB 計画確認: `npm run db:plan`（登録済み開発 project ref と一致確認、未リンク時はそのrefだけにlinkし、migration listとdry-runを実行）
 - DB 反映: `npm run db:push`（linked な Supabase プロジェクトへ。明示依頼時のみ）

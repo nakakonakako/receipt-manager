@@ -85,7 +85,9 @@ the worktree; it runs only `supabase migration list --linked` and
   Daily `npm run dev` validates required Supabase settings, checks backend
   `uvicorn` when `backend/.venv` is present without running `npm ci` or
   `uv sync` when healthy, and prepares missing links without replacing local
-  files.
+  files. It checks the configured Vite/API ports before launch and supervises
+  only the process groups it starts; occupied ports are never reassigned or
+  killed.
   Worktree setup manages `backend/.venv` with relocation detection and safe
   repair; see `docs/spec-worktree-runtime.md`.
   Register the development Supabase project ref once with
