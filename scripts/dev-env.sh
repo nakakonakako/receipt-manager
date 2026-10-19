@@ -13,6 +13,7 @@ environment_name="development"
 config_root="${HOME:?HOME must be set}/.config/$repo_name/$environment_name"
 standard_checkout="$HOME/web/$repo_name"
 env_paths=(.env frontend/.env frontend/.env.local backend/.env)
+supabase_project_ref_relative='supabase-development-project-ref'
 
 die() { printf '%s\n' "$1" >&2; exit 2; }
 mode_of() { stat -c '%a' -- "$1" 2>/dev/null || stat -f '%Lp' "$1"; }
@@ -147,7 +148,28 @@ link_configured_file() {
   fi
 }
 
+register_supabase_project_ref() {
+  [[ $# -eq 1 ]] || die 'register-supabase-project-ref requires exactly one project ref argument.'
+  local candidate="$1"
+  [[ "$candidate" =~ ^[a-z0-9]{20}$ ]] || die 'Project ref must be a 20-character Supabase project ref (lowercase letters and digits).'
+  local destination="$config_root/$supabase_project_ref_relative"
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    die "Development Supabase project ref is already registered at $destination; refusing to overwrite."
+  fi
+  printf 'Register this development-only Supabase project ref for db:plan (never production)? Type register to continue: '
+  read -r answer
+  [[ "$answer" == register ]] || die 'Registration cancelled.'
+  umask 077
+  mkdir -p "$config_root"
+  chmod 700 "$config_root"
+  printf '%s\n' "$candidate" >"$destination"
+  chmod 600 "$destination"
+  printf '[dev-env] Registered development Supabase project ref at %s (value hidden).\n' "$destination"
+}
+
 prepare() {
+  # shellcheck source=lib-backend-runtime.sh
+  source "$script_dir/lib-backend-runtime.sh"
   for relative_path in "${env_paths[@]}"; do link_configured_file "$relative_path"; done
   local env_file="$repo_root/frontend/.env" local_file="$repo_root/frontend/.env.local"
   if [[ -f "$env_file" && -f "$local_file" ]]; then
@@ -163,10 +185,12 @@ prepare() {
       exit 2
     fi
   done
+  check_backend_python_runtime_preflight "$repo_root" || exit 2
 }
 
 case "${1:-}" in
   migrate) shift; migrate_env "$@" ;;
   prepare) [[ $# -eq 1 ]] || die 'prepare takes no arguments.'; prepare ;;
-  *) die 'Usage: scripts/dev-env.sh prepare | migrate --preview | migrate --apply <explicit-relative-file> [...]' ;;
+  register-supabase-project-ref) shift; register_supabase_project_ref "${1:-}" ;;
+  *) die 'Usage: scripts/dev-env.sh prepare | migrate --preview | migrate --apply <explicit-relative-file> [...] | register-supabase-project-ref <project-ref>' ;;
 esac

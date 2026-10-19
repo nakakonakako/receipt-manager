@@ -25,8 +25,10 @@ command displays the worktree list and stops; inspect that worktree and pass its
 path to `reuse`. `reuse` displays the branch, status, staged/unstaged summaries,
 and untracked paths before running setup. It preserves all existing changes.
 
-Setup installs dependencies from the root and frontend lockfiles, syncs backend
-dependencies, and creates absolute symlinks for configured `.env`,
+Setup installs dependencies from the root and frontend lockfiles, ensures a
+managed `backend/.venv` (relocation detection, safe repair, and `uvicorn`
+verification; see [spec-worktree-runtime.md](./spec-worktree-runtime.md)), and
+creates absolute symlinks for configured `.env`,
 `frontend/.env`, `frontend/.env.local`, and `backend/.env` files. The source
 files must be regular files under `~/.config/receipt-manager/<environment>/`
 with the same relative paths.
@@ -65,7 +67,9 @@ excluded from migration and worktree links.
 
 Root `npm run dev` runs a lightweight environment preflight before starting.
 It prepares missing symlinks, validates the frontend Supabase settings,
-refuses conflicting local files, and does not install or sync dependencies.
+checks that the backend runtime can run `uvicorn` without reinstalling when
+healthy, refuses conflicting local files, and does not install or sync
+dependencies when checks pass.
 The ordinary Vite server is fixed to `5174` with `strictPort` so it can run
 alongside price-memo on `5173`. The separate Cursor Playwright server remains
 on `5273`. If Tailscale Serve forwards to the receipt-manager development
@@ -97,3 +101,24 @@ Use `--workspace <path>` to continue work in a listed worktree. Cursor's own
 `npm run dev` continues to start the same services, with the receipt-manager
 frontend on `5174`. Worktree setup does not start or stop services or apply
 database migrations.
+
+## Development database planning
+
+Register the development Supabase project ref once (never production):
+
+```bash
+bash scripts/dev-env.sh register-supabase-project-ref <project-ref>
+```
+
+When this worktree has no Supabase link, `db:plan` runs `supabase link` against
+the registered development ref only. An existing link to any other ref stops
+the command without changing it. For a CLI database-password prompt, use the
+documented `SUPABASE_DB_PASSWORD` environment variable; never put the password
+in command arguments, repository files, or logs. Preview pending migrations
+without applying them:
+
+```bash
+npm run db:plan
+```
+
+Details and safety constraints: [spec-worktree-runtime.md](./spec-worktree-runtime.md).

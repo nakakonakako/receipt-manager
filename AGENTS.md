@@ -59,6 +59,9 @@ Do not run:
 unless the user explicitly requests a database push.
 
 Prefer creating/reviewing migrations separately from applying them to a linked project.
+Use `npm run db:plan` after registering the development project ref and linking
+the worktree; it runs only `supabase migration list --linked` and
+`supabase db push --linked --dry-run`.
 
 ## Git worktree and environment files
 
@@ -79,8 +82,19 @@ Prefer creating/reviewing migrations separately from applying them to a linked p
   Migration copies into new mode-0600 files under mode-0700 directories,
   retains every source, and never prints values or replaces a destination.
   Existing `.env.local` files and Vite key overlaps are reported by name only.
-  Daily `npm run dev` validates required Supabase settings and prepares missing
-  links without installing dependencies or replacing local files.
+  Daily `npm run dev` validates required Supabase settings, checks backend
+  `uvicorn` when `backend/.venv` is present without running `npm ci` or
+  `uv sync` when healthy, and prepares missing links without replacing local
+  files.
+  Worktree setup manages `backend/.venv` with relocation detection and safe
+  repair; see `docs/spec-worktree-runtime.md`.
+  Register the development Supabase project ref once with
+  `bash scripts/dev-env.sh register-supabase-project-ref <project-ref>`.
+  Use `npm run db:plan` to preview migrations for the registered development
+  ref (dry-run only); it may link an unlinked worktree only to that ref, never
+  changes a mismatched link, never reads production IDs, and never applies
+  migrations. Outside this explicit command, setup and `npm run dev` do not
+  link Supabase or run DB commands.
   A symlink makes its target readable to any worker trusted with that workspace,
   so provide only the development credentials required by the task.
 - `.env.ai-quota`, `secrets/ai-quota-ca/`, `service_account.json`, and

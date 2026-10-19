@@ -101,6 +101,8 @@ setup_environment() {
 
 setup_dependencies() {
   local target_path="$1"
+  # shellcheck source=lib-backend-runtime.sh
+  source "$script_directory/lib-backend-runtime.sh"
   if [[ -f "$target_path/package-lock.json" ]]; then
     printf '[worktree-setup] Installing root dependencies\n'
     npm --prefix "$target_path" ci
@@ -110,8 +112,9 @@ setup_dependencies() {
     npm --prefix "$target_path/frontend" ci
   fi
   if [[ -f "$target_path/backend/pyproject.toml" ]]; then
-    printf '[worktree-setup] Syncing backend dependencies\n'
-    uv sync --directory "$target_path/backend"
+    printf '[worktree-setup] Ensuring managed backend runtime\n'
+    export RECEIPT_MANAGER_WORKTREE_ROOT="$target_path"
+    ensure_backend_python_runtime "$target_path" 1
   fi
 }
 

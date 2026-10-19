@@ -261,7 +261,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 | GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
 | GitHub Actions 手動 workflow | main から本番DBのAI利用制御 migration 権限を読み取り専用で事前確認 |
 | 品質チェック | リポジトリルートで `npm run check` |
-| Supabase CLI | `npm run db:push` / `db:list` |
+| Supabase CLI | `npm run db:plan`（linked 開発プロジェクトの dry-run 確認） / `db:push` / `db:list` |
 
 ※ `gspread` は依存に残っているが、アプリ本体からは未使用。
 
@@ -281,7 +281,8 @@ npm run dev
 
 - 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
-- DB 反映: `npm run db:push`（linked な Supabase プロジェクトへ）
+- DB 計画確認: `npm run db:plan`（登録済み開発 project ref と一致確認、未リンク時はそのrefだけにlinkし、migration listとdry-runを実行）
+- DB 反映: `npm run db:push`（linked な Supabase プロジェクトへ。明示依頼時のみ）
 
 ### 7.2 環境変数
 
@@ -364,6 +365,7 @@ receipt-manager/
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | A/B 分離・メモ削除・カテゴリ方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | 予定: 履歴の分類フィルタ構想 |
 | [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と FastAPI の3エンドポイント統合 |
+| [spec-worktree-runtime.md](./spec-worktree-runtime.md) | worktree仮想環境管理と開発DB dry-run |
 
 新規の仕様・設計メモを足したら、上記索引と本節にも行を追加する。
 
@@ -373,6 +375,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-20 | 開発Supabase refの明示登録、receipt-managerのmigration dry-run計画、worktree移動後のPython仮想環境復旧を追加 |
 | 2026-10-19 | Git worktree環境設定の明示移行、起動前検証、`origin/main`基準のCursor worktree作成を追加 |
 | 2026-10-16 | price-memoに本人の4テーブルだけを削除する認証済みSECURITY INVOKER RPCと隔離SQLテストを追加 |
 | 2026-10-15 | S1 F-01: APIロールのテーブル過大権限を既存表と `postgres` の `public` default privilegesから取り消し、読み取り専用検証を本番workflowへ追加 |

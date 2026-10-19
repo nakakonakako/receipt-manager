@@ -11,6 +11,7 @@ fixture_repo="$fixture_home/web/$repository_name"
 fixture_config="$fixture_home/.config/$repository_name/development"
 mkdir -p "$fixture_repo/scripts" "$fixture_repo/frontend" "$fixture_repo/backend"
 cp "$source_root/scripts/dev-env.sh" "$fixture_repo/scripts/dev-env.sh"
+cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
 chmod +x "$fixture_repo/scripts/dev-env.sh"
 printf 'VITE_SUPABASE_URL=https://safe.invalid\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
 printf 'VITE_SUPABASE_URL=https://override.invalid\nOVERRIDE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env.local"
@@ -22,7 +23,7 @@ touch "$fixture_repo/frontend/.keep" "$fixture_repo/backend/.keep"
 git -C "$fixture_repo" init -b main >/dev/null
 git -C "$fixture_repo" config user.name 'Dev Env Test'
 git -C "$fixture_repo" config user.email 'dev-env-test@example.invalid'
-git -C "$fixture_repo" add scripts/dev-env.sh .gitignore frontend/.keep backend/.keep
+git -C "$fixture_repo" add scripts/dev-env.sh scripts/lib-backend-runtime.sh .gitignore frontend/.keep backend/.keep
 git -C "$fixture_repo" commit -m 'development environment fixture' >/dev/null
 export HOME="$fixture_home"
 
@@ -47,6 +48,21 @@ if printf 'copy\n' | "$fixture_repo/scripts/dev-env.sh" migrate --apply frontend
   exit 1
 fi
 [[ "$(cat "$fixture_config/frontend/.env")" == *'must-not-print'* ]]
+
+if ! printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-ref abcdefghijklmnopqrst >"$test_root/register.log"; then
+  echo 'Expected explicit development project ref registration to succeed.' >&2
+  exit 1
+fi
+registered_ref_path="$fixture_config/supabase-development-project-ref"
+[[ "$(cat "$registered_ref_path")" == 'abcdefghijklmnopqrst' ]]
+[[ "$(stat -c '%a' "$registered_ref_path")" == 600 ]]
+[[ "$(stat -c '%a' "$fixture_config")" == 700 ]]
+[[ "$(cat "$test_root/register.log")" != *'abcdefghijklmnopqrst'* ]]
+if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-ref zyxwvutsrqponmlkjihg >"$test_root/register-conflict.log" 2>&1; then
+  echo 'Expected existing development project ref registration to be immutable.' >&2
+  exit 1
+fi
+[[ "$(cat "$registered_ref_path")" == 'abcdefghijklmnopqrst' ]]
 
 if "$fixture_repo/scripts/dev-env.sh" prepare >"$test_root/override.log" 2>&1; then
   echo 'Expected overlapping .env.local keys to block startup.' >&2
@@ -77,6 +93,7 @@ missing_home="$test_root/missing-home"
 missing_repo="$missing_home/web/$repository_name"
 mkdir -p "$missing_repo/scripts" "$missing_repo/frontend"
 cp "$source_root/scripts/dev-env.sh" "$missing_repo/scripts/dev-env.sh"
+cp "$source_root/scripts/lib-backend-runtime.sh" "$missing_repo/scripts/lib-backend-runtime.sh"
 if HOME="$missing_home" "$missing_repo/scripts/dev-env.sh" prepare >"$test_root/missing.log" 2>&1; then
   echo 'Expected missing development settings to block startup.' >&2
   exit 1
