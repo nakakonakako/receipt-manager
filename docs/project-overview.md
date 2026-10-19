@@ -285,6 +285,8 @@ npm run dev
 
 ### 7.2 環境変数
 
+追加worktreeの保存先、開発設定のsymlink、依存関係セットアップ、Cursor委譲の手順は [worktree-development.md](./worktree-development.md) を参照。`.env.ai-quota`、CA、service account、本番設定は標準worktreeセットアップの対象外。
+
 **フロント（`frontend/.env`、Docker ビルド時に焼込）**
 
 - `VITE_SUPABASE_URL`
@@ -371,6 +373,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-19 | 追加Git worktreeを `~/worktrees/receipt-manager/` に統一し、開発設定のsymlinkと安全な再利用・削除手順を追加 |
 | 2026-10-16 | price-memoに本人の4テーブルだけを削除する認証済みSECURITY INVOKER RPCと隔離SQLテストを追加 |
 | 2026-10-15 | S1 F-01: APIロールのテーブル過大権限を既存表と `postgres` の `public` default privilegesから取り消し、読み取り専用検証を本番workflowへ追加 |
 | 2026-10-15 | レシート解析の HTTP 429 を日次上限・同時実行上限・未知の利用制限に分類し、未知の応答本文は表示しない |

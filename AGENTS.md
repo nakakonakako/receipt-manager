@@ -60,6 +60,35 @@ unless the user explicitly requests a database push.
 
 Prefer creating/reviewing migrations separately from applying them to a linked project.
 
+## Git worktree and environment files
+
+- The normal checkout is `~/web/receipt-manager`; additional worktrees belong
+  under `~/worktrees/receipt-manager/<task-name>`.
+- Create, list, inspect/reuse, and remove worktrees with `scripts/worktree.sh`.
+  Run `scripts/worktree.sh list` before creating a worktree for an existing
+  branch. If that branch is already checked out, inspect the listed worktree
+  and reuse it; never force a second checkout.
+- Create new worktrees with an explicit branch and base, for example
+  `scripts/worktree.sh create <task> --branch <branch> --base origin/main`.
+  Reuse an existing path with `scripts/worktree.sh reuse <path>`.
+- Development environment files stay outside Git under
+  `~/.config/receipt-manager/<environment>/` and are linked into worktrees by
+  the setup command. Files are never copied or printed. The setup refuses to
+  replace an existing destination; inspect it manually if a link conflicts.
+  A symlink makes its target readable to any worker trusted with that workspace,
+  so provide only the development credentials required by the task.
+- `.env.ai-quota`, `secrets/ai-quota-ca/`, `service_account.json`, and
+  production settings are excluded from the standard setup. Do not link these
+  into worker workspaces.
+- `scripts/worktree.sh remove <path>` is an explicit, interactive operation for
+  clean worktrees under `~/worktrees/receipt-manager/`. It never forces removal
+  or deletes the branch. Check for active workers and development servers
+  first. Worktrees under `/tmp`, `~/.cursor/worktrees`, or `~/web` are not
+  migrated or removed automatically.
+- Use `scripts/delegate-cursor.sh --worktree <task>` to create/reuse the
+  standard worktree, or `--workspace <path>` to reuse an existing one. Cursor
+  receives `--workspace`; do not use Cursor's own `--worktree` location.
+
 ## Implementation rules
 
 - Never introduce TypeScript `any`.
@@ -188,11 +217,12 @@ appropriate under the ownership conditions. If Luna's independent
 direct-implementation conditions are met, follow that route instead.
 
 Use direct checkout only when one worker is running, the checkout is clean, and
-there is no concurrent work. Use `--worktree <name>` when workers run in
-parallel, the checkout is dirty, edits are concurrent, or a large or risky
-change needs isolation. Do not use `--allow-dirty` as a shortcut; it is only
-appropriate when mixing changes is intentional and explicitly approved by the
-supervisor or user.
+there is no concurrent work. Use `scripts/delegate-cursor.sh --worktree <task>`
+or create a standard worktree and pass it through `--workspace <path>` when
+workers run in parallel, the checkout is dirty, edits are concurrent, or a
+large or risky change needs isolation. Do not use `--allow-dirty` as a shortcut;
+it is only appropriate when mixing changes is intentional and explicitly
+approved by the supervisor or user.
 
 If an implementation attempt is unproductive, clarify the work order and retry
 at the next tier. Do not repeat unproductive retries at the same tier. If a

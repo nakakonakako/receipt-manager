@@ -4,14 +4,15 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/delegate-cursor.sh --tier <light|normal|hard> --task-file <path> [--worktree <name>] [--trust|--no-trust]
-  scripts/delegate-cursor.sh --tier <light|normal|hard> --prompt <text> [--worktree <name>] [--trust|--no-trust]
+  scripts/delegate-cursor.sh --tier <light|normal|hard> --task-file <path> [--worktree <task-name> | --workspace <path>] [--trust|--no-trust]
+  scripts/delegate-cursor.sh --tier <light|normal|hard> --prompt <text> [--worktree <task-name> | --workspace <path>] [--trust|--no-trust]
 
 Options:
   --tier        Cursor model tier. Default: normal
   --task-file   Read the work order from a file.
   --prompt      Pass the work order directly.
-  --worktree    Run Cursor in an isolated Git worktree.
+  --worktree    Create or reuse ~/worktrees/<repository>/<task> with Git, then pass it through --workspace.
+  --workspace   Reuse an existing worktree after showing its changes and running setup.
   --allow-dirty Allow direct execution in a dirty current checkout.
   --trust       Trust the workspace (enabled by default).
   --no-trust    Disable workspace trust for this invocation.
@@ -28,6 +29,7 @@ tier="normal"
 task_file=""
 prompt=""
 worktree=""
+workspace=""
 allow_dirty=0
 trust=1
 
@@ -37,6 +39,7 @@ while [[ $# -gt 0 ]]; do
     --task-file) task_file="${2:?missing value for --task-file}"; shift 2 ;;
     --prompt) prompt="${2:?missing value for --prompt}"; shift 2 ;;
     --worktree) worktree="${2:?missing value for --worktree}"; shift 2 ;;
+    --workspace) workspace="${2:?missing value for --workspace}"; shift 2 ;;
     --allow-dirty) allow_dirty=1; shift ;;
     --trust) trust=1; shift ;;
     --no-trust) trust=0; shift ;;
@@ -44,6 +47,11 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ -n "$worktree" && -n "$workspace" ]]; then
+  echo "Use either --worktree or --workspace, not both." >&2
+  exit 2
+fi
 
 case "$tier" in
   light)  model="composer-2.5" ;;
@@ -78,13 +86,34 @@ else
   work_order="$prompt"
 fi
 
-if [[ -z "$worktree" && "$allow_dirty" -ne 1 && -n "$(git status --porcelain)" ]]; then
+if [[ -n "$worktree" ]]; then
+  repo_name="$(basename "$(dirname "$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)")")"
+  workspace="$HOME/worktrees/$repo_name/$worktree"
+  "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree"
+elif [[ -n "$workspace" ]]; then
+  if [[ ! -d "$workspace" ]]; then
+    echo "Existing worktree not found: $workspace" >&2
+    exit 2
+  fi
+  workspace="$(cd "$workspace" && pwd -P)"
+  "$repo_root/scripts/worktree.sh" reuse "$workspace"
+  origin_common="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)"
+  target_common="$(git -C "$workspace" rev-parse --path-format=absolute --git-common-dir)"
+  if [[ "$origin_common" != "$target_common" ]]; then
+    echo "Worktree belongs to a different repository: $workspace" >&2
+    exit 2
+  fi
+  work_order="$(printf '%s\n\n%s' 'EXISTING WORKTREE REQUIREMENT: Before editing, inspect git status --short, staged and unstaged diffs, and relevant untracked files. Explain what is already changed, preserve all existing work, and continue in this worktree. Do not reset, checkout, stash, clean, or revert existing changes. If the existing diff is ambiguous or conflicts with the work order, stop and report it to the supervisor.' "$work_order")"
+fi
+
+if [[ -z "$workspace" && "$allow_dirty" -ne 1 && -n "$(git status --porcelain)" ]]; then
   cat >&2 <<'EOF'
 Current checkout has uncommitted changes.
 Refusing to run Cursor directly because its edits could mix with existing work.
 
 Use one of:
-  --worktree <name>   (recommended)
+  --worktree <task-name> (recommended)
+  --workspace <path>  Reuse an existing worktree
   --allow-dirty       (only when mixing changes is intentional)
 EOF
   exit 3
@@ -122,7 +151,9 @@ if [[ "$trust" -eq 1 ]]; then
   cmd+=(--trust)
 fi
 if [[ -n "$worktree" ]]; then
-  cmd+=(--worktree "$worktree")
+  cmd+=(--workspace "$workspace")
+elif [[ -n "$workspace" ]]; then
+  cmd+=(--workspace "$workspace")
 fi
 cmd+=(-p "$full_prompt")
 cmd+=(--output-format stream-json)
@@ -131,7 +162,9 @@ echo "[delegate-cursor] repo: $repo_root" >&2
 echo "[delegate-cursor] tier: $tier" >&2
 echo "[delegate-cursor] model: $model" >&2
 if [[ -n "$worktree" ]]; then
-  echo "[delegate-cursor] worktree: $worktree" >&2
+  echo "[delegate-cursor] workspace: $workspace" >&2
+elif [[ -n "$workspace" ]]; then
+  echo "[delegate-cursor] workspace: $workspace" >&2
 else
   echo "[delegate-cursor] worktree: direct checkout" >&2
 fi
