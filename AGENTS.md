@@ -73,8 +73,14 @@ Prefer creating/reviewing migrations separately from applying them to a linked p
   Reuse an existing path with `scripts/worktree.sh reuse <path>`.
 - Development environment files stay outside Git under
   `~/.config/receipt-manager/<environment>/` and are linked into worktrees by
-  the setup command. Files are never copied or printed. The setup refuses to
-  replace an existing destination; inspect it manually if a link conflicts.
+  the setup command. For initial migration from `~/web/receipt-manager`, first
+  run `bash scripts/dev-env.sh migrate --preview`, then explicitly select only
+  reviewed development files with `migrate --apply <relative-file> [...]`.
+  Migration copies into new mode-0600 files under mode-0700 directories,
+  retains every source, and never prints values or replaces a destination.
+  Existing `.env.local` files and Vite key overlaps are reported by name only.
+  Daily `npm run dev` validates required Supabase settings and prepares missing
+  links without installing dependencies or replacing local files.
   A symlink makes its target readable to any worker trusted with that workspace,
   so provide only the development credentials required by the task.
 - `.env.ai-quota`, `secrets/ai-quota-ca/`, `service_account.json`, and
@@ -88,6 +94,9 @@ Prefer creating/reviewing migrations separately from applying them to a linked p
 - Use `scripts/delegate-cursor.sh --worktree <task>` to create/reuse the
   standard worktree, or `--workspace <path>` to reuse an existing one. Cursor
   receives `--workspace`; do not use Cursor's own `--worktree` location.
+  New delegate worktrees fetch and use `origin/main`; failed fetches stop
+  creation instead of falling back to the current branch. Existing worktrees
+  are reused without fetching or changing their branch.
 
 ## Implementation rules
 

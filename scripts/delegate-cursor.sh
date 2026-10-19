@@ -89,7 +89,19 @@ fi
 if [[ -n "$worktree" ]]; then
   repo_name="$(basename "$(dirname "$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)")")"
   workspace="$HOME/worktrees/$repo_name/$worktree"
-  "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree"
+  if [[ ! -e "$workspace" ]]; then
+    if ! git -C "$repo_root" fetch --quiet --no-tags origin refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1; then
+      echo "Could not refresh origin/main. No new worktree was created; check the origin connection and retry." >&2
+      exit 2
+    fi
+    if ! git -C "$repo_root" rev-parse --verify 'origin/main^{commit}' >/dev/null 2>&1; then
+      echo "origin/main is unavailable after fetch. No new worktree was created." >&2
+      exit 2
+    fi
+    "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree" --base origin/main
+  else
+    "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree" --base origin/main
+  fi
 elif [[ -n "$workspace" ]]; then
   if [[ ! -d "$workspace" ]]; then
     echo "Existing worktree not found: $workspace" >&2

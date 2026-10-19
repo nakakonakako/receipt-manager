@@ -88,7 +88,7 @@ setup_environment() {
     printf '[worktree-setup] No environment directory configured: %s\n' "$source_dir"
     return 0
   }
-  for relative_path in .env frontend/.env backend/.env; do
+  for relative_path in .env frontend/.env frontend/.env.local backend/.env; do
     if [[ -e "$source_dir/$relative_path" ]]; then
       found_source=1
     fi
@@ -149,7 +149,7 @@ case "$command_name" in
     shift
     validate_task_name "$task_name"
     branch_name=""
-    base_ref="HEAD"
+    base_ref="origin/main"
     no_setup=0
     while [[ $# -gt 0 ]]; do
       case "$1" in
@@ -196,7 +196,7 @@ case "$command_name" in
       fi
       git -C "$script_repo_root" worktree add "$target_path" "$branch_name"
     else
-      git -C "$script_repo_root" rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || die "Base ref is not a commit: $base_ref"
+      git -C "$script_repo_root" rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || die "Base ref is not available: $base_ref. Fetch it explicitly (for example: git fetch origin main) or pass a valid --base ref."
       git -C "$script_repo_root" worktree add -b "$branch_name" "$target_path" "$base_ref"
     fi
     show_worktree_state "$target_path"

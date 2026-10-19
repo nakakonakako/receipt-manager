@@ -2,9 +2,9 @@
   "name": "receipt-manager",
   "private": true,
   "scripts": {
-    "dev": "concurrently -n \"FRONT,BACK\" -c \"cyan,magenta\" \"npm run dev --prefix frontend\" \"cd backend && uv run uvicorn app.main:app --reload\"",
+    "dev": "bash scripts/dev-env.sh prepare && concurrently -n \"FRONT,BACK\" -c \"cyan,magenta\" \"npm run dev --prefix frontend\" \"cd backend && uv run uvicorn app.main:app --reload\"",
     "check": "npm run check:worktree && npm run check:frontend && npm run check:backend",
-    "check:worktree": "bash scripts/test-worktree.sh",
+    "check:worktree": "bash scripts/test-worktree.sh && bash scripts/test-dev-env.sh",
     "worktree": "bash scripts/worktree.sh",
     "check:frontend": "npm run lint --prefix frontend && npm run test --prefix frontend && npm run build --prefix frontend",
     "check:backend": "uv run --directory backend ruff check . && uv run --directory backend ruff format --check . && uv run --directory backend python -m unittest discover -s tests -v",

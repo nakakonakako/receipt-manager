@@ -23,11 +23,19 @@ mkdir -p "$fixture_repo/frontend" "$fixture_repo/backend"
 : > "$fixture_repo/frontend/package-lock.json"
 : > "$fixture_repo/backend/pyproject.toml"
 printf 'tracked\n' > "$fixture_repo/README.md"
-printf '.env\nfrontend/.env\nbackend/.env\n' > "$fixture_repo/.gitignore"
+printf '.env\nfrontend/.env\nfrontend/.env.local\nbackend/.env\n' > "$fixture_repo/.gitignore"
 git -C "$fixture_repo" add .
 git -C "$fixture_repo" commit -m "test fixture" >/dev/null
+git init --bare "$test_root/origin.git" >/dev/null
+git -C "$fixture_repo" remote add origin "$test_root/origin.git"
+git -C "$fixture_repo" push origin main >/dev/null 2>&1
+git -C "$fixture_repo" fetch origin refs/heads/main:refs/remotes/origin/main >/dev/null 2>&1
+printf 'local-only\n' >> "$fixture_repo/README.md"
+git -C "$fixture_repo" add README.md
+git -C "$fixture_repo" commit -m "local branch only" >/dev/null
 
 printf 'VITE_TEST_VALUE=fixture-only\n' > "$fixture_config/frontend/.env"
+printf 'VITE_LOCAL_TEST_VALUE=fixture-only\n' > "$fixture_config/frontend/.env.local"
 printf 'TEST_SECRET_MARKER=fixture-only\n' > "$fixture_config/.env"
 printf 'excluded quota marker\n' > "$fixture_config/.env.ai-quota"
 printf 'excluded service marker\n' > "$fixture_config/service_account.json"
@@ -50,11 +58,17 @@ export HOME="$fixture_home"
 export PATH="$fixture_bin:$PATH"
 export WORKTREE_TEST_LOG="$command_log"
 
+"$fixture_repo/scripts/worktree.sh" create default-base --branch feature/default-base --no-setup >/dev/null
+default_base_path="$fixture_home/worktrees/$repository_name/default-base"
+[[ "$(git -C "$default_base_path" rev-parse HEAD)" == "$(git -C "$fixture_repo" rev-parse origin/main)" ]]
+[[ "$(git -C "$default_base_path" rev-parse HEAD)" != "$(git -C "$fixture_repo" rev-parse HEAD)" ]]
+
 create_output="$("$fixture_repo/scripts/worktree.sh" create review-task --branch feature/review-task --base main)"
 worktree_path="$fixture_home/worktrees/$repository_name/review-task"
 [[ -d "$worktree_path" ]]
 [[ "$(readlink "$worktree_path/.env")" == "$fixture_config/.env" ]]
 [[ "$(readlink "$worktree_path/frontend/.env")" == "$fixture_config/frontend/.env" ]]
+[[ "$(readlink "$worktree_path/frontend/.env.local")" == "$fixture_config/frontend/.env.local" ]]
 [[ ! -e "$worktree_path/.env.ai-quota" ]]
 [[ ! -e "$worktree_path/service_account.json" ]]
 [[ ! -e "$worktree_path/secrets/ai-quota-ca/root.crt" ]]

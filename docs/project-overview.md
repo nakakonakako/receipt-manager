@@ -373,7 +373,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
-| 2026-10-19 | 追加Git worktreeを `~/worktrees/receipt-manager/` に統一し、開発設定のsymlinkと安全な再利用・削除手順を追加 |
+| 2026-10-19 | Git worktree環境設定の明示移行、起動前検証、`origin/main`基準のCursor worktree作成を追加 |
 | 2026-10-16 | price-memoに本人の4テーブルだけを削除する認証済みSECURITY INVOKER RPCと隔離SQLテストを追加 |
 | 2026-10-15 | S1 F-01: APIロールのテーブル過大権限を既存表と `postgres` の `public` default privilegesから取り消し、読み取り専用検証を本番workflowへ追加 |
 | 2026-10-15 | レシート解析の HTTP 429 を日次上限・同時実行上限・未知の利用制限に分類し、未知の応答本文は表示しない |
