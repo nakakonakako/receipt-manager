@@ -16,12 +16,22 @@ import time
 from pathlib import Path
 
 
-def proc_info(pid: int) -> tuple[int, int, int, str] | None:
+def read_process_identity(pid: int) -> tuple[int, int, int] | None:
     try:
         raw = Path(f"/proc/{pid}/stat").read_text()
         tail = raw[raw.rfind(")") + 2 :].split()
         # Fields after comm begin at field 3: pgrp=5, session=6, starttime=22.
-        pgid, sid, start = int(tail[2]), int(tail[3]), int(tail[19])
+        return int(tail[2]), int(tail[3]), int(tail[19])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def proc_info(pid: int) -> tuple[int, int, int, str] | None:
+    identity = read_process_identity(pid)
+    if identity is None:
+        return None
+    pgid, sid, start = identity
+    try:
         raw_args = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
         args: list[str] = []
         redact_next = False
@@ -113,19 +123,24 @@ class OwnedGroup:
         self.name = name
         self.process = subprocess.Popen(command, cwd=cwd, start_new_session=True)
         self.pid = self.process.pid
-        self.identity = proc_info(self.pid)
-        if self.identity is None or self.identity[0] != self.pid or self.identity[1] != self.pid:
-            raise RuntimeError(f"Could not verify isolated process group for {name}")
-        self.starttime = self.identity[2]
+        # Keep the unreaped Popen child as the PID-reuse anchor until stop() completes.
+        self.identity: tuple[int, int, int] | None = None
+        self.starttime: int | None = None
+
+    def verify_identity(self) -> None:
+        identity = read_process_identity(self.pid)
+        if identity is None or identity[0] != self.pid or identity[1] != self.pid:
+            raise RuntimeError(f"Could not verify isolated process group for {self.name}")
+        self.identity = identity
+        self.starttime = identity[2]
 
     def still_owned(self) -> bool:
-        current = proc_info(self.pid)
-        return bool(
-            current
-            and current[0] == self.pid
-            and current[1] == self.pid
-            and current[2] == self.starttime
-        )
+        current = read_process_identity(self.pid)
+        if self.identity is not None:
+            return bool(current and current == self.identity)
+        # Verification may fail after Popen. Its unreaped child PID is reserved,
+        # and start_new_session guarantees this PID's own group/session identity.
+        return self.process.returncode is None and (current is None or (current[0] == self.pid and current[1] == self.pid))
 
     def members_alive(self) -> bool:
         for stat_path in glob.glob("/proc/[0-9]*/stat"):
@@ -138,9 +153,9 @@ class OwnedGroup:
                 continue
         return False
 
-    def has_exited(self) -> bool:
+    def exit_info(self):
         # WNOWAIT preserves the group leader as a PID-reuse anchor until cleanup.
-        return bool(os.waitid(os.P_PID, self.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT))
+        return os.waitid(os.P_PID, self.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
 
     def stop(self) -> None:
         if not self.still_owned():
@@ -176,6 +191,7 @@ def main() -> int:
 
     groups: list[OwnedGroup] = []
     interrupted = 0
+    failure_status: int | None = None
 
     def on_signal(signum: int, _frame: object) -> None:
         nonlocal interrupted
@@ -186,19 +202,27 @@ def main() -> int:
 
     try:
         print(f"[dev] Starting frontend on :{args.frontend_port} and backend on :{args.backend_port}")
-        groups.append(OwnedGroup("frontend", shlex.split(args.frontend_command), Path.cwd()))
-        groups.append(OwnedGroup("backend", shlex.split(args.backend_command), args.backend_cwd))
+        frontend = OwnedGroup("frontend", shlex.split(args.frontend_command), Path.cwd())
+        groups.append(frontend)
+        frontend.verify_identity()
+        backend = OwnedGroup("backend", shlex.split(args.backend_command), args.backend_cwd)
+        groups.append(backend)
+        backend.verify_identity()
         while not interrupted:
             for group in groups:
-                if group.has_exited():
-                    status = group.process.wait()
-                    print(f"[dev] {group.name} exited unexpectedly with status {status}; stopping owned servers", file=sys.stderr)
-                    return status or 1
-            time.sleep(0.1)
-        return 128 + interrupted
+                exit_info = group.exit_info()
+                if exit_info:
+                    exit_status = exit_info.si_status if exit_info.si_code == os.CLD_EXITED else 128 + exit_info.si_status
+                    print(f"[dev] {group.name} exited unexpectedly with status {exit_status}; stopping owned servers", file=sys.stderr)
+                    failure_status = exit_status or 1
+                    break
+            else:
+                time.sleep(0.1)
+                continue
+            break
     except (OSError, RuntimeError) as exc:
         print(f"[dev] ERROR: failed to start development servers: {exc}", file=sys.stderr)
-        return 1
+        failure_status = 1
     finally:
         for group in reversed(groups):
             group.stop()
@@ -207,6 +231,10 @@ def main() -> int:
                 group.process.wait(timeout=4)
             except subprocess.TimeoutExpired:
                 print(f"[dev] {group.name} leader did not exit after cleanup", file=sys.stderr)
+
+    if interrupted:
+        return 128 + interrupted
+    return failure_status or 1
 
 
 if __name__ == "__main__":
