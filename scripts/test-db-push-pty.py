@@ -12,10 +12,12 @@ import sys
 
 repo, confirmation, expected_code = sys.argv[1], sys.argv[2], int(sys.argv[3])
 script = sys.argv[4] if len(sys.argv) > 4 else "db-push.sh"
+working_directory = sys.argv[5] if len(sys.argv) > 5 else repo
+script_path = os.path.join(repo, "scripts", script)
 pid, fd = pty.fork()
 if pid == 0:
-    os.chdir(repo)
-    os.execv("/bin/bash", ["/bin/bash", f"scripts/{script}"])
+    os.chdir(working_directory)
+    os.execv("/bin/bash", ["/bin/bash", script_path])
 
 os.write(fd, (confirmation + "\n").encode())
 output = bytearray()
