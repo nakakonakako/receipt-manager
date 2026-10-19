@@ -66,9 +66,17 @@ excluded from migration and worktree links.
 Root `npm run dev` runs a lightweight environment preflight before starting.
 It prepares missing symlinks, validates the frontend Supabase settings,
 refuses conflicting local files, and does not install or sync dependencies.
-The ordinary Vite server is fixed to `5173` with `strictPort`. Existing
-Tailscale Serve commands continue to target the standard checkout and keep
-their current service ports.
+The ordinary Vite server is fixed to `5174` with `strictPort` so it can run
+alongside price-memo on `5173`. The separate Cursor Playwright server remains
+on `5273`. If Tailscale Serve forwards to the receipt-manager development
+server, verify its local target and update it from `5173` to `5174` when needed;
+this repository change does not alter the machine's Tailscale configuration.
+
+`frontend/src/components/Auth.tsx` sends the browser's current origin as the
+Supabase Auth redirect target. For local receipt-manager development, verify
+that `http://localhost:5174/` is allowed in the Supabase Auth redirect URL
+configuration. The Google OAuth provider callback URL remains the Supabase
+callback URL and is separate from this application redirect target.
 
 `remove` only accepts a clean, registered worktree below
 `~/worktrees/receipt-manager/`, prompts for the literal word `remove`, and uses
@@ -86,6 +94,6 @@ worktrees are reused without fetch or branch changes.
 Use `--workspace <path>` to continue work in a listed worktree. Cursor's own
 `--worktree` option is not used because it controls a separate storage root.
 
-`npm run dev` and the existing Tailscale Serve configuration keep their current
-behavior. Worktree setup does not start or stop services or apply database
-migrations.
+`npm run dev` continues to start the same services, with the receipt-manager
+frontend on `5174`. Worktree setup does not start or stop services or apply
+database migrations.

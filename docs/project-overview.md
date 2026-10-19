@@ -279,7 +279,7 @@ npm run dev
 # BACK:  uv run uvicorn app.main:app --reload（backend）
 ```
 
-- 開発時、Vite が `/api` を `http://localhost:8000` へプロキシ
+- 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - DB 反映: `npm run db:push`（linked な Supabase プロジェクトへ）
 
