@@ -24,37 +24,50 @@ steps when the venv is missing, stale, or cannot run `uvicorn`.
 
 ## Development Supabase project registration
 
-One-time registration stores the **development** project ref (20-character ref,
-not production) in:
-
-`~/.config/receipt-manager/development/supabase-development-project-ref` (mode `0600`)
+One-time registration stores both the Dashboard-confirmed development and
+production refs in the Git-ignored common settings file
+`~/.config/receipt-manager/development/supabase-project-refs` (file mode `0600`,
+directory mode `0700`). Both values are required, must be valid 20-character
+refs, and must differ. Registration checks that the development ref matches the
+standard frontend Supabase URL. Existing settings are never overwritten; no ref
+is inferred or registered automatically. An older single-ref registration is
+not migrated automatically; DB commands stop until it has been reviewed manually.
 
 ```bash
-bash scripts/dev-env.sh register-supabase-project-ref <project-ref>
+bash scripts/dev-env.sh register-supabase-project-refs <development-ref> <production-ref>
 ```
 
-The command refuses to overwrite an existing registration. Production project IDs
-and `PROD_SUPABASE_PROJECT_ID` are never used as the development registration source.
+The values are identifiers, not credentials, but should still be entered only
+after checking the Supabase Dashboard. They are never printed by the command.
 
 ## npm run db:plan
 
 Receipt-manager only. The command:
 
 1. Refuses to run outside the `receipt-manager` repository.
-2. Requires local `supabase/migrations/*.sql` files.
-3. Requires a registered development project ref in common settings.
-4. If the worktree is unlinked, runs `supabase link --project-ref` using only
-   the registered development ref; an existing link to another ref is never
-   overwritten.
-5. Requires the final linked ref to **exactly match** the registration, rejects
-   project/database URL overrides, and refuses when `PROD_SUPABASE_PROJECT_ID`
-   matches the linked or registered ref.
-6. For database inspection, runs only `supabase migration list --linked` and
-   `supabase db push --linked --dry-run` (no ordinary push, reset, repair, or apply).
-7. Fails when there are no pending local migrations to plan.
+2. Requires local `supabase/migrations/*.sql` files and both registered refs.
+3. Rejects equal development/production refs, project/database/workdir
+   environment overrides, Vite URL overrides, unsupported URL forms, and a
+   frontend URL that does not match the registered development ref.
+4. Requires the current worktree CLI link to match the registered development
+   ref. An unlinked worktree can be linked only after an interactive
+   confirmation; an existing mismatched or partial link is never repaired.
+5. Runs only `supabase migration list --linked` and
+   `supabase db push --linked --dry-run` for remote DB inspection. The dry-run
+   is shown even when there are no pending migrations and never applies them.
 
-Outside an explicit `db:plan` invocation, worktree setup and `npm run dev` never
-link to Supabase or run DB commands. If the CLI needs a database password, set
+## Local development database push
+
+`npm run db:push` is a development-only guarded command. It repeats the target
+checks, displays migration status and a dry-run plan, then requires a TTY and
+the user to type the development ref. The target is checked again immediately
+before the actual `supabase db push --linked`. Non-interactive runs and any
+ambiguous or mismatched target stop without applying migrations. Production
+CI/CD keeps its existing independent migration command and credentials.
+
+Outside explicit `db:plan` or `db:push` invocations, worktree setup, `npm run dev`,
+and `npm run check` never link to Supabase or access a remote database. If the
+CLI needs a database password, set
 `SUPABASE_DB_PASSWORD` in the shell; it is passed through the environment and
 never printed or placed in command arguments. For temporary `cli_login_postgres`
 role permission failures, retry with the development DB password set this way.

@@ -110,21 +110,32 @@ Worktree setup does not start or stop services or apply database migrations.
 
 ## Development database planning
 
-Register the development Supabase project ref once (never production):
+Register development and production Supabase project refs once. Confirm both
+values in Supabase Dashboard; the development ref must match `frontend/.env` and
+must differ from production. Existing settings cannot be overwritten:
 
 ```bash
-bash scripts/dev-env.sh register-supabase-project-ref <project-ref>
+bash scripts/dev-env.sh register-supabase-project-refs <development-ref> <production-ref>
 ```
 
-When this worktree has no Supabase link, `db:plan` runs `supabase link` against
-the registered development ref only. An existing link to any other ref stops
-the command without changing it. For a CLI database-password prompt, use the
-documented `SUPABASE_DB_PASSWORD` environment variable; never put the password
-in command arguments, repository files, or logs. Preview pending migrations
-without applying them:
+An existing legacy single-ref setting is not migrated automatically; review it
+manually before registering the pair.
+
+`db:plan` validates registered development/production refs, the frontend URL,
+and this worktree's Supabase CLI link. Vite URL overrides or unsupported URL
+formats fail closed. An unlinked worktree requires an interactive confirmation
+before it links to the registered development ref; a mismatched link is never
+changed. It runs migration list and dry-run only:
 
 ```bash
 npm run db:plan
 ```
+
+Local `npm run db:push` uses the same checks, displays the dry-run apply plan,
+and requires an interactive terminal plus typing the development ref. It cannot
+apply migrations to the registered production ref. The production deployment
+workflow remains unchanged. For a CLI database-password prompt, use the
+documented `SUPABASE_DB_PASSWORD` environment variable; never put the password
+in command arguments, repository files, or logs.
 
 Details and safety constraints: [spec-worktree-runtime.md](./spec-worktree-runtime.md).

@@ -4,167 +4,108 @@ set -euo pipefail
 source_root="$(git rev-parse --show-toplevel)"
 test_root="$(mktemp -d "${TMPDIR:-/tmp}/receipt-manager-db-plan-test.XXXXXX")"
 trap 'rm -rf "$test_root"' EXIT
+repo="$test_root/home/web/receipt-manager"
+config="$test_root/home/.config/receipt-manager/development"
+bin="$test_root/bin"
+log="$test_root/commands"
+mkdir -p "$repo/scripts" "$repo/frontend" "$repo/supabase/migrations" "$config" "$bin"
+chmod 700 "$config"
+for script in db-plan.sh db-push.sh lib-supabase-target.sh supabase-target.py test-db-push-pty.py; do
+  cp "$source_root/scripts/$script" "$repo/scripts/$script"
+done
+cp "$source_root/package.json" "$repo/package.json"
+touch "$repo/supabase/migrations/20260101000000_test.sql"
+printf 'VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co\n' >"$repo/frontend/.env"
+git -C "$repo" init -b main >/dev/null
+git -C "$repo" config user.name 'DB Plan Test'
+git -C "$repo" config user.email 'db-plan-test@example.invalid'
+git -C "$repo" add .
+git -C "$repo" commit -m fixture >/dev/null
 
-fixture_home="$test_root/home"
-fixture_repo="$fixture_home/web/receipt-manager"
-fixture_config="$fixture_home/.config/receipt-manager/development"
-fixture_bin="$test_root/bin"
-command_log="$test_root/supabase-commands.log"
-mkdir -p "$fixture_repo/scripts" "$fixture_repo/supabase/migrations" "$fixture_config" "$fixture_bin"
-cp "$source_root/scripts/db-plan.sh" "$fixture_repo/scripts/db-plan.sh"
-cp "$source_root/package.json" "$fixture_repo/package.json"
-printf '20260101000000_test.sql\n' >"$fixture_repo/supabase/migrations/20260101000000_test.sql"
-
-git -C "$fixture_repo" init -b main >/dev/null
-git -C "$fixture_repo" config user.name 'DB Plan Test'
-git -C "$fixture_repo" config user.email 'db-plan-test@example.invalid'
-git -C "$fixture_repo" add .
-git -C "$fixture_repo" commit -m 'fixture' >/dev/null
-
-wrong_repo="$test_root/wrong-repo"
-mkdir -p "$wrong_repo/scripts" "$wrong_repo/supabase/migrations"
-cp "$source_root/scripts/db-plan.sh" "$wrong_repo/scripts/db-plan.sh"
-printf '{"name":"price-memo","private":true}\n' >"$wrong_repo/package.json"
-printf '20260101000000_test.sql\n' >"$wrong_repo/supabase/migrations/20260101000000_test.sql"
-git -C "$wrong_repo" init -b main >/dev/null
-git -C "$wrong_repo" config user.name 'DB Plan Test'
-git -C "$wrong_repo" config user.email 'db-plan-test@example.invalid'
-git -C "$wrong_repo" add .
-git -C "$wrong_repo" commit -m 'fixture' >/dev/null
-
-cat >"$fixture_bin/npx" <<'EOF'
+cat >"$bin/npx" <<'EOF'
 #!/usr/bin/env bash
-log="${DB_PLAN_TEST_LOG:?}"
-printf 'npx' >>"$log"
-printf ' %s' "$@" >>"$log"
-printf '\n' >>"$log"
-if [[ "${1:-}" == --yes && "${2:-}" == supabase ]]; then
-  shift 2
-else
-  shift
-fi
+printf '%s\n' "$*" >>"${DB_PLAN_TEST_LOG:?}"
+if [[ "${1:-}" == --yes ]]; then shift; fi
+if [[ "${1:-}" == supabase ]]; then shift; fi
 case "$*" in
-  "link --project-ref abcdefghijklmnopqrst")
-    mkdir -p "$DB_PLAN_FIXTURE_REPO/supabase/.temp"
-    printf 'abcdefghijklmnopqrst\n' >"$DB_PLAN_FIXTURE_REPO/supabase/.temp/project-ref"
-    ;;
-  'migration list --linked')
-    printf 'LOCAL          │ REMOTE         │ TIME (UTC)\n'
-    printf '───────────────┼────────────────┼───────────────────\n'
-    printf '20260101000000 │                │ 2026-01-01 00:00:00\n'
-    ;;
-  'db push --linked --dry-run')
-    printf 'DRY RUN: migrations would be applied\n'
-    ;;
-  *)
-    printf 'unexpected supabase command: %s\n' "$*" >&2
-    exit 9
-    ;;
+  'link --project-ref abcdefghijklmnopqrst') printf 'abcdefghijklmnopqrst\n' >"${DB_PLAN_FIXTURE_REPO:?}/supabase/.temp/project-ref" ;;
+  'migration list --linked') printf 'LOCAL │ REMOTE\n20260101000000 │\n' ;;
+  'db push --linked --dry-run') printf 'DRY RUN: mock plan\n' ;;
+  'db push --linked') printf 'MOCK PUSH\n' ;;
+  *) exit 9 ;;
 esac
 EOF
-chmod +x "$fixture_bin/npx"
-
-export HOME="$fixture_home"
-export PATH="$fixture_bin:$PATH"
-export DB_PLAN_TEST_LOG="$command_log"
-export DB_PLAN_FIXTURE_REPO="$fixture_repo"
+chmod +x "$bin/npx"
+export HOME="$test_root/home" PATH="$bin:$PATH" DB_PLAN_TEST_LOG="$log" DB_PLAN_FIXTURE_REPO="$repo"
 export SUPABASE_DB_PASSWORD='do-not-print-test-secret'
+if bash "$repo/scripts/db-plan.sh" >"$test_root/unregistered.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/unregistered.log")" == *'not registered'* ]]
+printf 'development=abcdefghijklmnopqrst\nproduction=abcdefghijklmnopqrst\n' >"$config/supabase-project-refs"
+chmod 600 "$config/supabase-project-refs"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/same.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/same.log")" == *'must be different'* ]]
 
-if HOME="$fixture_home" bash "$wrong_repo/scripts/db-plan.sh" >"$test_root/wrong-repo.log" 2>&1; then
-  echo 'Expected wrong repository to be rejected.' >&2
+printf 'development=abcdefghijklmnopqrst\nproduction=zyxwvutsrqponmlkjihg\n' >"$config/supabase-project-refs"
+chmod 600 "$config/supabase-project-refs"
+mkdir -p "$repo/supabase/.temp"
+printf 'abcdefghijklmnopqrst\n' >"$repo/supabase/.temp/project-ref"
+rm "$repo/supabase/.temp/project-ref"
+: >"$log"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/unlinked.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/unlinked.log")" == *'interactive terminal'* ]]
+[[ ! -s "$log" ]]
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" link 0 db-plan.sh
+[[ "$(cat "$log")" == $'--yes supabase link --project-ref abcdefghijklmnopqrst\n--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
+printf 'abcdefghijklmnopqrst\n' >"$repo/supabase/.temp/project-ref"
+: >"$log"
+printf 'abcdefghijklmnopqrst\n' >"$repo/supabase/.temp/project-ref"
+if VITE_SUPABASE_URL='https://zyxwvutsrqponmlkjihg.supabase.co' bash "$repo/scripts/db-plan.sh" >"$test_root/env.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/env.log")" == *'process override'* ]]
+if SUPABASE_PROJECT_ID='zyxwvutsrqponmlkjihg' bash "$repo/scripts/db-plan.sh" >"$test_root/project.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/project.log")" == *'SUPABASE_PROJECT_ID override'* ]]
+for override in SUPABASE_DB_URL SUPABASE_WORKDIR; do
+  if env "$override=ambiguous-target" bash "$repo/scripts/db-plan.sh" >"$test_root/$override.log" 2>&1; then exit 1; fi
+  [[ "$(cat "$test_root/$override.log")" == *"$override override"* ]]
+done
+if PROD_SUPABASE_PROJECT_ID='abcdefghijklmnopqrst' bash "$repo/scripts/db-plan.sh" >"$test_root/prod-env-mismatch.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/prod-env-mismatch.log")" == *'does not match the registered production ref'* ]]
+
+printf 'VITE_SUPABASE_URL=https://zyxwvutsrqponmlkjihg.supabase.co\n' >"$repo/frontend/.env"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/url.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/url.log")" == *'does not match'* ]]
+printf 'VITE_SUPABASE_URL=https://custom.example.test\n' >"$repo/frontend/.env"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/custom-url.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/custom-url.log")" == *'must use https://<project-ref>.supabase.co'* ]]
+printf 'VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co\n' >"$repo/frontend/.env"
+printf 'zyxwvutsrqponmlkjihg\n' >"$repo/supabase/.temp/project-ref"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/link.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/link.log")" == *'does not match the registered development target'* ]]
+printf 'abcdefghijklmnopqrst\n' >"$repo/supabase/.temp/project-ref"
+printf 'VITE_SUPABASE_URL=https://zyxwvutsrqponmlkjihg.supabase.co\n' >"$repo/frontend/.env.local"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/override.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/override.log")" == *'override exists'* ]]
+rm "$repo/frontend/.env.local"
+
+: >"$log"
+bash "$repo/scripts/db-plan.sh" >"$test_root/plan.log"
+[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
+[[ "$(cat "$test_root/plan.log")" == *'Dry-run only'* ]]
+[[ "$(cat "$test_root/plan.log")" != *'do-not-print-test-secret'* ]]
+
+: >"$log"
+if bash "$repo/scripts/db-push.sh" >"$test_root/nontty.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/nontty.log")" == *'no DB request or push was run'* ]]
+[[ ! -s "$log" ]]
+
+: >"$log"
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" abcdefghijklmnopqrst 0
+[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run\n--yes supabase db push --linked' ]]
+: >"$log"
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" wrong-confirmation 2
+[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
+grep -Fq 'run: supabase db push --yes --linked' "$source_root/.github/workflows/deploy.yml"
+if grep -Fq 'npm run db:push' "$source_root/.github/workflows/deploy.yml"; then
+  echo 'Production deployment must keep its existing direct Supabase CLI migration path.' >&2
   exit 1
 fi
-[[ "$(cat "$test_root/wrong-repo.log")" == *'Refusing to run db:plan'* ]]
-
-if bash "$fixture_repo/scripts/db-plan.sh" >"$test_root/missing-registration.log" 2>&1; then
-  echo 'Expected missing registration to be rejected.' >&2
-  exit 1
-fi
-[[ "$(cat "$test_root/missing-registration.log")" == *'register-supabase-project-ref'* ]]
-
-printf 'abcdefghijklmnopqrst\n' >"$fixture_config/supabase-development-project-ref"
-chmod 600 "$fixture_config/supabase-development-project-ref"
-
-if PROD_SUPABASE_PROJECT_ID='abcdefghijklmnopqrst' bash "$fixture_repo/scripts/db-plan.sh" >"$test_root/production-ref.log" 2>&1; then
-  echo 'Expected registered production ref to be rejected before link setup.' >&2
-  exit 1
-fi
-[[ "$(cat "$test_root/production-ref.log")" == *'matches PROD_SUPABASE_PROJECT_ID'* ]]
-[[ ! -e "$fixture_repo/supabase/.temp/project-ref" ]]
-[[ ! -s "$command_log" ]]
-
-mkdir -p "$fixture_repo/supabase/.temp"
-printf 'partial metadata\n' >"$fixture_repo/supabase/.temp/legacy-config"
-if bash "$fixture_repo/scripts/db-plan.sh" >"$test_root/partial-link.log" 2>&1; then
-  echo 'Expected partial Supabase link metadata to stop automatic setup.' >&2
-  exit 1
-fi
-[[ "$(cat "$test_root/partial-link.log")" == *'metadata exists without project-ref'* ]]
-[[ ! -s "$command_log" ]]
-rm -rf "$fixture_repo/supabase/.temp"
-
-if ! missing_link_output="$(bash "$fixture_repo/scripts/db-plan.sh" 2>"$test_root/missing-link.err")"; then
-  cat "$test_root/missing-link.err" >&2
-  echo 'Expected safe development linking and dry-run planning for an unlinked worktree.' >&2
-  exit 1
-fi
-[[ "$missing_link_output" == *'Pending local migrations: 1'* ]]
-[[ "$(cat "$command_log")" == *'link --project-ref abcdefghijklmnopqrst'* ]]
-[[ "$(cat "$command_log")" == *'migration list --linked'* ]]
-[[ "$(cat "$command_log")" == *'db push --linked --dry-run'* ]]
-[[ "$missing_link_output$(cat "$test_root/missing-link.err")" != *'do-not-print-test-secret'* ]]
-
-mkdir -p "$fixture_repo/supabase/.temp"
-printf 'zyxwvutsrqponmlkjihg\n' >"$fixture_repo/supabase/.temp/project-ref"
-: >"$command_log"
-if bash "$fixture_repo/scripts/db-plan.sh" >"$test_root/wrong-link.log" 2>&1; then
-  echo 'Expected mismatched linked project ref to be rejected.' >&2
-  exit 1
-fi
-[[ "$(cat "$test_root/wrong-link.log")" == *'does not match'* ]]
-[[ ! -s "$command_log" ]]
-
-printf 'abcdefghijklmnopqrst\n' >"$fixture_repo/supabase/.temp/project-ref"
-if SUPABASE_PROJECT_ID='some-other-target' bash "$fixture_repo/scripts/db-plan.sh" >"$test_root/override.log" 2>&1; then
-  echo 'Expected project override to be rejected.' >&2
-  exit 1
-fi
-[[ "$(cat "$test_root/override.log")" == *'overrides are present'* ]]
-
-if ! success_output="$(bash "$fixture_repo/scripts/db-plan.sh" 2>"$test_root/db-plan-success.err")"; then
-  cat "$test_root/db-plan-success.err" >&2
-  exit 1
-fi
-[[ "$success_output" == *'Pending local migrations: 1'* ]]
-[[ "$success_output" == *'DRY RUN'* ]]
-[[ "$(cat "$command_log")" == *'migration list --linked'* ]]
-[[ "$(cat "$command_log")" == *'db push --linked --dry-run'* ]]
-if grep -E 'db push --linked( |$)' "$command_log" | grep -qv 'dry-run'; then
-  echo 'Non-dry-run db push must not run.' >&2
-  exit 1
-fi
-[[ "$success_output" != *'do-not-print-test-secret'* ]]
-
-cat >"$fixture_bin/npx" <<'EOF'
-#!/usr/bin/env bash
-log="${DB_PLAN_TEST_LOG:?}"
-printf 'npx %s\n' "$*" >>"$log"
-if [[ "${1:-}" == --yes ]]; then shift 2; else shift; fi
-case "$*" in
-  'migration list --linked')
-    printf 'LOCAL          │ REMOTE         │ TIME (UTC)\n'
-    printf '───────────────┼────────────────┼───────────────────\n'
-    printf '20260101000000 │ 20260101000000 │ 2026-01-01 00:00:00\n'
-    ;;
-  'db push --linked --dry-run') printf 'DRY RUN\n' ;;
-esac
-EOF
-chmod +x "$fixture_bin/npx"
-: >"$command_log"
-if bash "$fixture_repo/scripts/db-plan.sh" >"$test_root/no-pending.log" 2>&1; then
-  echo 'Expected no pending migrations to fail.' >&2
-  exit 1
-fi
-[[ "$(cat "$test_root/no-pending.log")" == *'No pending migrations'* ]]
-
-echo 'db:plan tests passed.'
+echo 'db target and push guard tests passed.'

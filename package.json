@@ -9,7 +9,7 @@
     "check:frontend": "npm run lint --prefix frontend && npm run test --prefix frontend && npm run build --prefix frontend",
     "check:backend": "uv run --directory backend ruff check . && uv run --directory backend ruff format --check . && uv run --directory backend python -m unittest discover -s tests -v",
     "db:plan": "bash scripts/db-plan.sh",
-    "db:push": "npx supabase db push --linked",
+    "db:push": "bash scripts/db-push.sh",
     "db:list": "npx supabase migration list"
   },
   "devDependencies": {
