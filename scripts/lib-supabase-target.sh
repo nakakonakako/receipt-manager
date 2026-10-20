@@ -15,7 +15,7 @@ confirm_development_link() {
     printf '%s\n' '[db] Linking requires an interactive terminal.' >&2
     return 2
   }
-  printf '[db] Link this worktree to the registered development project? Type link: '
+  printf '[db] Link this worktree to the allowed development project? Type link: '
   read -r answer
   [[ "$answer" == link ]] || {
     printf '%s\n' '[db] Link cancelled.' >&2
@@ -37,7 +37,7 @@ require_development_push_confirmation() {
     printf '%s\n' '[db:push] An interactive terminal is required; no push was run.' >&2
     return 2
   }
-  printf '[db:push] This applies pending migrations to the registered development project. Type the development ref to continue: '
+  printf '[db:push] This applies pending migrations to the allowed development project. Type the development ref to continue: '
   read -r answer
   [[ "$answer" == "$development_ref" ]] || {
     printf '%s\n' '[db:push] Confirmation did not match; no push was run.' >&2

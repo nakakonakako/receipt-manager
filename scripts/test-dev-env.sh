@@ -61,40 +61,6 @@ rm "$fixture_repo/frontend/.env.local"
 "$fixture_repo/scripts/dev-env.sh" prepare >/dev/null
 [[ -f "$fixture_repo/frontend/.env" && ! -L "$fixture_repo/frontend/.env" ]]
 
-printf 'VITE_SUPABASE_URL=https://zyxwvutsrqponmlkjihg.supabase.co\n' > "$fixture_repo/frontend/.env"
-if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst zyxwvutsrqponmlkjihg >"$test_root/register-url-mismatch.log" 2>&1; then
-  echo 'Expected development ref registration to match the frontend Supabase URL.' >&2
-  exit 1
-fi
-[[ ! -e "$fixture_config/supabase-project-refs" ]]
-printf 'VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
-printf 'abcdefghijklmnopqrst\n' > "$fixture_config/supabase-development-project-ref"
-if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst zyxwvutsrqponmlkjihg >"$test_root/register-legacy.log" 2>&1; then
-  echo 'Expected legacy single-ref settings to require manual review.' >&2
-  exit 1
-fi
-[[ ! -e "$fixture_config/supabase-project-refs" ]]
-rm "$fixture_config/supabase-development-project-ref"
-
-if ! printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst zyxwvutsrqponmlkjihg >"$test_root/register.log"; then
-  echo 'Expected explicit development and production project ref registration to succeed.' >&2
-  exit 1
-fi
-registered_ref_path="$fixture_config/supabase-project-refs"
-[[ "$(cat "$registered_ref_path")" == $'development=abcdefghijklmnopqrst\nproduction=zyxwvutsrqponmlkjihg' ]]
-[[ "$(stat -c '%a' "$registered_ref_path")" == 600 ]]
-[[ "$(stat -c '%a' "$fixture_config")" == 700 ]]
-[[ "$(cat "$test_root/register.log")" != *'abcdefghijklmnopqrst'* ]]
-if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs abcdefghijklmnopqrst abcdefghijklmnopqrst >"$test_root/register-same.log" 2>&1; then
-  echo 'Expected identical development and production refs to be rejected.' >&2
-  exit 1
-fi
-if printf 'register\n' | "$fixture_repo/scripts/dev-env.sh" register-supabase-project-refs zyxwvutsrqponmlkjihg abcdefghijklmnopqrst >"$test_root/register-conflict.log" 2>&1; then
-  echo 'Expected existing development and production refs to be immutable.' >&2
-  exit 1
-fi
-[[ "$(cat "$registered_ref_path")" == $'development=abcdefghijklmnopqrst\nproduction=zyxwvutsrqponmlkjihg' ]]
-
 worktree="$fixture_home/worktrees/$repository_name/new-task"
 mkdir -p "$(dirname "$worktree")"
 git -C "$fixture_repo" worktree add -b env-test "$worktree" HEAD >/dev/null

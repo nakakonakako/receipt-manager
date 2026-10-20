@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
+DEVELOPMENT_PROJECT_REF = "irgahixsuvtopiwmtkku"
 REF_PATTERN = re.compile(r"^[a-z0-9]{20}$")
 KEY_PATTERN = re.compile(r"^\s*(?:export\s+)?VITE_SUPABASE_URL\s*=")
 OVERRIDE_FILES = (
@@ -29,7 +30,7 @@ def fail(message: str) -> None:
 
 def read_env_url(path: Path) -> str:
     if not path.is_file():
-        fail("frontend/.env is missing or is not a regular file.")
+        fail("Shared development frontend/.env is missing or is not a regular file.")
     values: list[str] = []
     for line in path.read_text(encoding="utf-8", errors="strict").splitlines():
         if not KEY_PATTERN.match(line):
@@ -50,7 +51,36 @@ def read_env_url(path: Path) -> str:
     return values[0]
 
 
-def endpoint_ref(repo: Path) -> str:
+def shared_frontend_env(repo: Path, config: Path) -> Path:
+    if any(parent.is_symlink() for parent in (config, config.parent, config.parent.parent)):
+        fail("Common development settings directory must not be a symlink.")
+    if not config.is_dir():
+        fail("Shared development settings directory is missing.")
+    if stat.S_IMODE(config.stat().st_mode) & 0o077:
+        fail("Shared development settings directory must have mode 0700 or stricter.")
+    frontend_dir = config / "frontend"
+    if frontend_dir.is_symlink():
+        fail("Shared development frontend directory must not be a symlink.")
+    if not frontend_dir.is_dir():
+        fail("Shared development frontend directory is missing.")
+    shared_env = frontend_dir / ".env"
+    if shared_env.is_symlink() or not shared_env.is_file():
+        fail("Shared development frontend/.env must be a regular file.")
+    if stat.S_IMODE(shared_env.stat().st_mode) & 0o077:
+        fail("Shared development frontend/.env must have mode 0600 or stricter.")
+    worktree_env = repo / "frontend" / ".env"
+    if not worktree_env.is_symlink():
+        fail(
+            "frontend/.env must be a symlink to ~/.config/receipt-manager/development/frontend/.env."
+        )
+    if worktree_env.resolve() != shared_env.resolve():
+        fail(
+            "frontend/.env must symlink to the shared development frontend/.env for this machine."
+        )
+    return shared_env
+
+
+def endpoint_ref(repo: Path, config: Path) -> str:
     if "VITE_SUPABASE_URL" in os.environ:
         fail("VITE_SUPABASE_URL process override is present; refusing an ambiguous target.")
     frontend = repo / "frontend"
@@ -61,7 +91,7 @@ def endpoint_ref(repo: Path) -> str:
         for line in override.read_text(encoding="utf-8", errors="strict").splitlines():
             if KEY_PATTERN.match(line):
                 fail(f"VITE_SUPABASE_URL override exists in frontend/{filename}.")
-    raw_url = read_env_url(frontend / ".env")
+    raw_url = read_env_url(shared_frontend_env(repo, config))
     try:
         parsed = urlsplit(raw_url)
         host = parsed.hostname or ""
@@ -83,52 +113,15 @@ def endpoint_ref(repo: Path) -> str:
     return match.group(1)
 
 
-def read_registration(path: Path) -> tuple[str, str]:
-    if not path.exists():
-        fail("Development and production Supabase refs are not registered.")
-    if path.is_symlink() or not path.is_file():
-        fail("Development and production Supabase refs must be stored in a regular file.")
-    if any(parent.is_symlink() for parent in (path.parent, path.parent.parent, path.parent.parent.parent)):
-        fail("Common Supabase settings directories must not be symlinks.")
-    if stat.S_IMODE(path.parent.stat().st_mode) & 0o077:
-        fail("Supabase project ref settings directory must have mode 0700 or stricter.")
-    mode = stat.S_IMODE(path.stat().st_mode)
-    if mode & 0o077:
-        fail("Supabase project ref settings must have mode 0600 or stricter.")
-    values: dict[str, str] = {}
-    for line in path.read_text(encoding="ascii").splitlines():
-        if "=" not in line:
-            fail("Supabase project ref settings are malformed.")
-        key, value = line.split("=", 1)
-        if key in values or key not in {"development", "production"}:
-            fail("Supabase project ref settings are malformed.")
-        values[key] = value
-    dev_ref = values.get("development", "")
-    prod_ref = values.get("production", "")
-    if not REF_PATTERN.fullmatch(dev_ref) or not REF_PATTERN.fullmatch(prod_ref):
-        fail("Registered Supabase refs must each be 20 lowercase letters or digits.")
-    if dev_ref == prod_ref:
-        fail("Development and production Supabase refs must be different.")
-    return dev_ref, prod_ref
-
-
 def validate(repo: Path, config: Path, allow_unlinked: bool) -> str:
     for key in ("SUPABASE_PROJECT_ID", "SUPABASE_DB_URL", "SUPABASE_WORKDIR"):
         if key in os.environ:
             fail(f"{key} override is present; refusing an ambiguous DB target.")
-    legacy_registration = config / "supabase-development-project-ref"
-    if legacy_registration.exists() or legacy_registration.is_symlink():
-        fail("A legacy single-ref registration exists; review it manually before DB operations.")
-    registration = config / "supabase-project-refs"
-    dev_ref, prod_ref = read_registration(registration)
-    configured_prod_ref = os.environ.get("PROD_SUPABASE_PROJECT_ID")
-    if configured_prod_ref is not None and configured_prod_ref != prod_ref:
-        fail("PROD_SUPABASE_PROJECT_ID does not match the registered production ref.")
-    url_ref = endpoint_ref(repo)
-    if dev_ref == prod_ref:
-        fail("Development ref matches the registered production ref.")
-    if url_ref != dev_ref:
-        fail("Frontend Supabase URL does not match the registered development ref.")
+    if not REF_PATTERN.fullmatch(DEVELOPMENT_PROJECT_REF):
+        fail("Configured development project ref is invalid.")
+    url_ref = endpoint_ref(repo, config)
+    if url_ref != DEVELOPMENT_PROJECT_REF:
+        fail("Frontend Supabase URL does not match the allowed development project ref.")
     linked_path = repo / "supabase" / ".temp" / "project-ref"
     if linked_path.is_symlink() or linked_path.parent.is_symlink():
         fail("Supabase CLI link metadata must be stored inside this worktree.")
@@ -137,37 +130,14 @@ def validate(repo: Path, config: Path, allow_unlinked: bool) -> str:
         if temp_dir.is_dir() and any(temp_dir.iterdir()):
             fail("Supabase link metadata is incomplete; inspect it manually.")
         if allow_unlinked:
-            return dev_ref
+            return DEVELOPMENT_PROJECT_REF
         fail("This worktree is not linked to a Supabase project; refusing the DB operation.")
     linked_ref = linked_path.read_text(encoding="ascii").strip()
     if not REF_PATTERN.fullmatch(linked_ref):
         fail("This worktree has an invalid Supabase CLI link ref.")
-    if linked_ref != dev_ref or linked_ref == prod_ref:
-        fail("This worktree's Supabase CLI link does not match the registered development target.")
-    return dev_ref
-
-
-def register(repo: Path, config: Path, dev_ref: str, prod_ref: str) -> None:
-    if not REF_PATTERN.fullmatch(dev_ref) or not REF_PATTERN.fullmatch(prod_ref):
-        fail("Project refs must each be 20 lowercase letters or digits.")
-    if dev_ref == prod_ref:
-        fail("Development and production Supabase refs must be different.")
-    if endpoint_ref(repo) != dev_ref:
-        fail("Development ref does not match the frontend Supabase URL.")
-    if any(parent.is_symlink() for parent in (config, config.parent, config.parent.parent)):
-        fail("Common Supabase settings directory must not be a symlink.")
-    legacy_registration = config / "supabase-development-project-ref"
-    if legacy_registration.exists() or legacy_registration.is_symlink():
-        fail("A legacy single-ref registration exists; review it manually before registering both refs.")
-    config.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(config, 0o700)
-    path = config / "supabase-project-refs"
-    if path.exists() or path.is_symlink():
-        fail("Supabase project refs are already registered; refusing to overwrite.")
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w", encoding="ascii") as stream:
-        stream.write(f"development={dev_ref}\nproduction={prod_ref}\n")
-    os.chmod(path, 0o600)
+    if linked_ref != DEVELOPMENT_PROJECT_REF:
+        fail("This worktree's Supabase CLI link does not match the allowed development target.")
+    return DEVELOPMENT_PROJECT_REF
 
 
 def main(argv: list[str]) -> int:
@@ -176,8 +146,6 @@ def main(argv: list[str]) -> int:
         if command == "validate" and len(argv) == 5:
             result = validate(Path(argv[2]).resolve(), Path(argv[3]), argv[4] == "allow-unlinked")
             print(result)
-        elif command == "register" and len(argv) == 6:
-            register(Path(argv[2]).resolve(), Path(argv[3]), argv[4], argv[5])
         else:
             fail("Invalid Supabase target helper invocation.")
     except (TargetError, OSError, UnicodeError) as exc:
