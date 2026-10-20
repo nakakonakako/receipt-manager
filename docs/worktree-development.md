@@ -114,7 +114,8 @@ The allowed development Supabase project ref is fixed in the repository
 (`irgahixsuvtopiwmtkku`). Shared development credentials live under
 `~/.config/receipt-manager/development/`; each worktree's `frontend/.env` must
 symlink to `~/.config/receipt-manager/development/frontend/.env` (created by
-`bash scripts/dev-env.sh prepare` / worktree setup). The shared
+`bash scripts/dev-env.sh prepare`, worktree setup, or automatically on the first
+`npm run db:plan` / `db:push` when the path is missing). The shared
 `development/frontend` directory must be a regular directory, not a symlink.
 
 `db:plan` validates the shared `frontend/.env` symlink and URL, then this
@@ -128,10 +129,10 @@ npm run db:plan
 ```
 
 Local `npm run db:push` uses the same checks, displays the dry-run apply plan,
-and requires an interactive terminal plus typing the development ref. The
-production deployment
-workflow remains unchanged. For a CLI database-password prompt, use the
-documented `SUPABASE_DB_PASSWORD` environment variable; never put the password
-in command arguments, repository files, or logs.
+and requires an interactive terminal plus typing `apply` once to confirm. The
+production deployment workflow remains unchanged. `db:plan` and `db:push` accept
+`SUPABASE_DB_PASSWORD` from the shell or prompt for it with hidden input on a
+TTY; never put the password in command arguments, repository files, logs, or
+shell history.
 
 Details and safety constraints: [spec-worktree-runtime.md](./spec-worktree-runtime.md).
