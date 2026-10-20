@@ -29,11 +29,11 @@ if ! find "$migrations_dir" -maxdepth 1 -type f -name '*.sql' -print -quit | gre
 fi
 
 development_ref="$(validate_development_supabase_target "$repo_root" allow-unlinked)"
+ensure_supabase_db_password
 if [[ ! -f "$repo_root/supabase/.temp/project-ref" ]]; then
   confirm_development_link "$development_ref"
   development_ref="$(validate_development_supabase_target "$repo_root")"
 fi
-ensure_supabase_db_password
 
 printf '%s\n' '[db:plan] Migration status for the validated development project:'
 npx --yes supabase migration list --linked

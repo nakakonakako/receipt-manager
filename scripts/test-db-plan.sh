@@ -51,7 +51,13 @@ esac
 if [[ "\${1:-}" == --yes ]]; then shift; fi
 if [[ "\${1:-}" == supabase ]]; then shift; fi
 case "\$*" in
-  'link --project-ref ${allowed_ref}') printf '${allowed_ref}\n' >"\$PWD/supabase/.temp/project-ref" ;;
+  'link --project-ref ${allowed_ref}')
+    [[ -n "\${SUPABASE_DB_PASSWORD:-}" ]] || {
+      printf 'link did not receive the database password environment variable\n' >&2
+      exit 13
+    }
+    printf '${allowed_ref}\n' >"\$PWD/supabase/.temp/project-ref"
+    ;;
   'migration list --linked') printf 'LOCAL │ REMOTE\n20260101000000 │\n' ;;
   'db push --linked --dry-run')
     printf 'DRY RUN: mock plan\n'
@@ -99,12 +105,22 @@ mkdir -p "$repo/supabase/.temp"
 printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
 rm "$repo/supabase/.temp/project-ref"
 : >"$log"
+: >"$env_log"
+unset SUPABASE_DB_PASSWORD
+if bash "$repo/scripts/db-plan.sh" >"$test_root/unlinked-no-password.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/unlinked-no-password.log")" == *'SUPABASE_DB_PASSWORD is not set'* ]]
+[[ ! -s "$log" ]]
+[[ ! -s "$env_log" ]]
+export SUPABASE_DB_PASSWORD='do-not-print-test-secret'
 if bash "$repo/scripts/db-plan.sh" >"$test_root/unlinked.log" 2>&1; then exit 1; fi
 [[ "$(cat "$test_root/unlinked.log")" == *'interactive terminal'* ]]
 [[ ! -s "$log" ]]
+[[ ! -s "$env_log" ]]
 
+: >"$env_log"
 python3 "$repo/scripts/test-db-push-pty.py" "$repo" link 0 db-plan.sh "$foreign_cwd"
 [[ "$(cat "$log")" == $'--yes supabase link --project-ref irgahixsuvtopiwmtkku\n--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
+[[ "$(cat "$env_log")" == $'SUPABASE_DB_PASSWORD=present\nSUPABASE_DB_PASSWORD=present\nSUPABASE_DB_PASSWORD=present' ]]
 [[ "$(cat "$cwd_log")" == "$repo"$'\n'"$repo"$'\n'"$repo" ]]
 printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
 rm -f "$repo/frontend/.env"
