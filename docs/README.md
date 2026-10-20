@@ -11,3 +11,4 @@
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | **予定** — 履歴の大分類・サブを候補選択で絞る構想 |
 | [cursor-delegation.md](./cursor-delegation.md) | Codex supervisor から Cursor worker へ実装を委譲する手順 |
 | [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と、`/analyze`・`/search`・`/analyze_csv` の FastAPI 統合 |
+| [spec-price-memo-realtime.md](./spec-price-memo-realtime.md) | price-memo向けPrivate Broadcast通知のtopic・認可・trigger契約 |
