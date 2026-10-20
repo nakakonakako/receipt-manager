@@ -281,8 +281,8 @@ npm run dev
 
 - 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ。`npm run dev` は起動前に両ポートを検査し、競合時は所有プロセス情報を表示できる範囲で表示して停止。別ポートへの自動切替や既存プロセスの終了は行わず、Ctrl+C・SIGTERM・片側起動失敗時はこの起動が作成したプロセス群だけを終了
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
-- DB 計画確認: `npm run db:plan`（許可された開発ref、共有 `frontend/.env` symlink/URL、worktree linkを照合し、migration listとdry-runを実行）
-- DB 反映: `npm run db:push`（開発DB限定の接続先検証、dry-run表示、対話確認後に適用。明示依頼時のみ）
+- DB 計画確認: `npm run db:plan`（DB専用env準備、許可された開発ref、共有 `frontend/.env` と worktree symlink/URL、worktree linkを照合し、migration listとdry-runを実行。`frontend/.env` が未作成の worktree では共有設定への symlink を自動作成）
+- DB 反映: `npm run db:push`（同じ接続先検証、dry-run表示、TTYで `apply` 入力後に適用。`SUPABASE_DB_PASSWORD` は環境変数または非表示プロンプト。明示依頼時のみ）
 
 ### 7.2 環境変数
 

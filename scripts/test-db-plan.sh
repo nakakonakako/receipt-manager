@@ -8,15 +8,17 @@ repo="$test_root/home/web/receipt-manager"
 config="$test_root/home/.config/receipt-manager/development"
 bin="$test_root/bin"
 log="$test_root/commands"
+env_log="$test_root/cli-env"
 cwd_log="$test_root/cli-cwd"
 foreign_cwd="$test_root/other-worktree"
 allowed_ref='irgahixsuvtopiwmtkku'
 wrong_ref='zyxwvutsrqponmlkjihg'
 mkdir -p "$repo/scripts" "$repo/frontend" "$repo/supabase/migrations" "$config/frontend" "$bin" "$foreign_cwd"
 chmod 700 "$config"
-for script in db-plan.sh db-push.sh lib-supabase-target.sh supabase-target.py test-db-push-pty.py; do
+for script in db-plan.sh db-push.sh db-env-prepare.sh lib-supabase-target.sh supabase-target.py test-db-push-pty.py; do
   cp "$source_root/scripts/$script" "$repo/scripts/$script"
 done
+chmod +x "$repo/scripts/db-env-prepare.sh"
 cp "$source_root/package.json" "$repo/package.json"
 touch "$repo/supabase/migrations/20260101000000_test.sql"
 printf 'VITE_SUPABASE_URL=https://%s.supabase.co\n' "$allowed_ref" >"$config/frontend/.env"
@@ -36,6 +38,16 @@ cat >"$bin/npx" <<EOF
 }
 printf '%s\n' "\$(pwd -P)" >>"\${DB_PLAN_TEST_CWD_LOG:?}"
 printf '%s\n' "\$*" >>"\${DB_PLAN_TEST_LOG:?}"
+if [[ -n "\${DB_PLAN_TEST_ENV_LOG:-}" ]]; then
+  if [[ -n "\${SUPABASE_DB_PASSWORD:-}" ]]; then
+    printf 'SUPABASE_DB_PASSWORD=present\n' >>"\$DB_PLAN_TEST_ENV_LOG"
+  else
+    printf 'SUPABASE_DB_PASSWORD=missing\n' >>"\$DB_PLAN_TEST_ENV_LOG"
+  fi
+fi
+case "\$*" in
+  *do-not-print-test-secret*) printf 'password leaked into CLI args\n' >&2; exit 13 ;;
+esac
 if [[ "\${1:-}" == --yes ]]; then shift; fi
 if [[ "\${1:-}" == supabase ]]; then shift; fi
 case "\$*" in
@@ -47,7 +59,7 @@ case "\$*" in
 esac
 EOF
 chmod +x "$bin/npx"
-export HOME="$test_root/home" PATH="$bin:$PATH" DB_PLAN_TEST_LOG="$log" DB_PLAN_EXPECTED_CWD="$repo" DB_PLAN_TEST_CWD_LOG="$cwd_log"
+export HOME="$test_root/home" PATH="$bin:$PATH" DB_PLAN_TEST_LOG="$log" DB_PLAN_EXPECTED_CWD="$repo" DB_PLAN_TEST_CWD_LOG="$cwd_log" DB_PLAN_TEST_ENV_LOG="$env_log"
 export SUPABASE_DB_PASSWORD='do-not-print-test-secret'
 
 rm -f "$repo/frontend/.env"
@@ -56,6 +68,11 @@ if bash "$repo/scripts/db-plan.sh" >"$test_root/tampered-env.log" 2>&1; then exi
 [[ "$(cat "$test_root/tampered-env.log")" == *'must be a symlink'* ]]
 rm -f "$repo/frontend/.env"
 ln -s "$config/frontend/.env" "$repo/frontend/.env"
+
+ln -sf /tmp/receipt-manager-db-broken-env-target "$repo/frontend/.env"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/broken-symlink.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/broken-symlink.log")" == *'Broken frontend/.env symlink'* ]]
+ln -sf "$config/frontend/.env" "$repo/frontend/.env"
 
 mkdir -p "$test_root/other-shared"
 printf 'VITE_SUPABASE_URL=https://%s.supabase.co\n' "$allowed_ref" >"$test_root/other-shared/.env"
@@ -80,10 +97,19 @@ rm "$repo/supabase/.temp/project-ref"
 if bash "$repo/scripts/db-plan.sh" >"$test_root/unlinked.log" 2>&1; then exit 1; fi
 [[ "$(cat "$test_root/unlinked.log")" == *'interactive terminal'* ]]
 [[ ! -s "$log" ]]
+
 python3 "$repo/scripts/test-db-push-pty.py" "$repo" link 0 db-plan.sh "$foreign_cwd"
 [[ "$(cat "$log")" == $'--yes supabase link --project-ref irgahixsuvtopiwmtkku\n--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
 [[ "$(cat "$cwd_log")" == "$repo"$'\n'"$repo"$'\n'"$repo" ]]
 printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
+rm -f "$repo/frontend/.env"
+: >"$log"
+: >"$cwd_log"
+: >"$env_log"
+bash "$repo/scripts/db-plan.sh" >"$test_root/missing-symlink.log"
+[[ -L "$repo/frontend/.env" ]]
+[[ "$(readlink -f "$repo/frontend/.env")" == "$(readlink -f "$config/frontend/.env")" ]]
+[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
 : >"$log"
 printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
 if VITE_SUPABASE_URL="https://${wrong_ref}.supabase.co" bash "$repo/scripts/db-plan.sh" >"$test_root/env.log" 2>&1; then exit 1; fi
@@ -96,8 +122,11 @@ for override in SUPABASE_DB_URL SUPABASE_WORKDIR; do
 done
 
 printf 'VITE_SUPABASE_URL=https://%s.supabase.co\n' "$wrong_ref" >"$config/frontend/.env"
+rm -f "$repo/frontend/.env"
 if bash "$repo/scripts/db-plan.sh" >"$test_root/url.log" 2>&1; then exit 1; fi
 [[ "$(cat "$test_root/url.log")" == *'does not match the allowed development project ref'* ]]
+[[ ! -e "$repo/frontend/.env" && ! -L "$repo/frontend/.env" ]]
+ln -s "$config/frontend/.env" "$repo/frontend/.env"
 printf 'VITE_SUPABASE_URL=https://custom.example.test\n' >"$config/frontend/.env"
 if bash "$repo/scripts/db-plan.sh" >"$test_root/custom-url.log" 2>&1; then exit 1; fi
 [[ "$(cat "$test_root/custom-url.log")" == *'must use https://<project-ref>.supabase.co'* ]]
@@ -115,11 +144,34 @@ printf 'development=%s\nproduction=%s\n' "$allowed_ref" "$wrong_ref" >"$config/s
 chmod 600 "$config/supabase-project-refs"
 : >"$log"
 : >"$cwd_log"
+: >"$env_log"
 (cd "$foreign_cwd" && bash "$repo/scripts/db-plan.sh") >"$test_root/plan.log"
 [[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
 [[ "$(cat "$cwd_log")" == "$repo"$'\n'"$repo" ]]
 [[ "$(cat "$test_root/plan.log")" == *'Dry-run only'* ]]
 [[ "$(cat "$test_root/plan.log")" != *'do-not-print-test-secret'* ]]
+[[ "$(cat "$log")" != *'do-not-print-test-secret'* ]]
+[[ "$(cat "$env_log")" == $'SUPABASE_DB_PASSWORD=present\nSUPABASE_DB_PASSWORD=present' ]]
+
+unset SUPABASE_DB_PASSWORD
+: >"$log"
+if bash "$repo/scripts/db-plan.sh" >"$test_root/nontty-password.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/nontty-password.log")" == *'SUPABASE_DB_PASSWORD is not set'* ]]
+[[ "$(cat "$test_root/nontty-password.log")" == *'read -r -s SUPABASE_DB_PASSWORD'* ]]
+[[ ! -s "$log" ]]
+
+unset SUPABASE_DB_PASSWORD
+: >"$log"
+: >"$cwd_log"
+: >"$env_log"
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" 'do-not-print-test-secret' 0 db-plan.sh "$foreign_cwd"
+[[ "$(cat "$env_log")" == $'SUPABASE_DB_PASSWORD=present\nSUPABASE_DB_PASSWORD=present' ]]
+[[ "$(cat "$log")" != *'do-not-print-test-secret'* ]]
+
+: >"$log"
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" '__EOF__' 2 db-plan.sh "$foreign_cwd"
+[[ ! -s "$log" ]]
+export SUPABASE_DB_PASSWORD='do-not-print-test-secret'
 
 : >"$log"
 if bash "$repo/scripts/db-push.sh" >"$test_root/nontty.log" 2>&1; then exit 1; fi
@@ -128,7 +180,7 @@ if bash "$repo/scripts/db-push.sh" >"$test_root/nontty.log" 2>&1; then exit 1; f
 
 : >"$log"
 : >"$cwd_log"
-python3 "$repo/scripts/test-db-push-pty.py" "$repo" "$allowed_ref" 0 db-push.sh "$foreign_cwd"
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" apply 0 db-push.sh "$foreign_cwd"
 [[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run\n--yes supabase db push --linked' ]]
 [[ "$(cat "$cwd_log")" == "$repo"$'\n'"$repo"$'\n'"$repo" ]]
 : >"$log"

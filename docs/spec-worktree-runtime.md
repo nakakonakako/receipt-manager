@@ -28,11 +28,19 @@ The allowed development Supabase project ref is fixed in
 `scripts/supabase-target.py` (`irgahixsuvtopiwmtkku`). There is no registration
 file or registration command.
 
-Before `db:plan` or `db:push`, the guard checks that:
+Before `db:plan` or `db:push`, `scripts/db-env-prepare.sh` (also invoked at the
+start of both commands) runs a DB-only environment step. It does **not** run
+`dev-env.sh prepare`, backend `.venv` checks, or other application runtime
+preflight.
 
-- `frontend/.env` in the current worktree is a symlink to
-  `~/.config/receipt-manager/development/frontend/.env` (mode `0600`, parent
-  directory mode `0700`).
+That step checks that:
+
+- Shared `~/.config/receipt-manager/development/frontend/.env` exists with mode
+  `0600` and parent directory mode `0700`.
+- `frontend/.env` in the current worktree is a symlink to that shared file when
+  it already exists. If `frontend/.env` is missing entirely, the command creates
+  an absolute symlink to the shared file. Regular files, broken symlinks, and
+  mismatched symlinks are never changed.
 - `VITE_SUPABASE_URL` in that shared file resolves to
   `https://irgahixsuvtopiwmtkku.supabase.co` with no Vite override files or
   process-level URL overrides.
@@ -59,17 +67,20 @@ Receipt-manager only. The command:
 
 `npm run db:push` is a development-only guarded command. It repeats the target
 checks, displays migration status and a dry-run plan, then requires a TTY and
-the user to type the development ref. The target is checked again immediately
-before the actual `supabase db push --linked`. Non-interactive runs and any
-ambiguous or mismatched target stop without applying migrations. Production
-CI/CD keeps its existing independent migration command and credentials.
+the user to type `apply` once to confirm. The target is checked again
+immediately before the actual `supabase db push --linked`. Non-interactive runs
+and any ambiguous or mismatched target stop without applying migrations.
+Production CI/CD keeps its existing independent migration command and credentials.
 
 Outside explicit `db:plan` or `db:push` invocations, worktree setup, `npm run dev`,
-and `npm run check` never link to Supabase or access a remote database. If the
-CLI needs a database password, set
-`SUPABASE_DB_PASSWORD` in the shell; it is passed through the environment and
-never printed or placed in command arguments. For temporary `cli_login_postgres`
-role permission failures, retry with the development DB password set this way.
+and `npm run check` never link to Supabase or access a remote database.
+
+If `SUPABASE_DB_PASSWORD` is unset, `db:plan` and `db:push` prompt for it on a
+TTY with hidden input, export it only for the current process, and never print,
+log, or pass it on the CLI argument list. Non-interactive sessions without the
+variable stop with recovery steps instead of running Supabase. For temporary
+`cli_login_postgres` role permission failures, retry with the development DB
+password set this way.
 
 Applying migrations remains `npm run db:push` and requires an explicit human or
 supervisor request per `AGENTS.md`.

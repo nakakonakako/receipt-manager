@@ -5,6 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/.." && pwd -P)"
 cd -- "$repo_root"
 source "$script_dir/lib-supabase-target.sh"
+prepare_database_command_environment "$repo_root"
 
 git_common_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 repo_name="$(basename "$(dirname "$git_common_dir")")"
@@ -29,7 +30,7 @@ printf '%s\n' '[db:push] Review current migration status:'
 npx --yes supabase migration list --linked
 printf '\n%s\n' '[db:push] Review the apply plan (dry-run; no changes applied):'
 npx --yes supabase db push --linked --dry-run
-require_development_push_confirmation "$development_ref"
+require_development_push_confirmation
 
 # Recheck immediately before the write in case the link or local settings changed
 # while the migration plan was being reviewed.
