@@ -26,6 +26,7 @@ fi
 
 development_ref="$(validate_development_supabase_target "$repo_root")"
 require_interactive_database_push
+ensure_supabase_db_password
 printf '%s\n' '[db:push] Review current migration status:'
 npx --yes supabase migration list --linked
 printf '\n%s\n' '[db:push] Review the apply plan (dry-run; no changes applied):'
@@ -34,5 +35,7 @@ require_development_push_confirmation
 
 # Recheck immediately before the write in case the link or local settings changed
 # while the migration plan was being reviewed.
-development_ref="$(validate_development_supabase_target "$repo_root")"
-npx --yes supabase db push --linked
+if ! development_ref="$(validate_development_supabase_target "$repo_root")"; then
+  exit 2
+fi
+npx --yes supabase db push --linked --yes

@@ -8,7 +8,6 @@ prepare_database_command_environment() {
   local config_root="${HOME:?HOME must be set}/.config/receipt-manager/development"
   python3 "$supabase_target_script_dir/supabase-target.py" prepare \
     "$repo_root" "$config_root"
-  ensure_supabase_db_password
 }
 
 validate_development_supabase_target() {
