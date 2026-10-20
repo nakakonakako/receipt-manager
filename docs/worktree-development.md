@@ -110,30 +110,26 @@ Worktree setup does not start or stop services or apply database migrations.
 
 ## Development database planning
 
-Register development and production Supabase project refs once. Confirm both
-values in Supabase Dashboard; the development ref must match `frontend/.env` and
-must differ from production. Existing settings cannot be overwritten:
+The allowed development Supabase project ref is fixed in the repository
+(`irgahixsuvtopiwmtkku`). Shared development credentials live under
+`~/.config/receipt-manager/development/`; each worktree's `frontend/.env` must
+symlink to `~/.config/receipt-manager/development/frontend/.env` (created by
+`bash scripts/dev-env.sh prepare` / worktree setup). The shared
+`development/frontend` directory must be a regular directory, not a symlink.
 
-```bash
-bash scripts/dev-env.sh register-supabase-project-refs <development-ref> <production-ref>
-```
-
-An existing legacy single-ref setting is not migrated automatically; review it
-manually before registering the pair.
-
-`db:plan` validates registered development/production refs, the frontend URL,
-and this worktree's Supabase CLI link. Vite URL overrides or unsupported URL
-formats fail closed. An unlinked worktree requires an interactive confirmation
-before it links to the registered development ref; a mismatched link is never
-changed. It runs migration list and dry-run only:
+`db:plan` validates the shared `frontend/.env` symlink and URL, then this
+worktree's Supabase CLI link. Vite URL overrides or unsupported URL formats fail
+closed. An unlinked worktree requires an interactive confirmation before it
+links to the allowed development ref; a mismatched link is never changed. It
+runs migration list and dry-run only:
 
 ```bash
 npm run db:plan
 ```
 
 Local `npm run db:push` uses the same checks, displays the dry-run apply plan,
-and requires an interactive terminal plus typing the development ref. It cannot
-apply migrations to the registered production ref. The production deployment
+and requires an interactive terminal plus typing the development ref. The
+production deployment
 workflow remains unchanged. For a CLI database-password prompt, use the
 documented `SUPABASE_DB_PASSWORD` environment variable; never put the password
 in command arguments, repository files, or logs.

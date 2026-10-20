@@ -22,36 +22,35 @@
 and `uv sync` when the backend runtime is healthy. It fails with concrete recovery
 steps when the venv is missing, stale, or cannot run `uvicorn`.
 
-## Development Supabase project registration
+## Development Supabase project target
 
-One-time registration stores both the Dashboard-confirmed development and
-production refs in the Git-ignored common settings file
-`~/.config/receipt-manager/development/supabase-project-refs` (file mode `0600`,
-directory mode `0700`). Both values are required, must be valid 20-character
-refs, and must differ. Registration checks that the development ref matches the
-standard frontend Supabase URL. Existing settings are never overwritten; no ref
-is inferred or registered automatically. An older single-ref registration is
-not migrated automatically; DB commands stop until it has been reviewed manually.
+The allowed development Supabase project ref is fixed in
+`scripts/supabase-target.py` (`irgahixsuvtopiwmtkku`). There is no registration
+file or registration command.
 
-```bash
-bash scripts/dev-env.sh register-supabase-project-refs <development-ref> <production-ref>
-```
+Before `db:plan` or `db:push`, the guard checks that:
 
-The values are identifiers, not credentials, but should still be entered only
-after checking the Supabase Dashboard. They are never printed by the command.
+- `frontend/.env` in the current worktree is a symlink to
+  `~/.config/receipt-manager/development/frontend/.env` (mode `0600`, parent
+  directory mode `0700`).
+- `VITE_SUPABASE_URL` in that shared file resolves to
+  `https://irgahixsuvtopiwmtkku.supabase.co` with no Vite override files or
+  process-level URL overrides.
+- `~/.config/receipt-manager/development/frontend` is a regular directory, not
+  a symlink.
 
 ## npm run db:plan
 
 Receipt-manager only. The command:
 
 1. Refuses to run outside the `receipt-manager` repository.
-2. Requires local `supabase/migrations/*.sql` files and both registered refs.
-3. Rejects equal development/production refs, project/database/workdir
-   environment overrides, Vite URL overrides, unsupported URL forms, and a
-   frontend URL that does not match the registered development ref.
-4. Requires the current worktree CLI link to match the registered development
-   ref. An unlinked worktree can be linked only after an interactive
-   confirmation; an existing mismatched or partial link is never repaired.
+2. Requires local `supabase/migrations/*.sql` files.
+3. Rejects project/database/workdir environment overrides, Vite URL overrides,
+   unsupported URL forms, a non-symlink or mismatched `frontend/.env`, and a
+   frontend URL that does not match the allowed development ref.
+4. Requires the current worktree CLI link to match the allowed development ref.
+   An unlinked worktree can be linked only after an interactive confirmation;
+   an existing mismatched or partial link is never repaired.
 5. Runs only `supabase migration list --linked` and
    `supabase db push --linked --dry-run` for remote DB inspection. The dry-run
    is shown even when there are no pending migrations and never applies them.
