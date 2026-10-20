@@ -51,47 +51,7 @@ def read_env_url(path: Path) -> str:
     return values[0]
 
 
-def shared_frontend_env(repo: Path, config: Path) -> Path:
-    if any(parent.is_symlink() for parent in (config, config.parent, config.parent.parent)):
-        fail("Common development settings directory must not be a symlink.")
-    if not config.is_dir():
-        fail("Shared development settings directory is missing.")
-    if stat.S_IMODE(config.stat().st_mode) & 0o077:
-        fail("Shared development settings directory must have mode 0700 or stricter.")
-    frontend_dir = config / "frontend"
-    if frontend_dir.is_symlink():
-        fail("Shared development frontend directory must not be a symlink.")
-    if not frontend_dir.is_dir():
-        fail("Shared development frontend directory is missing.")
-    shared_env = frontend_dir / ".env"
-    if shared_env.is_symlink() or not shared_env.is_file():
-        fail("Shared development frontend/.env must be a regular file.")
-    if stat.S_IMODE(shared_env.stat().st_mode) & 0o077:
-        fail("Shared development frontend/.env must have mode 0600 or stricter.")
-    worktree_env = repo / "frontend" / ".env"
-    if not worktree_env.is_symlink():
-        fail(
-            "frontend/.env must be a symlink to ~/.config/receipt-manager/development/frontend/.env."
-        )
-    if worktree_env.resolve() != shared_env.resolve():
-        fail(
-            "frontend/.env must symlink to the shared development frontend/.env for this machine."
-        )
-    return shared_env
-
-
-def endpoint_ref(repo: Path, config: Path) -> str:
-    if "VITE_SUPABASE_URL" in os.environ:
-        fail("VITE_SUPABASE_URL process override is present; refusing an ambiguous target.")
-    frontend = repo / "frontend"
-    for filename in OVERRIDE_FILES:
-        override = frontend / filename
-        if not override.is_file():
-            continue
-        for line in override.read_text(encoding="utf-8", errors="strict").splitlines():
-            if KEY_PATTERN.match(line):
-                fail(f"VITE_SUPABASE_URL override exists in frontend/{filename}.")
-    raw_url = read_env_url(shared_frontend_env(repo, config))
+def url_project_ref(raw_url: str) -> str:
     try:
         parsed = urlsplit(raw_url)
         host = parsed.hostname or ""
@@ -111,6 +71,86 @@ def endpoint_ref(repo: Path, config: Path) -> str:
     if match is None:
         fail("VITE_SUPABASE_URL must use https://<project-ref>.supabase.co.")
     return match.group(1)
+
+
+def validate_shared_development_frontend_env(config: Path) -> Path:
+    if any(parent.is_symlink() for parent in (config, config.parent, config.parent.parent)):
+        fail("Common development settings directory must not be a symlink.")
+    if not config.is_dir():
+        fail("Shared development settings directory is missing.")
+    if stat.S_IMODE(config.stat().st_mode) & 0o077:
+        fail("Shared development settings directory must have mode 0700 or stricter.")
+    frontend_dir = config / "frontend"
+    if frontend_dir.is_symlink():
+        fail("Shared development frontend directory must not be a symlink.")
+    if not frontend_dir.is_dir():
+        fail("Shared development frontend directory is missing.")
+    shared_env = frontend_dir / ".env"
+    if shared_env.is_symlink() or not shared_env.is_file():
+        fail("Shared development frontend/.env must be a regular file.")
+    if stat.S_IMODE(shared_env.stat().st_mode) & 0o077:
+        fail("Shared development frontend/.env must have mode 0600 or stricter.")
+    return shared_env
+
+
+def require_worktree_frontend_env_symlink(repo: Path, shared_env: Path) -> None:
+    worktree_env = repo / "frontend" / ".env"
+    if not worktree_env.is_symlink():
+        fail(
+            "frontend/.env must be a symlink to ~/.config/receipt-manager/development/frontend/.env."
+        )
+    if not worktree_env.exists():
+        fail("Broken frontend/.env symlink; inspect it manually before running DB commands.")
+    if worktree_env.resolve() != shared_env.resolve():
+        fail(
+            "frontend/.env must symlink to the shared development frontend/.env for this machine."
+        )
+
+
+def shared_frontend_env(repo: Path, config: Path) -> Path:
+    shared_env = validate_shared_development_frontend_env(config)
+    require_worktree_frontend_env_symlink(repo, shared_env)
+    return shared_env
+
+
+def endpoint_ref(repo: Path, config: Path) -> str:
+    if "VITE_SUPABASE_URL" in os.environ:
+        fail("VITE_SUPABASE_URL process override is present; refusing an ambiguous target.")
+    frontend = repo / "frontend"
+    for filename in OVERRIDE_FILES:
+        override = frontend / filename
+        if not override.is_file():
+            continue
+        for line in override.read_text(encoding="utf-8", errors="strict").splitlines():
+            if KEY_PATTERN.match(line):
+                fail(f"VITE_SUPABASE_URL override exists in frontend/{filename}.")
+    return url_project_ref(read_env_url(shared_frontend_env(repo, config)))
+
+
+def prepare(repo: Path, config: Path) -> None:
+    shared_env = validate_shared_development_frontend_env(config)
+    if url_project_ref(read_env_url(shared_env)) != DEVELOPMENT_PROJECT_REF:
+        fail("Frontend Supabase URL does not match the allowed development project ref.")
+    frontend_dir = repo / "frontend"
+    if frontend_dir.is_symlink():
+        fail("Worktree frontend directory must not be a symlink.")
+    if not frontend_dir.is_dir():
+        fail("Worktree frontend directory is missing.")
+    worktree_env = repo / "frontend" / ".env"
+    if worktree_env.is_symlink():
+        if not worktree_env.exists():
+            fail("Broken frontend/.env symlink; inspect it manually before running DB commands.")
+        if worktree_env.resolve() != shared_env.resolve():
+            fail(
+                "frontend/.env must symlink to the shared development frontend/.env for this machine."
+            )
+        return
+    if worktree_env.exists():
+        fail(
+            "frontend/.env must be a symlink to ~/.config/receipt-manager/development/frontend/.env."
+        )
+    worktree_env.parent.mkdir(parents=True, exist_ok=True)
+    worktree_env.symlink_to(shared_env.resolve())
 
 
 def validate(repo: Path, config: Path, allow_unlinked: bool) -> str:
@@ -146,6 +186,8 @@ def main(argv: list[str]) -> int:
         if command == "validate" and len(argv) == 5:
             result = validate(Path(argv[2]).resolve(), Path(argv[3]), argv[4] == "allow-unlinked")
             print(result)
+        elif command == "prepare" and len(argv) == 4:
+            prepare(Path(argv[2]).resolve(), Path(argv[3]))
         else:
             fail("Invalid Supabase target helper invocation.")
     except (TargetError, OSError, UnicodeError) as exc:

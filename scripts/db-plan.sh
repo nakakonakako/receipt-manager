@@ -5,6 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$script_dir/.." && pwd -P)"
 cd -- "$repo_root"
 source "$script_dir/lib-supabase-target.sh"
+prepare_database_command_environment "$repo_root"
 
 git_common_dir="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
 if [[ -n "$git_common_dir" ]]; then
@@ -28,6 +29,7 @@ if ! find "$migrations_dir" -maxdepth 1 -type f -name '*.sql' -print -quit | gre
 fi
 
 development_ref="$(validate_development_supabase_target "$repo_root" allow-unlinked)"
+ensure_supabase_db_password
 if [[ ! -f "$repo_root/supabase/.temp/project-ref" ]]; then
   confirm_development_link "$development_ref"
   development_ref="$(validate_development_supabase_target "$repo_root")"
