@@ -9,22 +9,25 @@ trap 'rm -rf "$test_root"' EXIT
 fixture_home="$test_root/home"
 fixture_repo="$fixture_home/web/$repository_name"
 fixture_config="$fixture_home/.config/$repository_name/development"
-mkdir -p "$fixture_repo/scripts" "$fixture_repo/frontend" "$fixture_repo/backend"
+mkdir -p "$fixture_repo/scripts" "$fixture_repo/frontend" "$fixture_repo/backend/app" "$fixture_config/backend"
+chmod 700 "$fixture_config" "$fixture_config/backend"
 cp "$source_root/scripts/dev-env.sh" "$fixture_repo/scripts/dev-env.sh"
 cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
 cp "$source_root/scripts/supabase-target.py" "$fixture_repo/scripts/supabase-target.py"
 chmod +x "$fixture_repo/scripts/dev-env.sh"
-printf 'VITE_SUPABASE_URL=https://abcdefghijklmnopqrst.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
+printf 'VITE_SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env"
 printf 'VITE_SUPABASE_URL=https://override.invalid\nOVERRIDE_MARKER=must-not-print\n' > "$fixture_repo/frontend/.env.local"
-printf 'BACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
-printf 'ROOT_MARKER=must-not-print\n' > "$fixture_repo/.env"
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nBACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nROOT_MARKER=must-not-print\n' > "$fixture_repo/.env"
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nBACKEND_MARKER=must-not-print\n' > "$fixture_config/backend/.env"
+chmod 600 "$fixture_config/backend/.env"
 chmod 644 "$fixture_repo/frontend/.env" "$fixture_repo/frontend/.env.local" "$fixture_repo/backend/.env" "$fixture_repo/.env"
 printf '.env\nfrontend/.env\nfrontend/.env.local\nbackend/.env\n' > "$fixture_repo/.gitignore"
 touch "$fixture_repo/frontend/.keep" "$fixture_repo/backend/.keep"
 git -C "$fixture_repo" init -b main >/dev/null
 git -C "$fixture_repo" config user.name 'Dev Env Test'
 git -C "$fixture_repo" config user.email 'dev-env-test@example.invalid'
-git -C "$fixture_repo" add scripts/dev-env.sh scripts/lib-backend-runtime.sh .gitignore frontend/.keep backend/.keep
+git -C "$fixture_repo" add scripts/dev-env.sh scripts/lib-backend-runtime.sh scripts/supabase-target.py .gitignore frontend/.keep backend/.keep
 git -C "$fixture_repo" commit -m 'development environment fixture' >/dev/null
 export HOME="$fixture_home"
 
@@ -60,6 +63,96 @@ fi
 rm "$fixture_repo/frontend/.env.local"
 "$fixture_repo/scripts/dev-env.sh" prepare >/dev/null
 [[ -f "$fixture_repo/frontend/.env" && ! -L "$fixture_repo/frontend/.env" ]]
+[[ "$(python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config")" == 'irgahixsuvtopiwmtkku' ]]
+
+wrong_url='https://zyxwvutsrqponmlkjihg.supabase.co'
+unset VITE_SUPABASE_URL SUPABASE_URL
+printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\n' "$wrong_url" > "$fixture_config/frontend/.env"
+cp "$fixture_config/frontend/.env" "$fixture_repo/frontend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/frontend-target.log" 2>&1; then
+  echo 'Expected an unapproved frontend target to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/frontend-target.log")" != *"$wrong_url"* ]]
+printf 'VITE_SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\nPRIVATE_MARKER=must-not-print\n' > "$fixture_config/frontend/.env"
+cp "$fixture_config/frontend/.env" "$fixture_repo/frontend/.env"
+
+if VITE_SUPABASE_URL="$wrong_url" "$fixture_repo/scripts/dev-env.sh" prepare >"$test_root/frontend-process-override.log" 2>&1; then
+  echo 'Expected a frontend process override to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/frontend-process-override.log")" == *'VITE_SUPABASE_URL process override'* ]]
+[[ "$(cat "$test_root/frontend-process-override.log")" != *"$wrong_url"* ]]
+
+if SUPABASE_URL="$wrong_url" "$fixture_repo/scripts/dev-env.sh" prepare >"$test_root/backend-process-override.log" 2>&1; then
+  echo 'Expected a backend process override to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-process-override.log")" == *'SUPABASE_URL process override'* ]]
+[[ "$(cat "$test_root/backend-process-override.log")" != *"$wrong_url"* ]]
+
+printf 'VITE_SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nSUPABASE_URL=%s\n' "$wrong_url" > "$fixture_repo/backend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-file-override.log" 2>&1; then
+  echo 'Expected a mismatched backend URL to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-file-override.log")" == *'Backend SUPABASE_URL does not match'* ]]
+[[ "$(cat "$test_root/backend-file-override.log")" != *"$wrong_url"* ]]
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nBACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
+
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nVITE_SUPABASE_URL=%s\n' "$wrong_url" > "$fixture_repo/backend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-effective-override.log" 2>&1; then
+  echo 'Expected the backend-selected VITE_SUPABASE_URL to be validated.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-effective-override.log")" == *'Backend VITE_SUPABASE_URL does not match'* ]]
+[[ "$(cat "$test_root/backend-effective-override.log")" != *"$wrong_url"* ]]
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nBACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
+
+for override_file in .env.development .env.development.local; do
+  printf 'VITE_SUPABASE_URL=%s\n' "$wrong_url" > "$fixture_repo/frontend/$override_file"
+  if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/frontend-file-override.log" 2>&1; then
+    echo "Expected frontend/$override_file to block startup." >&2
+    exit 1
+  fi
+  [[ "$(cat "$test_root/frontend-file-override.log")" == *"VITE_SUPABASE_URL override exists in frontend/$override_file"* ]]
+  [[ "$(cat "$test_root/frontend-file-override.log")" != *"$wrong_url"* ]]
+  rm "$fixture_repo/frontend/$override_file"
+done
+
+printf 'SUPABASE_URL=%s\n' "$wrong_url" > "$fixture_repo/backend/app/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-app-env.log" 2>&1; then
+  echo 'Expected the backend dotenv file nearest main.py to be validated first.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-app-env.log")" == *'does not match the allowed development project ref'* ]]
+[[ "$(cat "$test_root/backend-app-env.log")" != *"$wrong_url"* ]]
+rm "$fixture_repo/backend/app/.env"
+
+printf 'VITE_SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nSUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\n' > "$fixture_repo/backend/.env"
+[[ "$(python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config")" == 'irgahixsuvtopiwmtkku' ]]
+printf 'VITE_SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nSUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nVITE_SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\n' > "$fixture_repo/backend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-duplicate.log" 2>&1; then
+  echo 'Expected duplicate backend URL settings to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-duplicate.log")" == *'must be defined at most once'* ]]
+
+printf 'BACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-missing-url.log" 2>&1; then
+  echo 'Expected a missing backend URL to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-missing-url.log")" == *'must define VITE_SUPABASE_URL or SUPABASE_URL'* ]]
+
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co/path\n' > "$fixture_repo/backend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-malformed-url.log" 2>&1; then
+  echo 'Expected a non-canonical backend URL to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-malformed-url.log")" == *'SUPABASE_URL is not a canonical Supabase project URL'* ]]
+[[ "$(cat "$test_root/backend-malformed-url.log")" != *'/path'* ]]
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nBACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
 
 worktree="$fixture_home/worktrees/$repository_name/new-task"
 mkdir -p "$(dirname "$worktree")"

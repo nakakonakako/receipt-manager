@@ -51,7 +51,40 @@ def read_env_url(path: Path) -> str:
     return values[0]
 
 
-def url_project_ref(raw_url: str) -> str:
+def read_env_values(path: Path, keys: set[str]) -> dict[str, str]:
+    """Read literal URL settings from dotenv without exposing their values."""
+    if not path.is_file():
+        fail(f"Backend environment file {path.name} is missing or is not a regular file.")
+    values: dict[str, str] = {}
+    key_pattern = re.compile(
+        r"^\s*(?:export\s+)?(" + "|".join(re.escape(key) for key in keys) + r")\s*="
+    )
+    for line in path.read_text(encoding="utf-8", errors="strict").splitlines():
+        match = key_pattern.match(line)
+        if match is None:
+            continue
+        key = match.group(1)
+        if key in values:
+            fail(f"{key} must be defined at most once in {path.name}.")
+        value = line[match.end() :].strip()
+        if value.startswith(("'", '"')):
+            quote = value[0]
+            closing = value.find(quote, 1)
+            if closing < 0:
+                fail(f"{key} cannot be parsed safely from {path.name}.")
+            suffix = value[closing + 1 :].strip()
+            if suffix and not suffix.startswith("#"):
+                fail(f"{key} cannot be parsed safely from {path.name}.")
+            value = value[1:closing]
+        else:
+            value = value.split("#", 1)[0].strip()
+        if not value or "$" in value or "`" in value:
+            fail(f"{key} must be a non-empty literal URL without interpolation.")
+        values[key] = value
+    return values
+
+
+def url_project_ref(raw_url: str, setting_name: str = "VITE_SUPABASE_URL") -> str:
     try:
         parsed = urlsplit(raw_url)
         host = parsed.hostname or ""
@@ -64,12 +97,12 @@ def url_project_ref(raw_url: str) -> str:
             or parsed.query
             or parsed.fragment
         ):
-            fail("VITE_SUPABASE_URL is not a canonical Supabase project URL.")
+            fail(f"{setting_name} is not a canonical Supabase project URL.")
     except ValueError:
-        fail("VITE_SUPABASE_URL is not a canonical Supabase project URL.")
+        fail(f"{setting_name} is not a canonical Supabase project URL.")
     match = re.fullmatch(r"([a-z0-9]{20})\.supabase\.co", host)
     if match is None:
-        fail("VITE_SUPABASE_URL must use https://<project-ref>.supabase.co.")
+        fail(f"{setting_name} must use https://<project-ref>.supabase.co.")
     return match.group(1)
 
 
@@ -125,6 +158,60 @@ def endpoint_ref(repo: Path, config: Path) -> str:
             if KEY_PATTERN.match(line):
                 fail(f"VITE_SUPABASE_URL override exists in frontend/{filename}.")
     return url_project_ref(read_env_url(shared_frontend_env(repo, config)))
+
+
+def development_endpoint_ref(repo: Path, config: Path) -> str:
+    """Validate the effective frontend and backend URLs before local app startup."""
+    for key in ("VITE_SUPABASE_URL", "SUPABASE_URL"):
+        if key in os.environ:
+            fail(f"{key} process override is present; refusing an ambiguous development target.")
+
+    shared_env = validate_shared_development_frontend_env(config)
+    worktree_env = repo / "frontend" / ".env"
+    if worktree_env.is_symlink():
+        require_worktree_frontend_env_symlink(repo, shared_env)
+    elif not worktree_env.is_file() or worktree_env.read_bytes() != shared_env.read_bytes():
+        fail("frontend/.env must match the shared development frontend/.env.")
+
+    frontend_ref = url_project_ref(read_env_url(worktree_env))
+    if frontend_ref != DEVELOPMENT_PROJECT_REF:
+        fail("Frontend Supabase URL does not match the allowed development project ref.")
+
+    frontend_dir = repo / "frontend"
+    for filename in OVERRIDE_FILES:
+        override = frontend_dir / filename
+        if not override.exists() and not override.is_symlink():
+            continue
+        if override.is_symlink() and not override.exists():
+            fail(f"frontend/{filename} is a broken environment symlink.")
+        if not override.is_file():
+            fail(f"frontend/{filename} is not a regular environment file.")
+        for line in override.read_text(encoding="utf-8", errors="strict").splitlines():
+            if KEY_PATTERN.match(line):
+                fail(f"VITE_SUPABASE_URL override exists in frontend/{filename}.")
+
+    backend_env_candidates = (
+        repo / "backend" / "app" / ".env",
+        repo / "backend" / ".env",
+        repo / ".env",
+    )
+    backend_env = next(
+        (
+            candidate
+            for candidate in backend_env_candidates
+            if candidate.exists() or candidate.is_symlink()
+        ),
+        None,
+    )
+    if backend_env is None:
+        fail("Backend environment file is missing.")
+    backend_values = read_env_values(backend_env, {"VITE_SUPABASE_URL", "SUPABASE_URL"})
+    if not backend_values:
+        fail("Backend environment must define VITE_SUPABASE_URL or SUPABASE_URL.")
+    for key, value in backend_values.items():
+        if url_project_ref(value, key) != DEVELOPMENT_PROJECT_REF:
+            fail(f"Backend {key} does not match the allowed development project ref.")
+    return DEVELOPMENT_PROJECT_REF
 
 
 def prepare(repo: Path, config: Path) -> None:
@@ -188,6 +275,8 @@ def main(argv: list[str]) -> int:
             print(result)
         elif command == "prepare" and len(argv) == 4:
             prepare(Path(argv[2]).resolve(), Path(argv[3]))
+        elif command == "validate-dev" and len(argv) == 4:
+            print(development_endpoint_ref(Path(argv[2]).resolve(), Path(argv[3])))
         else:
             fail("Invalid Supabase target helper invocation.")
     except (TargetError, OSError, UnicodeError) as exc:

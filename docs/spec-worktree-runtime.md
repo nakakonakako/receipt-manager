@@ -28,6 +28,17 @@ The allowed development Supabase project ref is fixed in
 `scripts/supabase-target.py` (`irgahixsuvtopiwmtkku`). There is no registration
 file or registration command.
 
+Before `npm run dev` starts either server, `dev-env.sh prepare` also runs the
+local-only target validator. It checks the shared frontend `.env`, all Vite
+development override files, URL process overrides, and the backend dotenv file
+selected by `load_dotenv()` (`backend/app/.env`, then `backend/.env`, then
+repository `.env`).
+Both backend URL setting names are checked when present, because the backend
+prefers `VITE_SUPABASE_URL` over `SUPABASE_URL`. Missing, duplicated,
+non-literal, malformed, or mismatched URLs fail closed. Diagnostics show
+setting/file names and never print URL values. The validator does not invoke the
+Supabase CLI or make a network/database connection.
+
 Before `db:plan` or `db:push`, `scripts/db-env-prepare.sh` (also invoked at the
 start of both commands) runs a DB-only environment step. It does **not** run
 `dev-env.sh prepare`, backend `.venv` checks, or other application runtime
