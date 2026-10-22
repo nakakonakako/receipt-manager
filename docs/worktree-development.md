@@ -71,10 +71,15 @@ checks that the backend runtime can run `uvicorn` without reinstalling when
 healthy, refuses conflicting local files, and does not install or sync
 dependencies when checks pass.
 The ordinary Vite server is fixed to `5174` with `strictPort` so it can run
-alongside price-memo on `5173`. The separate Cursor Playwright server remains
-on `5273`. If Tailscale Serve forwards to the receipt-manager development
-server, verify its local target and update it from `5173` to `5174` when needed;
-this repository change does not alter the machine's Tailscale configuration.
+alongside price-memo on `5173`. The official Playwright MCP configured in
+`.cursor/mcp.json` provides browser automation; it does not start a separate
+receipt-manager Vite server. For UI verification, start the application with
+`npm run dev` and use the MCP to open `http://localhost:5174/`. Vite proxies
+`/api` requests to the supervised FastAPI server on `8000`. This repository does
+not define a separate Playwright port or additional npm command. If Tailscale
+Serve forwards to the receipt-manager development server, verify its local
+target and update it from `5173` to `5174` when needed; this repository change
+does not alter the machine's Tailscale configuration.
 Before `npm run dev` starts, an owned-process supervisor checks frontend `5174`
 and backend `8000`. Occupied ports stop startup with listener PID, command, and
 working directory where available; ports are never reassigned and existing
