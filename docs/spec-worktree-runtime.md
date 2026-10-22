@@ -28,6 +28,24 @@ The allowed development Supabase project ref is fixed in
 `scripts/supabase-target.py` (`irgahixsuvtopiwmtkku`). There is no registration
 file or registration command.
 
+Before `npm run dev` starts either server, `dev-env.sh prepare` also runs the
+local-only target validator. It checks the shared frontend `.env`, all Vite
+development override files, URL process overrides, and the backend dotenv
+sources. `gemini_service.py` calls `load_dotenv()` during import from
+`backend/app/services`, then `main.py` calls it from `backend/app`. Both calls
+use python-dotenv's default `override=False`, so values loaded by the first call
+remain effective. The validator rejects `backend/app/services/.env` as an
+ambiguous higher-priority source and checks the remaining selected file
+(`backend/app/.env`, then `backend/.env`, then repository `.env`).
+
+The backend prefers `VITE_SUPABASE_URL` over `SUPABASE_URL`; both are checked
+when present. The AI quota dotenv is loaded afterward with `override=False`, so
+the validator also rejects either Supabase URL setting in the selected quota
+file. `PYTHON_DOTENV_DISABLED` values that disable dotenv loading are rejected.
+Missing, duplicated, non-literal, malformed, or mismatched URLs fail closed.
+Diagnostics show setting/file names and never print URL values. The validator
+does not invoke the Supabase CLI or make a network/database connection.
+
 Before `db:plan` or `db:push`, `scripts/db-env-prepare.sh` (also invoked at the
 start of both commands) runs a DB-only environment step. It does **not** run
 `dev-env.sh prepare`, backend `.venv` checks, or other application runtime

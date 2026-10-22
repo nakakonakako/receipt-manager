@@ -165,6 +165,9 @@ prepare() {
       exit 2
     fi
   done
+  if ! python3 "$script_dir/supabase-target.py" validate-dev "$repo_root" "$config_root" >/dev/null; then
+    die 'Supabase development target validation failed; review the named setting or environment file. Values are never displayed.'
+  fi
   check_backend_python_runtime_preflight "$repo_root" || exit 2
 }
 

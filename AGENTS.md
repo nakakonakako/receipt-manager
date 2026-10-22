@@ -90,9 +90,11 @@ unless the user explicitly requests it.
   Migration copies into new mode-0600 files under mode-0700 directories,
   retains every source, and never prints values or replaces a destination.
   Existing `.env.local` files and Vite key overlaps are reported by name only.
-  Daily `npm run dev` validates required Supabase settings, checks backend
-  `uvicorn` when `backend/.venv` is present without running `npm ci` or
-  `uv sync` when healthy, and prepares missing links without replacing local
+  Daily `npm run dev` validates required Supabase settings and checks the
+  effective frontend and backend URLs against the approved development project
+  ref; ambiguous URL overrides fail closed. It checks backend `uvicorn` when
+  `backend/.venv` is present without running `npm ci` or `uv sync` when healthy,
+  and prepares missing links without replacing local
   files. It checks the configured Vite/API ports before launch and supervises
   only the process groups it starts; occupied ports are never reassigned or
   killed.
