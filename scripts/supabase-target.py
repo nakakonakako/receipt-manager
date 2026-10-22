@@ -51,8 +51,10 @@ def read_env_url(path: Path) -> str:
     return values[0]
 
 
-def read_env_values(path: Path, keys: set[str]) -> dict[str, str]:
-    """Read literal URL settings from dotenv without exposing their values."""
+def read_env_values(
+    path: Path, keys: set[str], *, allow_empty: bool = False
+) -> dict[str, str]:
+    """Read selected literal settings from dotenv without exposing their values."""
     if not path.is_file():
         fail(f"Backend environment file {path.name} is missing or is not a regular file.")
     values: dict[str, str] = {}
@@ -78,8 +80,8 @@ def read_env_values(path: Path, keys: set[str]) -> dict[str, str]:
             value = value[1:closing]
         else:
             value = value.split("#", 1)[0].strip()
-        if not value or "$" in value or "`" in value:
-            fail(f"{key} must be a non-empty literal URL without interpolation.")
+        if (not value and not allow_empty) or "$" in value or "`" in value:
+            fail(f"{key} must be a literal environment value without interpolation.")
         values[key] = value
     return values
 
@@ -162,6 +164,15 @@ def endpoint_ref(repo: Path, config: Path) -> str:
 
 def development_endpoint_ref(repo: Path, config: Path) -> str:
     """Validate the effective frontend and backend URLs before local app startup."""
+    if os.environ.get("PYTHON_DOTENV_DISABLED", "").casefold() in {
+        "1",
+        "true",
+        "t",
+        "yes",
+        "y",
+    }:
+        fail("PYTHON_DOTENV_DISABLED prevents backend dotenv loading.")
+
     for key in ("VITE_SUPABASE_URL", "SUPABASE_URL"):
         if key in os.environ:
             fail(f"{key} process override is present; refusing an ambiguous development target.")
@@ -190,6 +201,10 @@ def development_endpoint_ref(repo: Path, config: Path) -> str:
             if KEY_PATTERN.match(line):
                 fail(f"VITE_SUPABASE_URL override exists in frontend/{filename}.")
 
+    service_env = repo / "backend" / "app" / "services" / ".env"
+    if service_env.exists() or service_env.is_symlink():
+        fail("backend/app/services/.env is an ambiguous higher-priority dotenv source.")
+
     backend_env_candidates = (
         repo / "backend" / "app" / ".env",
         repo / "backend" / ".env",
@@ -205,12 +220,39 @@ def development_endpoint_ref(repo: Path, config: Path) -> str:
     )
     if backend_env is None:
         fail("Backend environment file is missing.")
-    backend_values = read_env_values(backend_env, {"VITE_SUPABASE_URL", "SUPABASE_URL"})
-    if not backend_values:
+    backend_values = read_env_values(
+        backend_env,
+        {"VITE_SUPABASE_URL", "SUPABASE_URL", "AI_QUOTA_ENV_FILE"},
+        allow_empty=True,
+    )
+    if not any(
+        key in backend_values for key in ("VITE_SUPABASE_URL", "SUPABASE_URL")
+    ):
         fail("Backend environment must define VITE_SUPABASE_URL or SUPABASE_URL.")
-    for key, value in backend_values.items():
+    for key in ("VITE_SUPABASE_URL", "SUPABASE_URL"):
+        if key not in backend_values:
+            continue
+        value = backend_values[key]
         if url_project_ref(value, key) != DEVELOPMENT_PROJECT_REF:
             fail(f"Backend {key} does not match the allowed development project ref.")
+
+    if "AI_QUOTA_ENV_FILE" in os.environ:
+        quota_override = os.environ["AI_QUOTA_ENV_FILE"]
+    else:
+        quota_override = backend_values.get("AI_QUOTA_ENV_FILE", "")
+    quota_env_candidates = ([Path(quota_override)] if quota_override else []) + [
+        Path("/app/.env.ai-quota"),
+        Path(".env.ai-quota"),
+    ]
+    for quota_env in quota_env_candidates:
+        if not quota_env.is_absolute():
+            quota_env = repo / "backend" / quota_env
+        if not quota_env.is_file():
+            continue
+        quota_values = read_env_values(quota_env, {"VITE_SUPABASE_URL", "SUPABASE_URL"})
+        if quota_values:
+            fail("AI quota dotenv must not define Supabase URL settings.")
+        break
     return DEVELOPMENT_PROJECT_REF
 
 

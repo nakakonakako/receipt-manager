@@ -9,7 +9,7 @@ trap 'rm -rf "$test_root"' EXIT
 fixture_home="$test_root/home"
 fixture_repo="$fixture_home/web/$repository_name"
 fixture_config="$fixture_home/.config/$repository_name/development"
-mkdir -p "$fixture_repo/scripts" "$fixture_repo/frontend" "$fixture_repo/backend/app" "$fixture_config/backend"
+mkdir -p "$fixture_repo/scripts" "$fixture_repo/frontend" "$fixture_repo/backend/app/services" "$fixture_config/backend"
 chmod 700 "$fixture_config" "$fixture_config/backend"
 cp "$source_root/scripts/dev-env.sh" "$fixture_repo/scripts/dev-env.sh"
 cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
@@ -66,7 +66,7 @@ rm "$fixture_repo/frontend/.env.local"
 [[ "$(python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config")" == 'irgahixsuvtopiwmtkku' ]]
 
 wrong_url='https://zyxwvutsrqponmlkjihg.supabase.co'
-unset VITE_SUPABASE_URL SUPABASE_URL
+unset VITE_SUPABASE_URL SUPABASE_URL PYTHON_DOTENV_DISABLED AI_QUOTA_ENV_FILE
 printf 'VITE_SUPABASE_URL=%s\nVITE_SUPABASE_PUBLISHABLE_KEY=public-test-value\n' "$wrong_url" > "$fixture_config/frontend/.env"
 cp "$fixture_config/frontend/.env" "$fixture_repo/frontend/.env"
 if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/frontend-target.log" 2>&1; then
@@ -120,6 +120,29 @@ for override_file in .env.development .env.development.local; do
   rm "$fixture_repo/frontend/$override_file"
 done
 
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\n' > "$fixture_repo/backend/app/.env"
+printf 'SUPABASE_URL=%s\n' "$wrong_url" > "$fixture_repo/backend/app/services/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-service-env.log" 2>&1; then
+  echo 'Expected a higher-priority backend/app/services/.env to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-service-env.log")" == *'ambiguous higher-priority dotenv source'* ]]
+[[ "$(cat "$test_root/backend-service-env.log")" != *"$wrong_url"* ]]
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\n' > "$fixture_repo/backend/app/services/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-service-dev-env.log" 2>&1; then
+  echo 'Expected even an approved higher-priority dotenv source to block ambiguous startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-service-dev-env.log")" == *'ambiguous higher-priority dotenv source'* ]]
+rm "$fixture_repo/backend/app/services/.env"
+ln -s "$fixture_repo/backend/app/services/missing.env" "$fixture_repo/backend/app/services/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-service-broken-env.log" 2>&1; then
+  echo 'Expected a broken higher-priority dotenv symlink to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/backend-service-broken-env.log")" == *'ambiguous higher-priority dotenv source'* ]]
+rm "$fixture_repo/backend/app/services/.env"
+
 printf 'SUPABASE_URL=%s\n' "$wrong_url" > "$fixture_repo/backend/app/.env"
 if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-app-env.log" 2>&1; then
   echo 'Expected the backend dotenv file nearest main.py to be validated first.' >&2
@@ -137,6 +160,30 @@ if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_rep
   exit 1
 fi
 [[ "$(cat "$test_root/backend-duplicate.log")" == *'must be defined at most once'* ]]
+
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\n' > "$fixture_repo/backend/.env"
+quota_env="$test_root/quota.env"
+printf 'VITE_SUPABASE_URL=%s\nQUOTA_PRIVATE_MARKER=must-not-print\n' "$wrong_url" > "$quota_env"
+if AI_QUOTA_ENV_FILE="$quota_env" python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/quota-url-override.log" 2>&1; then
+  echo 'Expected a Supabase URL in the selected AI quota dotenv to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/quota-url-override.log")" == *'AI quota dotenv must not define Supabase URL settings'* ]]
+[[ "$(cat "$test_root/quota-url-override.log")" != *"$wrong_url"* ]]
+
+printf 'SUPABASE_URL=https://irgahixsuvtopiwmtkku.supabase.co\nAI_QUOTA_ENV_FILE=%s\n' "$quota_env" > "$fixture_repo/backend/.env"
+if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/quota-env-path-override.log" 2>&1; then
+  echo 'Expected a backend dotenv selected AI quota file with a Supabase URL to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/quota-env-path-override.log")" == *'AI quota dotenv must not define Supabase URL settings'* ]]
+[[ "$(cat "$test_root/quota-env-path-override.log")" != *"$wrong_url"* ]]
+
+if PYTHON_DOTENV_DISABLED=true python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/dotenv-disabled.log" 2>&1; then
+  echo 'Expected disabled python-dotenv loading to block startup.' >&2
+  exit 1
+fi
+[[ "$(cat "$test_root/dotenv-disabled.log")" == *'PYTHON_DOTENV_DISABLED prevents backend dotenv loading'* ]]
 
 printf 'BACKEND_MARKER=must-not-print\n' > "$fixture_repo/backend/.env"
 if python3 "$fixture_repo/scripts/supabase-target.py" validate-dev "$fixture_repo" "$fixture_config" >"$test_root/backend-missing-url.log" 2>&1; then
