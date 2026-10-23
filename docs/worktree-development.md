@@ -102,6 +102,27 @@ non-forced `git worktree remove`. It does not delete the branch. Check for activ
 workers and development servers first. It never runs automatically after a PR
 is merged.
 
+Before showing the confirmation prompt and again immediately before removing,
+the command scans Linux `/proc` for live processes whose canonical current
+working directory is the target worktree or one of its subdirectories. A match
+prints the PID and asks you to stop that process yourself before retrying. The
+guard never kills processes. A `/proc` enumeration error or unreadable process
+identity for a current-user PID refuses removal with a reason and a retry hint.
+Zombie processes are ignored, and process start times are compared around the
+working-directory read so an exited or reused PID is not attributed to the old
+process. The final scan narrows the race where a process starts while the
+confirmation prompt is open; a process could still start in the small interval
+between that scan and Git removing the worktree.
+
+The scan depends on Linux `/proc`. Processes that move their working directory
+out of the worktree, or whose cwd cannot be read, may not be detected. A PID
+whose cwd cannot be read is skipped because its relation to the target cannot
+be established; a same-user PID whose stat identity or `/proc` enumeration
+cannot be read blocks removal. If removal is refused, inspect the listed PID
+locally (for example with `ps`), stop the relevant development server or worker,
+then run `scripts/worktree.sh remove <path>` again. The guard does not print
+process command lines or environment values.
+
 ## Cursor delegation
 
 `scripts/delegate-cursor.sh --worktree <task-name>` creates or reuses the

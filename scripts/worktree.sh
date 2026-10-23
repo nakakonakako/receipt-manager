@@ -244,9 +244,14 @@ case "$command_name" in
     if [[ -n "$(git -C "$target_path" status --porcelain)" ]]; then
       die "Refusing to remove a worktree with staged, unstaged, or untracked changes."
     fi
+    worktree_remove_inspect() {
+      python3 "$script_directory/worktree-remove-inspect.py" "$target_path"
+    }
+    worktree_remove_inspect || die "Worktree removal was refused. Stop the listed worktree process(es) or resolve inspection failure, then retry."
     printf 'Remove this clean worktree only? Type remove to confirm: '
     read -r confirmation
     [[ "$confirmation" == "remove" ]] || die "Removal cancelled."
+    worktree_remove_inspect || die "Worktree removal was refused. Stop the listed worktree process(es) or resolve inspection failure, then retry."
     git -C "$script_repo_root" worktree remove "$target_path"
     ;;
   -h|--help|help)
