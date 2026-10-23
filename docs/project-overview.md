@@ -289,7 +289,7 @@ npm run dev
 # BACK:  uv run uvicorn app.main:app --reload（backend）
 ```
 
-- 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ。`npm run dev` は起動前に両ポートを検査し、競合時は所有プロセス情報を表示できる範囲で表示して停止。別ポートへの自動切替や既存プロセスの終了は行わず、Ctrl+C・SIGTERM・片側起動失敗時はこの起動が作成したプロセス群だけを終了
+- 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ。`npm run dev` は起動前に両ポートを検査し、競合時は所有プロセス情報を表示できる範囲で表示して停止。別ポートへの自動切替や既存プロセスの終了は行わず、Ctrl+C・SIGTERM・片側起動失敗時はこの起動が作成したプロセス群だけを終了する。SIGTERM後に終了確認し、必要なSIGKILL後も期限付きで再確認する。所有権・終了状態・`/proc` のいずれかを確認できない場合はcleanup失敗をstderrと終了コードに反映する
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - DB 計画確認: `npm run db:plan`（DB専用env準備、許可された開発ref、共有 `frontend/.env` と worktree symlink/URL、worktree linkを照合し、migration listとdry-runを実行。`frontend/.env` が未作成の worktree では共有設定への symlink を自動作成）
@@ -387,6 +387,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-23 | 開発サーバーの所有プロセス群について、SIGKILL後の終了確認とcleanup失敗の報告を追加 |
 | 2026-10-20 | 開発Supabase refの明示登録、receipt-managerのmigration dry-run計画、worktree移動後のPython仮想環境復旧を追加 |
 | 2026-10-19 | Git worktree環境設定の明示移行、起動前検証、`origin/main`基準のCursor worktree作成を追加 |
 | 2026-10-18 | price-memo 4表のPrivate Broadcast無効化通知と本人topic限定の受信policyを追加 |

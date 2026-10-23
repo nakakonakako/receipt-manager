@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import glob
 import os
 import re
 import shlex
@@ -13,6 +12,7 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -42,7 +42,7 @@ def proc_info(pid: int) -> tuple[int, int, int, str] | None:
             if redact_next:
                 args.append("<redacted>")
                 redact_next = False
-            elif re.search(r"(password|passwd|token|secret|api[-_]?key)", arg, re.I):
+            elif re.search(r"(password|passwd|token|secret|api[-_]?key)", arg, re.IGNORECASE):
                 if "=" in arg:
                     args.append(f"{arg.split('=', 1)[0]}=<redacted>")
                 else:
@@ -118,7 +118,38 @@ def preflight(ports: list[tuple[str, int]]) -> bool:
     return not occupied
 
 
+@dataclass(frozen=True)
+class GroupMembers:
+    alive_pids: tuple[int, ...] = ()
+    inspection_errors: tuple[str, ...] = ()
+
+    @property
+    def confirmed_stopped(self) -> bool:
+        return not self.alive_pids and not self.inspection_errors
+
+    def describe(self) -> str:
+        details: list[str] = []
+        if self.alive_pids:
+            details.append(f"active member PIDs: {', '.join(map(str, self.alive_pids))}")
+        if self.inspection_errors:
+            shown = self.inspection_errors[:5]
+            details.append(f"could not inspect: {'; '.join(shown)}")
+            if len(self.inspection_errors) > len(shown):
+                details.append(f"and {len(self.inspection_errors) - len(shown)} more inspection errors")
+        return "; ".join(details) or "process group state was not confirmed"
+
+
+@dataclass(frozen=True)
+class CleanupResult:
+    success: bool
+    detail: str = ""
+
+
 class OwnedGroup:
+    TERM_TIMEOUT = 3.0
+    KILL_VERIFY_TIMEOUT = 2.0
+    POLL_INTERVAL = 0.05
+
     def __init__(self, name: str, command: list[str], cwd: Path):
         self.name = name
         self.process = subprocess.Popen(command, cwd=cwd, start_new_session=True)
@@ -142,39 +173,113 @@ class OwnedGroup:
         # and start_new_session guarantees this PID's own group/session identity.
         return self.process.returncode is None and (current is None or (current[0] == self.pid and current[1] == self.pid))
 
-    def members_alive(self) -> bool:
-        for stat_path in glob.glob("/proc/[0-9]*/stat"):
+    def members_status(self) -> GroupMembers:
+        alive_pids: list[int] = []
+        inspection_errors: list[str] = []
+        try:
+            with os.scandir("/proc") as entries:
+                proc_entries = list(entries)
+        except OSError as exc:
+            reason = exc.strerror or type(exc).__name__
+            return GroupMembers(inspection_errors=(f"/proc scan failed ({reason})",))
+
+        found_supervisor = False
+        for entry in proc_entries:
+            if not entry.name.isdecimal():
+                continue
+            pid = int(entry.name)
+            if pid == os.getpid():
+                found_supervisor = True
             try:
-                raw = Path(stat_path).read_text()
+                raw = Path(entry.path, "stat").read_text()
                 tail = raw[raw.rfind(")") + 2 :].split()
                 if int(tail[2]) == self.pid and int(tail[3]) == self.pid and tail[0] != "Z":
-                    return True
-            except (OSError, ValueError, IndexError):
+                    alive_pids.append(pid)
+            except FileNotFoundError:
+                # The process exited between /proc enumeration and stat access.
                 continue
-        return False
+            except (OSError, ValueError, IndexError) as exc:
+                reason = exc.strerror if isinstance(exc, OSError) else "invalid process stat"
+                inspection_errors.append(f"PID {pid} stat unavailable ({reason or type(exc).__name__})")
+        if not found_supervisor:
+            inspection_errors.append("current supervisor process missing from /proc scan")
+        return GroupMembers(tuple(alive_pids), tuple(inspection_errors))
+
+    def wait_until_stopped(self, timeout: float) -> tuple[bool, GroupMembers]:
+        deadline = time.monotonic() + timeout
+        while True:
+            status = self.members_status()
+            if status.confirmed_stopped:
+                return True, status
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False, status
+            time.sleep(min(self.POLL_INTERVAL, remaining))
 
     def exit_info(self):
         # WNOWAIT preserves the group leader as a PID-reuse anchor until cleanup.
         return os.waitid(os.P_PID, self.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
 
-    def stop(self) -> None:
+    def stop(self) -> CleanupResult:
         if not self.still_owned():
-            print(f"[dev] left {self.name} group alone: process identity changed", file=sys.stderr)
-            return
+            return CleanupResult(False, "process identity changed; no signal was sent")
+
+        signal_errors: list[str] = []
         try:
             os.killpg(self.pid, signal.SIGTERM)
         except ProcessLookupError:
-            return
-        deadline = time.monotonic() + 3
-        while time.monotonic() < deadline:
-            if not self.members_alive():
-                return
-            time.sleep(0.05)
-        if self.still_owned() and self.members_alive():
-            try:
-                os.killpg(self.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            pass
+        except OSError as exc:
+            signal_errors.append(f"SIGTERM failed ({exc.strerror or type(exc).__name__})")
+
+        stopped, status = self.wait_until_stopped(self.TERM_TIMEOUT)
+        if stopped:
+            return CleanupResult(True)
+
+        # The unreaped leader remains the PID-reuse anchor. Never escalate if
+        # its PID/PGID/SID/start time can no longer prove this is our group.
+        if not self.still_owned():
+            detail = f"ownership changed before SIGKILL; {status.describe()}"
+            return CleanupResult(False, "; ".join([*signal_errors, detail]))
+
+        try:
+            os.killpg(self.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            signal_errors.append(f"SIGKILL failed ({exc.strerror or type(exc).__name__})")
+
+        stopped, status = self.wait_until_stopped(self.KILL_VERIFY_TIMEOUT)
+        if stopped:
+            return CleanupResult(True)
+
+        detail = f"process group did not stop after SIGKILL verification: {status.describe()}"
+        return CleanupResult(False, "; ".join([*signal_errors, detail]))
+
+
+def cleanup_groups(groups: list[OwnedGroup]) -> bool:
+    succeeded = True
+    for group in reversed(groups):
+        try:
+            result = group.stop()
+        except Exception as exc:  # noqa: BLE001 - continue cleanup of the other owned group
+            result = CleanupResult(False, f"stop raised {type(exc).__name__}")
+        if not result.success:
+            succeeded = False
+            detail = f": {result.detail}" if result.detail else ""
+            print(f"[dev] ERROR: cleanup failed for {group.name}{detail}", file=sys.stderr)
+
+    # Reap each direct child even when another group's stop failed.
+    for group in groups:
+        try:
+            group.process.wait(timeout=4)
+        except subprocess.TimeoutExpired:
+            succeeded = False
+            print(f"[dev] ERROR: {group.name} leader did not exit after cleanup", file=sys.stderr)
+        except OSError as exc:
+            succeeded = False
+            print(f"[dev] ERROR: could not confirm {group.name} leader exit ({exc.strerror or type(exc).__name__})", file=sys.stderr)
+    return succeeded
 
 
 def main() -> int:
@@ -192,6 +297,7 @@ def main() -> int:
     groups: list[OwnedGroup] = []
     interrupted = 0
     failure_status: int | None = None
+    cleanup_succeeded = True
 
     def on_signal(signum: int, _frame: object) -> None:
         nonlocal interrupted
@@ -224,14 +330,10 @@ def main() -> int:
         print(f"[dev] ERROR: failed to start development servers: {exc}", file=sys.stderr)
         failure_status = 1
     finally:
-        for group in reversed(groups):
-            group.stop()
-        for group in groups:
-            try:
-                group.process.wait(timeout=4)
-            except subprocess.TimeoutExpired:
-                print(f"[dev] {group.name} leader did not exit after cleanup", file=sys.stderr)
+        cleanup_succeeded = cleanup_groups(groups)
 
+    if not cleanup_succeeded:
+        return 1
     if interrupted:
         return 128 + interrupted
     return failure_status or 1

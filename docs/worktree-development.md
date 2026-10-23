@@ -83,9 +83,12 @@ does not alter the machine's Tailscale configuration.
 Before `npm run dev` starts, an owned-process supervisor checks frontend `5174`
 and backend `8000`. Occupied ports stop startup with listener PID, command, and
 working directory where available; ports are never reassigned and existing
-owners are never stopped. Ctrl+C, SIGTERM, and either server's startup failure
-stop only the isolated process groups started by that command. Shutdown releases
-the ports for a later run.
+owners are never stopped. The supervisor runs each server in its own session and
+stops only the isolated process groups started by that command on Ctrl+C,
+SIGTERM, or startup failure. It confirms group exit after SIGTERM and, when
+needed, after SIGKILL. If ownership or exit cannot be confirmed, or `/proc`
+inspection fails, cleanup reports an error and returns a failure status.
+Shutdown releases the ports for a later run when cleanup succeeds.
 
 `frontend/src/components/Auth.tsx` sends the browser's current origin as the
 Supabase Auth redirect target. For local receipt-manager development, verify
