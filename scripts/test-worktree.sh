@@ -14,6 +14,7 @@ command_log="$test_root/setup-commands.log"
 mkdir -p "$fixture_repo/scripts" "$fixture_config/frontend" "$fixture_config/backend" "$fixture_bin"
 mkdir -p "$fixture_config/secrets/ai-quota-ca"
 cp "$source_root/scripts/worktree.sh" "$fixture_repo/scripts/worktree.sh"
+cp "$source_root/scripts/worktree-remove-inspect.py" "$fixture_repo/scripts/worktree-remove-inspect.py"
 cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
 
 git -C "$fixture_repo" init -b main >/dev/null
@@ -164,5 +165,7 @@ fi
 rm "$worktree_path/untracked-test-file"
 printf 'remove\n' | "$fixture_repo/scripts/worktree.sh" remove "$worktree_path" >/dev/null
 git -C "$fixture_repo" show-ref --verify --quiet refs/heads/feature/review-task
+
+python3 "$source_root/scripts/test-worktree-remove-guard.py"
 
 echo "Worktree workflow tests passed."
