@@ -126,3 +126,19 @@ changes is intentional and explicitly approved by the supervisor or user.
 - If a `hard` attempt still fails and redesign is needed, use the Sol
   escalation above before another implementation attempt.
 - Review high-risk work in Codex even after a successful worker run.
+
+## Playwright MCP permissions
+
+The project config exposes only the pinned Playwright MCP server through
+`.cursor/mcp.json`. `.cursor/cli.json` grants `Mcp(playwright:*)` while keeping
+existing Shell permissions and denials intact. Do not add `--approve-mcps` to
+the delegation command: that flag approves all configured MCP servers. Cursor
+CLI discovers project MCP configuration automatically; when a server approval
+is required, approve only `playwright`. Use `agent mcp list` and
+`agent mcp list-tools playwright` to diagnose discovery and tool registration.
+
+Use Playwright MCP sequentially within one worktree because its persistent
+browser profile is locked to one browser process at a time. The profile is
+workspace-keyed, so separate worktrees retain separate sessions. See
+[worktree-development.md](./worktree-development.md) for setup, browser cache,
+troubleshooting, and pin-update steps.

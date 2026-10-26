@@ -81,12 +81,38 @@ checks that the backend runtime can run `uvicorn` without reinstalling when
 healthy, refuses conflicting local files, and does not install or sync
 dependencies when checks pass.
 The ordinary Vite server is fixed to `5174` with `strictPort` so it can run
-alongside price-memo on `5173`. The official Playwright MCP configured in
-`.cursor/mcp.json` provides browser automation; it does not start a separate
-receipt-manager Vite server. For UI verification, start the application with
-`npm run dev` and use the MCP to open `http://localhost:5174/`. Vite proxies
-`/api` requests to the supervised FastAPI server on `8000`. This repository does
-not define a separate Playwright port or additional npm command. If Tailscale
+alongside price-memo on `5173`. The Playwright MCP configured in `.cursor/mcp.json` provides browser
+automation; it does not start a separate receipt-manager Vite server. The
+checked-in `.cursor/playwright-mcp.sh` pins `@playwright/mcp@0.0.83` and its
+exact `playwright@1.64.0-alpha-1790635538000` dependency, and installs Chromium
+revision `1247` from the matching Playwright package into
+`~/.cache/ms-playwright` on first launch. It runs Chromium headless so the MCP
+does not depend on a WSL display server. Node.js 20 or newer is recommended by
+the current Playwright MCP setup guide; the pinned package declares Node.js 18
+or newer.
+
+The browser uses Playwright MCP's default persistent profile. On Linux this is
+stored under `~/.cache/ms-playwright-mcp/` and keyed by browser channel and the
+MCP client's workspace path, so each worktree is expected to retain a separate
+login session. The profile persists cookies and local storage. Never delete,
+reset, copy, or commit profile data as routine troubleshooting. A profile can
+only be open in one browser at a time; run MCP checks sequentially within a
+worktree. Separate worktrees can use their separate profiles concurrently, but
+a login in one worktree is not shared with another. Complete any required
+development login manually; do not automate Google/OAuth authentication.
+
+For first use, open the repository/worktree in Cursor and check MCP discovery
+with `agent mcp list` and tool availability with `agent mcp list-tools
+playwright`. On first use, inspect `.cursor/mcp.json` and explicitly enable only
+this server with `agent mcp enable playwright`; this records the server in the
+local Cursor CLI approved list. Project CLI permissions allow only
+`Mcp(playwright:*)`; do not use `--approve-mcps`, which auto-approves every
+configured MCP server. Then start the application
+with `npm run dev` and use the MCP to open `http://localhost:5174/`. Use the
+browser tools to inspect the DOM and set desktop and mobile viewport sizes.
+Vite proxies `/api` requests to the supervised FastAPI server on `8000`. This
+repository does not define a separate Playwright port or additional npm
+command. If Tailscale
 Serve forwards to the receipt-manager development server, verify its local
 target and update it from `5173` to `5174` when needed; this repository change
 does not alter the machine's Tailscale configuration.
@@ -146,6 +172,31 @@ Use `--workspace <path>` to continue work in a listed worktree. Cursor's own
 `npm run dev` starts the same services with the receipt-manager frontend on
 `5174`, supervised backend on `8000`, and explicit port-conflict handling.
 Worktree setup does not start or stop services or apply database migrations.
+
+### Playwright MCP setup, troubleshooting, and updates
+
+The first MCP launch downloads the pinned MCP package and, if needed, its
+matching Chromium build. This requires npm registry access. Browser binaries are
+shared in the standard Playwright cache; browser profiles remain in the MCP
+cache and are scoped by workspace. If MCP does not start, run `agent mcp list`
+and `agent mcp list-tools playwright` from the target worktree, confirm that
+`.cursor/mcp.json` is loaded, and inspect the Cursor CLI error for npm network or
+permission failures. Do not add broad Shell or MCP permissions to work around a
+single-server issue.
+
+If Chromium is missing or mismatched, start `.cursor/playwright-mcp.sh` again;
+it installs only the pinned browser revision when that revision is absent. The
+launcher refuses to start MCP if the matching headless-shell executable is still
+missing. Do not delete the Playwright browser cache or MCP profile as a generic
+repair.
+
+When updating Playwright MCP, select a concrete `@playwright/mcp` release,
+inspect that release's exact `playwright` / `playwright-core` dependencies and
+its `browsers.json`, and update the three pins in
+`.cursor/playwright-mcp.sh` together. Then run
+`bash scripts/test-playwright-mcp.sh` and `npm run check`. From Cursor, verify
+that the MCP tools are listed, Chromium launches,
+`http://localhost:5174/` loads, and desktop/mobile viewport checks work. Do not infer successful Cursor or browser operation from static tests.
 
 ## Development database planning
 

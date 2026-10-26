@@ -5,8 +5,12 @@
       "Shell(uv)",
       "Shell(git)",
       "Shell(ls)",
-      "Shell(cat)"
+      "Shell(cat)",
+      "Mcp(playwright:*)"
     ],
-    "deny": ["Shell(sudo)", "Shell(rm)"]
+    "deny": [
+      "Shell(sudo)",
+      "Shell(rm)"
+    ]
   }
 }
