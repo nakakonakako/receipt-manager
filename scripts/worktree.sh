@@ -20,6 +20,14 @@ die() {
   exit 2
 }
 
+refresh_origin_main_for_create() {
+  if ! git -C "$script_repo_root" fetch --quiet --no-tags origin refs/heads/main:refs/remotes/origin/main; then
+    die "Could not refresh origin/main from the remote. No worktree or branch was created."
+  fi
+  git -C "$script_repo_root" rev-parse --verify 'origin/main^{commit}' >/dev/null 2>&1 \
+    || die "origin/main is unavailable or not a valid commit after fetch. No worktree or branch was created."
+}
+
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 script_repo_root="$(git -C "$script_directory" rev-parse --show-toplevel 2>/dev/null)" || die "Not inside a Git repository."
 git_common_dir="$(git -C "$script_repo_root" rev-parse --path-format=absolute --git-common-dir)"
@@ -199,7 +207,12 @@ case "$command_name" in
       fi
       git -C "$script_repo_root" worktree add "$target_path" "$branch_name"
     else
-      git -C "$script_repo_root" rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || die "Base ref is not available: $base_ref. Fetch it explicitly (for example: git fetch origin main) or pass a valid --base ref."
+      if [[ "$base_ref" == "origin/main" ]]; then
+        refresh_origin_main_for_create
+      else
+        git -C "$script_repo_root" rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 \
+          || die "Base ref is not available: $base_ref. Fetch it explicitly (for example: git fetch origin main) or pass a valid --base ref."
+      fi
       git -C "$script_repo_root" worktree add -b "$branch_name" "$target_path" "$base_ref"
     fi
     show_worktree_state "$target_path"

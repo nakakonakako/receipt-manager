@@ -126,9 +126,10 @@ unless the user explicitly requests it.
 - Use `scripts/delegate-cursor.sh --worktree <task>` to create/reuse the
   standard worktree, or `--workspace <path>` to reuse an existing one. Cursor
   receives `--workspace`; do not use Cursor's own `--worktree` location.
-  New delegate worktrees fetch and use `origin/main`; failed fetches stop
-  creation instead of falling back to the current branch. Existing worktrees
-  are reused without fetching or changing their branch.
+  New branches based on `origin/main` fetch and validate the remote ref in
+  `scripts/worktree.sh create`; failed fetches stop creation instead of falling
+  back to a stale ref. Explicit bases and existing local branches do not fetch.
+  Existing worktrees are reused without fetching or changing their branch.
 
 ## Implementation rules
 

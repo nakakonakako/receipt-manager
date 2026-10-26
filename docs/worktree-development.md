@@ -20,10 +20,20 @@ scripts/worktree.sh remove <path>
 ```
 
 `create` creates a Git worktree under the standard directory and runs dependency
-and environment setup. If its branch is already checked out elsewhere, the
-command displays the worktree list and stops; inspect that worktree and pass its
-path to `reuse`. `reuse` displays the branch, status, staged/unstaged summaries,
-and untracked paths before running setup. It preserves all existing changes.
+and environment setup. When it creates a **new** branch with the default base
+`origin/main` (exactly that ref, including the implicit default), it first
+completes existing-worktree and in-use-branch checks, then fetches
+`refs/heads/main` into `refs/remotes/origin/main`, verifies
+`origin/main^{commit}`, and only then runs `git worktree add`. Fetch failure,
+a missing refspec, or an invalid commit stops without creating a worktree or
+branch; there is no fallback to a stale local `origin/main` or the current
+branch. Explicit `--base main`, any other `--base` ref, checkout of an existing
+local branch, and `reuse` do not fetch or reset anything.
+
+If its branch is already checked out elsewhere, the command displays the
+worktree list and stops; inspect that worktree and pass its path to `reuse`.
+`reuse` displays the branch, status, staged/unstaged summaries, and untracked
+paths before running setup. It preserves all existing changes.
 
 Setup installs dependencies from the root and frontend lockfiles, ensures a
 managed `backend/.venv` (relocation detection, safe repair, and `uvicorn`
@@ -127,9 +137,9 @@ process command lines or environment values.
 
 `scripts/delegate-cursor.sh --worktree <task-name>` creates or reuses the
 standard Git worktree and invokes Cursor with `--workspace <absolute-path>`.
-For a new worktree it fetches `origin/main` and uses that exact ref as its base;
-fetch failure stops creation, with no fallback to the current branch. Existing
-worktrees are reused without fetch or branch changes.
+Freshness of `origin/main` for new branches is handled only by
+`scripts/worktree.sh create` (default `--base origin/main`); the delegate script
+does not fetch. Existing worktrees are reused without fetch or branch changes.
 Use `--workspace <path>` to continue work in a listed worktree. Cursor's own
 `--worktree` option is not used because it controls a separate storage root.
 
