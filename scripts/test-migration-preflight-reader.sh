@@ -50,15 +50,18 @@ CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN;
 CREATE ROLE ai_quota_owner NOLOGIN NOINHERIT;
-GRANT ai_quota_owner TO postgres WITH ADMIN TRUE, SET TRUE, INHERIT FALSE;
+CREATE ROLE migration_executor LOGIN CREATEROLE NOINHERIT PASSWORD 'disposable-migration-executor-password';
+GRANT ai_quota_owner TO migration_executor WITH ADMIN TRUE, SET FALSE, INHERIT FALSE;
 GRANT CREATE ON DATABASE postgres TO ai_quota_owner;
-CREATE SCHEMA supabase_migrations;
+ALTER DATABASE postgres OWNER TO migration_executor;
+CREATE SCHEMA supabase_migrations AUTHORIZATION migration_executor;
 CREATE TABLE supabase_migrations.schema_migrations (
   version text PRIMARY KEY,
   statements text[]
 );
 INSERT INTO supabase_migrations.schema_migrations (version, statements)
 VALUES ('20261027150000', ARRAY['fixture migration']);
+ALTER TABLE supabase_migrations.schema_migrations OWNER TO migration_executor;
 CREATE TABLE public.business_rows (id integer PRIMARY KEY, secret text NOT NULL);
 INSERT INTO public.business_rows VALUES (1, 'fixture-only-business-data');
 SET ROLE ai_quota_owner;
@@ -84,14 +87,52 @@ $function$;
 REVOKE ALL ON FUNCTION public.migration_reader_secdef_probe() FROM PUBLIC;
 SQL
 
+export PGUSER=migration_executor PGPASSWORD=disposable-migration-executor-password
+[[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  "SELECT concat_ws(':', rolsuper::text, rolcreaterole::text) FROM pg_catalog.pg_roles WHERE rolname = current_user")" == 'false:true' ]] || {
+  echo "Migration executor is not a non-superuser CREATEROLE role." >&2
+  exit 1
+}
+membership_before="$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  "SELECT count(*)::text || ':' || coalesce(bool_and(m.admin_option AND NOT m.set_option AND NOT m.inherit_option)::text, 'false') FROM pg_catalog.pg_auth_members AS m JOIN pg_catalog.pg_roles AS granted ON granted.oid = m.roleid JOIN pg_catalog.pg_roles AS member ON member.oid = m.member WHERE granted.rolname = 'ai_quota_owner' AND member.rolname = current_user")"
+[[ "$membership_before" == '1:true' ]] || {
+  echo "Non-superuser fixture did not start with the expected ADMIN-only membership: $membership_before" >&2
+  exit 1
+}
+export PGUSER=postgres PGPASSWORD=disposable-postgres-password
+psql -X -w -v ON_ERROR_STOP=1 -c \
+  "ALTER TABLE ai_quota.settings OWNER TO postgres" >/dev/null
+export PGUSER=migration_executor PGPASSWORD=disposable-migration-executor-password
+if psql -X -w -v ON_ERROR_STOP=1 -f \
+  "$repo_root/supabase/migrations/20261027150000_migration_preflight_reader.sql" >/dev/null 2>&1; then
+  echo "Migration unexpectedly succeeded after its required column grant was denied." >&2
+  exit 1
+fi
+membership_after_failure="$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  "SELECT count(*)::text || ':' || coalesce(bool_and(m.admin_option AND NOT m.set_option AND NOT m.inherit_option)::text, 'false') FROM pg_catalog.pg_auth_members AS m JOIN pg_catalog.pg_roles AS granted ON granted.oid = m.roleid JOIN pg_catalog.pg_roles AS member ON member.oid = m.member WHERE granted.rolname = 'ai_quota_owner' AND member.rolname = current_user")"
+[[ "$membership_after_failure" == '1:true' ]] || {
+  echo "Failed migration changed the executor's existing membership." >&2
+  exit 1
+}
+[[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  "SELECT count(*) FROM pg_catalog.pg_roles WHERE rolname = 'migration_preflight_reader'")" == 0 ]] || {
+  echo "Failed migration left behind the reader role." >&2
+  exit 1
+}
+export PGUSER=postgres PGPASSWORD=disposable-postgres-password
+psql -X -w -v ON_ERROR_STOP=1 -c \
+  "ALTER TABLE ai_quota.settings OWNER TO ai_quota_owner" >/dev/null
+export PGUSER=migration_executor PGPASSWORD=disposable-migration-executor-password
 psql -X -w -v ON_ERROR_STOP=1 \
   -f "$repo_root/supabase/migrations/20261027150000_migration_preflight_reader.sql"
-if [[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
-  "SELECT coalesce(bool_or(m.set_option OR m.inherit_option), false) FROM pg_catalog.pg_auth_members AS m JOIN pg_catalog.pg_roles AS granted ON granted.oid = m.roleid JOIN pg_catalog.pg_roles AS member ON member.oid = m.member WHERE granted.rolname = 'ai_quota_owner' AND member.rolname = 'postgres'")" != f ]]; then
-  echo "Migration executor retained SET access to ai_quota_owner." >&2
+membership_after="$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  "SELECT count(*)::text || ':' || coalesce(bool_and(m.admin_option AND NOT m.set_option AND NOT m.inherit_option)::text, 'false') FROM pg_catalog.pg_auth_members AS m JOIN pg_catalog.pg_roles AS granted ON granted.oid = m.roleid JOIN pg_catalog.pg_roles AS member ON member.oid = m.member WHERE granted.rolname = 'ai_quota_owner' AND member.rolname = current_user")"
+if [[ "$membership_after" != '1:true' ]]; then
+  echo "Migration did not preserve the executor's ADMIN-only membership: $membership_after" >&2
   exit 1
 fi
 
+export PGUSER=postgres PGPASSWORD=disposable-postgres-password
 psql -X -w -v ON_ERROR_STOP=1 <<SQL
 CREATE ROLE migration_preflight_login
   LOGIN PASSWORD '$test_password'

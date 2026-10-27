@@ -21,7 +21,25 @@ begin
     raise exception 'Supabase migration history table is unavailable';
   end if;
 
-  if pg_catalog.to_regclass('ai_quota.settings') is null
+  if not exists (
+    select 1
+    from pg_catalog.pg_class as c
+    join pg_catalog.pg_namespace as n on n.oid = c.relnamespace
+    where n.nspname = 'ai_quota'
+      and c.relname = 'settings'
+      and c.relkind in ('r', 'p')
+  ) then
+    raise exception 'ai_quota.settings table is unavailable';
+  end if;
+
+  if (
+       select count(*)
+       from pg_catalog.pg_auth_members as m
+       join pg_catalog.pg_roles as granted on granted.oid = m.roleid
+       join pg_catalog.pg_roles as member on member.oid = m.member
+       where granted.rolname = 'ai_quota_owner'
+         and member.rolname = current_user
+     ) <> 1
      or not exists (
        select 1
        from pg_catalog.pg_auth_members as m
@@ -30,8 +48,10 @@ begin
        where granted.rolname = 'ai_quota_owner'
          and member.rolname = current_user
          and m.admin_option
+         and not m.set_option
+         and not m.inherit_option
      ) then
-    raise exception 'migration executor cannot temporarily SET ROLE ai_quota_owner to grant singleton-id access';
+    raise exception 'migration executor requires an existing ADMIN-only ai_quota_owner membership';
   end if;
 end
 $preflight$;
@@ -51,15 +71,17 @@ grant select (version)
   on table supabase_migrations.schema_migrations
   to migration_preflight_reader;
 
--- Temporarily enable SET only to grant the safe singleton key column.
+-- Change only SET while preserving the existing ADMIN-only membership.
 grant ai_quota_owner to current_user with set true, inherit false;
 set local role ai_quota_owner;
 grant usage on schema ai_quota to migration_preflight_reader;
 grant select (id) on table ai_quota.settings to migration_preflight_reader;
 reset role;
-revoke ai_quota_owner from current_user;
 
-do $verify_membership$
+-- If the bootstrap ADMIN grant was made by this executor, restore its SET
+-- option on that same grant. Otherwise remove only the temporary grant made
+-- by this executor, leaving the bootstrap grant untouched.
+do $restore_membership$
 begin
   if exists (
     select 1
@@ -68,9 +90,45 @@ begin
     join pg_catalog.pg_roles as member on member.oid = m.member
     where granted.rolname = 'ai_quota_owner'
       and member.rolname = current_user
-      and (m.set_option or m.inherit_option)
+      and m.grantor = (select oid from pg_catalog.pg_roles where rolname = current_user)
+      and m.admin_option
   ) then
-    raise exception 'migration executor retained effective membership in ai_quota_owner';
+    execute pg_catalog.format(
+      'GRANT ai_quota_owner TO %I WITH SET FALSE, INHERIT FALSE',
+      current_user
+    );
+  else
+    execute pg_catalog.format(
+      'REVOKE ai_quota_owner FROM %I GRANTED BY %I',
+      current_user,
+      current_user
+    );
+  end if;
+end
+$restore_membership$;
+
+do $verify_membership$
+begin
+  if (
+       select count(*)
+       from pg_catalog.pg_auth_members as m
+       join pg_catalog.pg_roles as granted on granted.oid = m.roleid
+       join pg_catalog.pg_roles as member on member.oid = m.member
+       where granted.rolname = 'ai_quota_owner'
+         and member.rolname = current_user
+     ) <> 1
+     or not exists (
+       select 1
+       from pg_catalog.pg_auth_members as m
+       join pg_catalog.pg_roles as granted on granted.oid = m.roleid
+       join pg_catalog.pg_roles as member on member.oid = m.member
+       where granted.rolname = 'ai_quota_owner'
+         and member.rolname = current_user
+         and m.admin_option
+         and not m.set_option
+         and not m.inherit_option
+     ) then
+    raise exception 'migration executor ADMIN-only ai_quota_owner membership was not preserved';
   end if;
 end
 $verify_membership$;

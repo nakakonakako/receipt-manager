@@ -140,6 +140,19 @@ class MigrationHistoryTests(unittest.TestCase):
         self.assertIn("has_column_privilege", reader_audit)
         self.assertIn("a.attname <> 'id'", reader_audit)
 
+    def test_reader_migration_preserves_the_bootstrap_admin_membership(self) -> None:
+        migration = (
+            SCRIPT.parent.parent
+            / "supabase"
+            / "migrations"
+            / "20261027150000_migration_preflight_reader.sql"
+        ).read_text()
+        self.assertIn("m.admin_option", migration)
+        self.assertIn("with set true, inherit false", migration.lower())
+        self.assertIn("REVOKE ai_quota_owner FROM %I GRANTED BY %I", migration)
+        self.assertNotIn("revoke ai_quota_owner from current_user;", migration.lower())
+        self.assertIn("ADMIN-only ai_quota_owner membership was not preserved", migration)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

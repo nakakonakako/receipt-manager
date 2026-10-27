@@ -19,7 +19,7 @@
 
 ## 読み取りロール
 
-`migration_preflight_reader` は `NOLOGIN` の権限グループです。migrationは `postgres` DBへのCONNECT、`supabase_migrations` schemaのUSAGE、`schema_migrations.version` 列、`ai_quota.settings.id` 列だけのSELECTを付与します。`id` は設定値を読まずにsingleton行の存在だけを数えるためです。`ai_quota_owner` のADMIN membershipを用いてトランザクション内で一時的にSETし、この列権限だけを付与した後に実効membershipを取り消します。アプリ業務テーブル、migration本文列、AI quotaの設定値・request行へのSELECT、書込み権限、アプリrole membershipは付与しません。`pg_catalog` の通常の公開カタログ情報は診断SQLに必要です。
+`migration_preflight_reader` は `NOLOGIN` の権限グループです。migrationは `postgres` DBへのCONNECT、`supabase_migrations` schemaのUSAGE、`schema_migrations.version` 列、`ai_quota.settings.id` 列だけのSELECTを付与します。`id` は設定値を読まずにsingleton行の存在だけを数えるためです。migration executorには既存のADMIN-only membershipが1件だけ存在することを事前確認します。トランザクション内でexecutor自身が一時membershipを追加してSETし、この列権限だけを付与します。その後、一時membershipだけを `GRANTED BY current_user` で取り消すか、既存membershipのSETを無効に戻します。元のADMIN-only membershipは維持し、復元workflowには依存しません。アプリ業務テーブル、migration本文列、AI quotaの設定値・request行へのSELECT、書込み権限、アプリrole membershipは付与しません。`pg_catalog` の通常の公開カタログ情報は診断SQLに必要です。
 
 認証用LOGIN roleはこのmigrationでは作りません。後述の初回bootstrap後に、別の非特権LOGINを作成してこの権限roleだけを付与します。Environment secretに保存するreaderパスワードは本番DB管理者が設定し、migrationファイルや通常のrepository secretには置きません。
 
