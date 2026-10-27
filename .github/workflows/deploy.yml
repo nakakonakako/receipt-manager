@@ -2,8 +2,17 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# All production DB checks, migration applies, and deployments share this queue.
+concurrency:
+  group: receipt-manager-production-db
+  cancel-in-progress: false
+  queue: max
 
 env:
   REGISTRY: ghcr.io
@@ -12,104 +21,157 @@ env:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    outputs:
-      migrations_changed: ${{ steps.migration_changes.outputs.changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-
-      - name: Check migration changes
-        id: migration_changes
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-        run: |
-          if [[ "$BEFORE_SHA" =~ ^0{40}$ ]] || ! git cat-file -e "$BEFORE_SHA^{commit}"; then
-            changed=true
-          elif git diff --quiet "$BEFORE_SHA" "$AFTER_SHA" -- supabase/migrations/; then
-            changed=false
-          else
-            changed=true
-          fi
-          echo "changed=$changed" >> "$GITHUB_OUTPUT"
-
+      - name: Require latest main commit
+        run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
-
       - name: Setup uv
         uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.12"
           enable-cache: true
-
       - name: Install backend dependencies
         run: uv sync --directory backend --frozen
-
       - name: Run quality checks
         run: npm run check
 
-  migrate:
+  preflight:
     needs: quality
-    if: ${{ needs.quality.result == 'success' && needs.quality.outputs.migrations_changed == 'true' }}
     runs-on: ubuntu-latest
+    environment:
+      name: production-db-check
     env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_ID: ${{ secrets.PROD_SUPABASE_PROJECT_ID }}
+      PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+      PGPORT: "5432"
+      PGDATABASE: postgres
+      PGUSER: migration_preflight_login.${{ vars.PROD_SUPABASE_PROJECT_REF }}
+      PGPASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}
+      PGSSLMODE: require
+      PGCONNECT_TIMEOUT: "10"
+    outputs:
+      state: ${{ steps.history.outputs.state }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require latest main commit and reader environment
+        env:
+          READER_PASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}
+          PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          if [[ "$GITHUB_REF" != refs/heads/main || -z "$PGHOST" || "$PGHOST" =~ [[:space:]] || ! "$PROJECT_REF" =~ ^[A-Za-z0-9]+$ || -z "$READER_PASSWORD" ]]; then
+            echo "Production DB reader environment is missing or this is not main; deployment is blocked." >&2
+            exit 1
+          fi
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+      - name: Compare migration history with main
+        id: history
+        run: python3 scripts/check-production-db-state.py --base-ref "${{ github.event.before || github.sha }}" --output "$GITHUB_OUTPUT"
+      - name: Verify reader role and production database baseline
+        run: |
+          set -euo pipefail
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_production_db_reader.sql >/dev/null
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_migration_reader_bootstrap.sql >/dev/null
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_08_rpc_integrity.sql >/dev/null
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql >/dev/null
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_f01_acl_integrity.sql >/dev/null
 
+  apply:
+    needs: [quality, preflight]
+    if: ${{ needs.preflight.outputs.state == 'PENDING' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production-db-apply
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Require latest main commit and writer environment
+        env:
+          DB_PASSWORD: ${{ secrets.MIGRATION_SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
+          POOLER_HOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          if [[ "$GITHUB_REF" != refs/heads/main || -z "$DB_PASSWORD" || ! "$PROJECT_REF" =~ ^[A-Za-z0-9]+$ || -z "$POOLER_HOST" ]]; then
+            echo "Production DB apply environment is incomplete; migration is blocked." >&2
+            exit 1
+          fi
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v3
         with:
           version: 2.115.0
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+      - name: Recheck pending history after approval
+        id: pending
+        env:
+          PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+          PGPORT: "5432"
+          PGDATABASE: postgres
+          PGUSER: postgres.${{ vars.PROD_SUPABASE_PROJECT_REF }}
+          PGPASSWORD: ${{ secrets.MIGRATION_SUPABASE_DB_PASSWORD }}
+          PGSSLMODE: require
+          PGCONNECT_TIMEOUT: "10"
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
+          grep -qx 'state=PENDING' "$GITHUB_OUTPUT"
+      - name: Apply pending main migrations
+        env:
+          PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+          PGPORT: "5432"
+          PGDATABASE: postgres
+          PGUSER: postgres.${{ vars.PROD_SUPABASE_PROJECT_REF }}
+          PGPASSWORD: ${{ secrets.MIGRATION_SUPABASE_DB_PASSWORD }}
+          PGSSLMODE: require
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
+          supabase db push --db-url "$SUPABASE_DB_URL" --yes
 
-      - name: Link production project
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
-
-      - name: Push migrations to production
-        run: supabase db push --yes --linked
-
-  verify_rpc:
-    needs: migrate
-    if: ${{ needs.migrate.result == 'success' }}
+  postflight:
+    needs: [quality, preflight, apply]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && (needs.apply.result == 'success' || (needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC')) }}
     uses: ./.github/workflows/verify-production-rpcs.yml
-    secrets:
-      PROD_SUPABASE_DB_PASSWORD: ${{ secrets.PROD_SUPABASE_DB_PASSWORD }}
-      PROD_SUPABASE_PROJECT_ID: ${{ secrets.PROD_SUPABASE_PROJECT_ID }}
 
   build-and-push:
-    needs: [quality, migrate, verify_rpc]
-    if: ${{ always() && !cancelled() && needs.quality.result == 'success' && ((needs.quality.outputs.migrations_changed == 'true' && needs.migrate.result == 'success' && needs.verify_rpc.result == 'success') || (needs.quality.outputs.migrations_changed == 'false' && needs.migrate.result == 'skipped' && needs.verify_rpc.result == 'skipped')) }}
+    needs: [quality, preflight, apply, postflight]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && (needs.apply.result == 'success' || (needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC')) && needs.postflight.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
+      - name: Require latest main commit
+        run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
       - name: Docker Setup
         uses: docker/setup-buildx-action@v4
-
       - name: Login to GHCR
         uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build/Push Frontend
         uses: docker/build-push-action@v7
         with:
@@ -123,7 +185,6 @@ jobs:
             VITE_SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }}
             VITE_SUPABASE_PUBLISHABLE_KEY=${{ secrets.PROD_SUPABASE_PUBLISHABLE_KEY }}
             VITE_API_URL=/api
-
       - name: Build/Push Backend
         uses: docker/build-push-action@v7
         with:
@@ -135,13 +196,14 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend
 
   deploy:
-    needs: build-and-push
-    if: ${{ always() && !cancelled() && needs.build-and-push.result == 'success' }}
+    needs: [quality, preflight, apply, postflight, build-and-push]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && (needs.apply.result == 'success' || (needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC')) && needs.postflight.result == 'success' && needs.build-and-push.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-
+      - name: Require latest main commit before deployment
+        run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
       - name: SCP Transfer
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -150,7 +212,6 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "docker-compose.production.yml, nginx-config"
           target: "~/receipt-manager"
-
       - name: SSH Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -188,6 +249,7 @@ jobs:
               exit 1
             fi
             mv -fT -- "$env_tmp" .env
+
             if [[ "$(stat -c '%a' -- .env)" != 600 ]]; then
               echo ".env permissions are not 0600" >&2
               exit 1

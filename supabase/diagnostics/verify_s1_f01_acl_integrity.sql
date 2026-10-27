@@ -14,10 +14,6 @@ declare
   v_role_name text;
   v_privilege_name text;
 begin
-  if current_user <> 'postgres' then
-    raise exception 'S1 F-01 verifier requires current_user=postgres; got %', current_user;
-  end if;
-
   select count(*)
     into v_migration_count
   from supabase_migrations.schema_migrations
