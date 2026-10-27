@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "bash scripts/dev-env.sh prepare && python3 scripts/dev-supervisor.py --frontend-port 5174 --backend-port 8000 --frontend-command 'npm run dev --prefix frontend' --backend-command '.venv/bin/python -m uvicorn app.main:app --reload --port 8000' --backend-cwd backend",
-    "check": "npm run check:worktree && npm run check:frontend && npm run check:backend",
+    "check": "npm run check:worktree && npm run check:frontend && npm run check:backend && npm run test:production-db-gate",
     "check:worktree": "bash scripts/test-worktree.sh && bash scripts/test-playwright-mcp.sh && bash scripts/test-dev-env.sh && bash scripts/test-backend-runtime.sh && bash scripts/test-db-plan.sh && python3 scripts/test-dev-supervisor.py && python3 scripts/test_migration_history.py",
     "test:db-migration-reader": "bash scripts/test-migration-preflight-reader.sh",
     "worktree": "bash scripts/worktree.sh",
@@ -11,7 +11,8 @@
     "check:backend": "uv run --directory backend ruff check . && uv run --directory backend ruff format --check . && uv run --directory backend python -m unittest discover -s tests -v",
     "db:plan": "bash scripts/db-plan.sh",
     "db:push": "bash scripts/db-push.sh",
-    "db:list": "npx supabase migration list"
+    "db:list": "npx supabase migration list",
+    "test:production-db-gate": "python3 scripts/test-production-db-gate.py"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

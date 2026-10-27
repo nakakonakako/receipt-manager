@@ -221,7 +221,7 @@ DB_PLAN_TEST_MUTATE_LINK=wrong python3 "$repo/scripts/test-db-push-pty.py" "$rep
 [[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
 [[ "$(cat "$repo/supabase/.temp/project-ref")" == "$wrong_ref" ]]
 printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
-grep -Fq 'run: supabase db push --yes --linked' "$source_root/.github/workflows/deploy.yml"
+grep -Fq 'supabase db push --db-url "$SUPABASE_DB_URL" --yes' "$source_root/.github/workflows/deploy.yml"
 if grep -Fq 'npm run db:push' "$source_root/.github/workflows/deploy.yml"; then
   echo 'Production deployment must keep its existing direct Supabase CLI migration path.' >&2
   exit 1

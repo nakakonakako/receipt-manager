@@ -109,12 +109,9 @@ BEGIN
   END IF;
 
   IF (SELECT pg_catalog.count(*)
-      FROM pg_catalog.pg_class AS c
-      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'ai_quota'
-        AND c.relname = 'settings'
-        AND c.relkind = 'r') IS DISTINCT FROM 1 THEN
-    RAISE EXCEPTION 'ai_quota.settings is missing';
+      FROM ai_quota.settings
+      WHERE id = 1) IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'ai_quota.settings singleton row is missing';
   END IF;
 
   IF (SELECT pg_catalog.count(*)

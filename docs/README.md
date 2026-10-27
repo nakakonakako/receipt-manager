@@ -11,5 +11,6 @@
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | **予定** — 履歴の大分類・サブを候補選択で絞る構想 |
 | [cursor-delegation.md](./cursor-delegation.md) | Codex supervisor から Cursor worker へ実装を委譲する手順 |
 | [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と、`/analyze`・`/search`・`/analyze_csv` の FastAPI 統合 |
-| [database-migration-deployment.md](./database-migration-deployment.md) | 本番migration承認・履歴整合性ゲートの段階的な導入手順 |
+| [database-migration-deployment.md](./database-migration-deployment.md) | reader role migrationと履歴検証の実装メモ |
+| [production-database-migration-gate.md](./production-database-migration-gate.md) | 本番migration gateのEnvironment設定・bootstrap・運用・復旧手順 |
 | [spec-price-memo-realtime.md](./spec-price-memo-realtime.md) | price-memo向けPrivate Broadcast通知のtopic・認可・trigger契約 |
