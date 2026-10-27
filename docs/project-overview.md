@@ -151,6 +151,8 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 マイグレーション: `supabase/migrations/`  
 RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
+本番migrationの承認・整合性ゲートは段階導入中。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴をfail closedで比較し、`migration_preflight_reader` はmigration履歴のversion列だけを読むNOLOGIN権限role。現在の本番deploy workflowとGitHub設定は未変更で、reader role migrationも未適用。Environment承認を含む切替順序と未解決の制約は [database-migration-deployment.md](./database-migration-deployment.md) を参照。
+
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
 | `receipts` | レシート親 | `date`, `store_name`, `total_amount`, `payment_method` | 主キー `id` に加え `UNIQUE (user_id, id)` |
