@@ -151,6 +151,8 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 マイグレーション: `supabase/migrations/`  
 RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
+本番migrationの承認・整合性ゲートはmainに導入済み。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。reader secretがEnvironmentに設定されるまではmain pushのpreflightはfail closedで停止する。reader role migrationは未適用。Environment設定、bootstrap、切替順序、復旧手順は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
+
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
 | `receipts` | レシート親 | `date`, `store_name`, `total_amount`, `payment_method` | 主キー `id` に加え `UNIQUE (user_id, id)` |
@@ -330,7 +332,7 @@ AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - main push後のCD: `.github/workflows/deploy.yml` は全main pushでmigration履歴とreader roleを読み取り専用で検証する。履歴一致時はRPC/ACL検証成功後に承認なしでbuild/deployを続ける。未適用migration時はRPC/ACLのassertion mismatchだけを修復経路として許容し、`production-db-apply` Environmentの本人承認付きapply後に全検証を再実行する。接続・履歴・reader・検証実行エラーやpostflight失敗ではdeployしない。全DB操作とdeployは共通queueで直列化する。
 - 本番DB credentialは用途別Environmentに分離する。`production-db-check` はmain限定・承認なしの読み取り専用login、`production-db-apply` はmain限定・本人承認付きのwriter secretを持つ。初回reader作成は `.github/workflows/bootstrap-production-db-reader.yml` の一回限りの承認付きworkflowで行い、アプリdeployは行わない。
-- 初回切替、Environment設定順、reader bootstrap、旧repository secret削除条件、失敗復旧は [production database migration gate](./production-database-migration-gate.md) を参照する。PR #35のreader-role migrationと段階2workflowは別PRで、Environment設定を先に済ませてから順序どおり適用する。
+- 初回切替、Environment設定順、reader bootstrap、旧repository secret削除条件、失敗復旧は [production database migration gate](./production-database-migration-gate.md) を参照する。PR #35のreader-role migrationは未適用であり、main pushのpreflightが成功する前にproduction deployは進まない。
 
 ### 7.4 認証フロー
 
