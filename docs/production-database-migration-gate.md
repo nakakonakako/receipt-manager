@@ -8,9 +8,10 @@ workflowをmainへ入れる前にSettingsを準備する。Environmentが存在�
 ## Environmentとcredential
 
 1. `production-db-check` Environmentを作成し、deployment branchを `main` のみに制限する。
-   Required reviewersは設定しない。両Environmentで共有するrepository variablesとして
-   `PROD_SUPABASE_POOLER_HOST` と `PROD_SUPABASE_PROJECT_REF` を設定し、Environment secret
-   `MIGRATION_READER_PASSWORD` を登録する。
+   Required reviewersは設定しない。repository variablesとして
+   `PROD_SUPABASE_POOLER_HOST` と `PROD_SUPABASE_PROJECT_REF` を設定する。reader LOGINは
+   bootstrap後に作成するため、この時点では `MIGRATION_READER_PASSWORD` を設定しない。
+   secret未設定のpreflightはfail closedでdeployを停止する。
 2. `production-db-apply` Environmentを作成し、deployment branchを `main` のみに制限する。
    Required reviewersに本人を登録し、Prevent self-reviewを無効、administrator bypassを
    無効にする。Environment secretに `MIGRATION_SUPABASE_DB_PASSWORD` を設定する。Supabase Management API tokenは使わず、
@@ -46,14 +47,19 @@ role password設定時は対話型 `\password` 等を使い、SQLやActionsロ�
    確認する。`verify_migration_reader_bootstrap.sql` はbootstrap後と毎回のpreflight/postflightで
    postgresのADMIN保持とSET/INHERIT無効を確認する。bootstrapのpostflightが失敗した場合、
    通常deployは引き続き停止する。
-6. 人がLOGIN roleを作成・設定し、reader group membershipとread-only既定値を構成する。
-   `production-db-check` のreader secret、project ref、hostが有効であることを確認する。
+6. 本番DB管理者が対話型 `psql` で `migration_preflight_login` を作成し、`\password`
+   でpasswordを設定する。`migration_preflight_reader` だけを `INHERIT TRUE, SET FALSE`
+   で付与し、`default_transaction_read_only=on`、`statement_timeout=15s`、`lock_timeout=3s`
+   を設定する。Supabase shared poolerのusernameは `migration_preflight_login.<project-ref>`。
+   値をログに出さず `production-db-check` の `MIGRATION_READER_PASSWORD` に設定し、readerで
+   `verify_production_db_reader.sql` を実行してから次へ進む。
 7. `CI/CD Pipeline` を最新mainから `workflow_dispatch` する。reader接続、履歴一致、reader権限、
    RPC/ACLがすべて成功した場合だけbuild/deployへ進む。失敗した場合はDB状態とroleを修正し、
    最新main SHAで再実行する。
-8. すべてのworkflowが新しいEnvironment secretだけを参照し、main上の自動デプロイが成功した
-   後に限り、旧repository writer secretsを削除できる。旧値をEnvironmentへコピーした後も、
-   workflow参照を検索して旧secret依存がないことを確認してから削除する。
+8. 本番DB writer credentialが `production-db-apply` Environmentだけで使われ、main上の自動
+   デプロイが成功した後に限り、旧repositoryの `SUPABASE_ACCESS_TOKEN`,
+   `PROD_SUPABASE_DB_PASSWORD`, `PROD_SUPABASE_PROJECT_ID` を削除できる。writer passwordを
+   Environmentへ移行した後もworkflow全件で旧secret参照がないことを確認してから削除する。
 
 ## 日常運用と失敗復旧
 
