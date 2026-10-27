@@ -185,6 +185,17 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("verify-production-db-integrity.py", deploy)
         self.assertIn("grep -qx 'state=PENDING'", deploy)
         self.assertIn("--bootstrap-version 20261027150000", bootstrap)
+        self.assertIn("name: production-db-apply", bootstrap)
+        self.assertIn("Classify existing RPC and ACL integrity", bootstrap)
+        self.assertIn("verify-production-db-integrity.py --output", bootstrap)
+        self.assertIn("result=MISMATCH", bootstrap)
+        self.assertIn("preflight_migration_reader_bootstrap.sql", bootstrap)
+        self.assertIn("grep -qx 'state=BOOTSTRAP_APPLIED'", bootstrap)
+        self.assertIn("grep -qx 'bootstrap_action=verify'", bootstrap)
+        self.assertIn("verify_migration_reader_bootstrap.sql", bootstrap)
+        self.assertIn("Record remaining RPC and ACL integrity", bootstrap)
+        self.assertNotIn("build-and-push:", bootstrap)
+        self.assertNotIn("deploy:", bootstrap)
         self.assertNotIn("workflow_dispatch", verifier)
         self.assertIn("MIGRATION_READER_PASSWORD", verifier)
         self.assertNotIn("PROD_SUPABASE_DB_PASSWORD", deploy + verifier)
@@ -251,6 +262,27 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("needs.integrity.outputs.result == 'MISMATCH'", build_block)
         self.assertIn("needs.postflight.result == 'success'", build_block)
 
+    def test_bootstrap_integrity_mismatch_is_recorded_but_execution_errors_stop(self) -> None:
+        bootstrap = (ROOT / ".github/workflows/bootstrap-production-db-reader.yml").read_text(
+            encoding="utf-8"
+        )
+        classification = bootstrap.split("      - name: Classify existing RPC and ACL integrity", 1)[1].split(
+            "      - name: Apply the reader bootstrap migration", 1
+        )[0]
+        approval_apply = bootstrap.split("      - name: Apply the reader bootstrap migration", 1)[1].split(
+            "      - name: Recheck exact bootstrap migration history", 1
+        )[0]
+        post_history = bootstrap.split("      - name: Recheck exact bootstrap migration history", 1)[1]
+        self.assertIn("verify-production-db-integrity.py", classification)
+        self.assertIn("grep -qx 'result=MISMATCH'", classification)
+        self.assertIn("if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}", approval_apply)
+        self.assertIn("environment:\n      name: production-db-apply", bootstrap)
+        self.assertIn("preflight_migration_reader_bootstrap.sql", bootstrap)
+        self.assertIn("check-production-db-state.py --base-ref \"$GITHUB_SHA\" --bootstrap-version 20261027150000", post_history)
+        self.assertIn("verify_migration_reader_bootstrap.sql", post_history)
+        self.assertIn("verify-production-db-integrity.py", post_history)
+        self.assertIn("MISMATCH", post_history)
+
     def test_database_url_builder_encodes_password_without_printing_it(self) -> None:
         output = self.root / "runner-env"
         env = os.environ.copy()
@@ -281,6 +313,9 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("v_admin IS DISTINCT FROM true", sql)
         self.assertIn("v_set IS DISTINCT FROM false OR v_inherit IS DISTINCT FROM false", sql)
         self.assertIn("WHERE rolname = 'postgres'", sql)
+        self.assertIn("'migration_preflight_reader', 'supabase_migrations', 'USAGE'", sql)
+        self.assertIn("'migration_preflight_reader', 'ai_quota', 'USAGE'", sql)
+        self.assertIn("'migration_preflight_reader', pg_catalog.current_database(), 'CREATE'", sql)
         self.assertIn("m.member = v_executor", sql)
         self.assertIn("WHERE id = 1", (ROOT / "supabase/diagnostics/preflight_migration_reader_bootstrap.sql").read_text(encoding="utf-8"))
         reader = (ROOT / "supabase/diagnostics/verify_production_db_reader.sql").read_text(encoding="utf-8")

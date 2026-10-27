@@ -60,12 +60,13 @@ jobs:
       - name: Verify first-apply prerequisites
         if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}
         run: psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/preflight_migration_reader_bootstrap.sql >/dev/null
-      - name: Verify existing RPC and ACL baseline
+      - name: Classify existing RPC and ACL integrity
         run: |
           set -euo pipefail
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_08_rpc_integrity.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_f01_acl_integrity.sql >/dev/null
+          python3 scripts/verify-production-db-integrity.py --output "$RUNNER_TEMP/bootstrap-integrity-before"
+          if grep -qx 'result=MISMATCH' "$RUNNER_TEMP/bootstrap-integrity-before"; then
+            echo "Existing RPC/ACL mismatch recorded; only the protected reader bootstrap may continue. Application build/deploy remains blocked until a forward repair passes postflight."
+          fi
       - name: Apply the reader bootstrap migration
         if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}
         run: |
@@ -75,10 +76,22 @@ jobs:
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"
           python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
           supabase db push --db-url "$SUPABASE_DB_URL" --yes
-      - name: Verify bootstrap and ADMIN-only owner membership
+      - name: Recheck exact bootstrap migration history
+        id: final_state
         run: |
           set -euo pipefail
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA" --bootstrap-version 20261027150000 --output "$RUNNER_TEMP/bootstrap-final-state"
+          grep -qx 'state=BOOTSTRAP_APPLIED' "$RUNNER_TEMP/bootstrap-final-state"
+          grep -qx 'bootstrap_action=verify' "$RUNNER_TEMP/bootstrap-final-state"
+      - name: Verify reader group and ADMIN-only owner membership
+        run: |
+          set -euo pipefail
           psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_migration_reader_bootstrap.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_f01_acl_integrity.sql >/dev/null
+      - name: Record remaining RPC and ACL integrity
+        run: |
+          set -euo pipefail
+          python3 scripts/verify-production-db-integrity.py --output "$RUNNER_TEMP/bootstrap-integrity-after"
+          if grep -qx 'result=MISMATCH' "$RUNNER_TEMP/bootstrap-integrity-after"; then
+            echo "Reader bootstrap is verified; RPC/ACL mismatch remains and must be repaired by an approved forward migration before application delivery."
+          fi

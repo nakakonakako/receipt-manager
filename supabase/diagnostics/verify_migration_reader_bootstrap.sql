@@ -47,6 +47,33 @@ BEGIN
     RAISE EXCEPTION 'reader role is missing its required version or singleton-id access';
   END IF;
 
+  IF NOT pg_catalog.has_database_privilege(
+       'migration_preflight_reader', pg_catalog.current_database(), 'CONNECT'
+     )
+     OR NOT pg_catalog.has_schema_privilege(
+       'migration_preflight_reader', 'supabase_migrations', 'USAGE'
+     )
+     OR NOT pg_catalog.has_schema_privilege(
+       'migration_preflight_reader', 'ai_quota', 'USAGE'
+     ) THEN
+    RAISE EXCEPTION 'reader role is missing required database or schema access';
+  END IF;
+
+  IF pg_catalog.has_database_privilege(
+       'migration_preflight_reader', pg_catalog.current_database(), 'CREATE'
+     )
+     OR pg_catalog.has_schema_privilege(
+       'migration_preflight_reader', 'public', 'CREATE'
+     )
+     OR pg_catalog.has_schema_privilege(
+       'migration_preflight_reader', 'supabase_migrations', 'CREATE'
+     )
+     OR pg_catalog.has_schema_privilege(
+       'migration_preflight_reader', 'ai_quota', 'CREATE'
+     ) THEN
+    RAISE EXCEPTION 'reader role can create persistent database objects';
+  END IF;
+
   IF EXISTS (
     SELECT 1
     FROM pg_catalog.pg_attribute AS a

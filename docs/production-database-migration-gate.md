@@ -39,14 +39,16 @@ role password設定時は対話型 `\password` 等を使い、SQLやActionsロ�
    fallbackしたり、migrationを適用したりしない。
 4. `Bootstrap production DB reader` workflowをmainから手動実行し、入力に
    `bootstrap-reader-20261027150000` を指定する。`production-db-apply` Environmentの本人承認後、
-   workflowが最新main SHA、migration履歴、既存RPC/ACL、`ai_quota_owner` ADMIN権限と
-   SET/INHERIT無効状態を確認する。対象migrationだけが未適用の場合のみapplyし、既適用なら
-   検証だけを行う。このworkflowはアプリをbuild/deployしない。
+   workflowが最新main SHA、migration履歴、対象version、`ai_quota_owner` ADMIN権限と
+   SET/INHERIT無効状態を確認する。RPC/ACLの明示的なassertion mismatchだけは記録してreader
+   bootstrapへ進める。接続・権限・SQL実行エラーは停止する。対象migrationだけが未適用の場合のみapplyし、
+   適用後に履歴、reader group role、ADMIN-only owner membershipを再検証する。残るRPC/ACL mismatchは
+   明示して通常の承認付きforward migrationへ引き継ぐ。このworkflowはアプリをbuild/deployしない。
 5. bootstrap migrationは `ai_quota_owner` のADMIN OPTIONが残ることを検証し、必要な列
    (`settings.id`) のみ付与する。SET/INHERITは一時的に変更し、終了後に無効であることを
    確認する。`verify_migration_reader_bootstrap.sql` はbootstrap後と毎回のpreflight/postflightで
-   postgresのADMIN保持とSET/INHERIT無効を確認する。bootstrapのpostflightが失敗した場合、
-   通常deployは引き続き停止する。
+   postgresのADMIN保持とSET/INHERIT無効を確認する。残るRPC/ACL mismatchがあれば通常deployは停止し、
+   readerが有効になった後、PENDINGのforward migrationをEnvironment承認付きで適用して修復する。
 6. 本番DB管理者が対話型 `psql` で `migration_preflight_login` を作成し、`\password`
    でpasswordを設定する。`migration_preflight_reader` だけを `INHERIT TRUE, SET FALSE`
    で付与し、`default_transaction_read_only=on`、`statement_timeout=15s`、`lock_timeout=3s`
