@@ -43,7 +43,10 @@ role password設定時は対話型 `\password` 等を使い、SQLやActionsロ�
    SET/INHERIT無効状態を確認する。RPC/ACLの明示的なassertion mismatchだけは記録してreader
    bootstrapへ進める。接続・権限・SQL実行エラーは停止する。対象migrationだけが未適用の場合のみapplyし、
    適用後に履歴、reader group role、ADMIN-only owner membershipを再検証する。残るRPC/ACL mismatchは
-   明示して通常の承認付きforward migrationへ引き継ぐ。このworkflowはアプリをbuild/deployしない。
+   明示して通常の承認付きforward migrationへ引き継ぐ。`ai_quota.settings`の表と`id`列は必要だが、
+   singleton行の存在はreader作成の前提にせず、欠落は後続のforward migrationで修復する。このworkflowは
+   migrationの実行に伴うexecutor membershipの一時取り消し後は、事前確認済みのADMIN-only状態を復元してから
+   検証する。アプリをbuild/deployしない。
 5. bootstrap migrationは `ai_quota_owner` のADMIN OPTIONが残ることを検証し、必要な列
    (`settings.id`) のみ付与する。SET/INHERITは一時的に変更し、終了後に無効であることを
    確認する。`verify_migration_reader_bootstrap.sql` はbootstrap後と毎回のpreflight/postflightで

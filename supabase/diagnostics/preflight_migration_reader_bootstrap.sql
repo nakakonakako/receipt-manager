@@ -46,9 +46,6 @@ BEGIN
     RAISE EXCEPTION 'reader role already exists; use bootstrap verification, not first-apply';
   END IF;
 
-  IF (SELECT count(*) FROM ai_quota.settings WHERE id = 1) IS DISTINCT FROM 1 THEN
-    RAISE EXCEPTION 'ai_quota.settings singleton row is missing before bootstrap';
-  END IF;
 END
 $preflight$;
 

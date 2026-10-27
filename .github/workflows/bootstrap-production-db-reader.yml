@@ -76,6 +76,13 @@ jobs:
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"
           python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
           supabase db push --db-url "$SUPABASE_DB_URL" --yes
+      - name: Restore the preflighted ADMIN-only executor membership
+        if: ${{ steps.state.outputs.bootstrap_action == 'apply' || steps.state.outputs.bootstrap_action == 'verify' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          psql -X -w -v ON_ERROR_STOP=1 -c \
+            'GRANT ai_quota_owner TO postgres WITH ADMIN TRUE, SET FALSE, INHERIT FALSE' >/dev/null
       - name: Recheck exact bootstrap migration history
         id: final_state
         run: |
