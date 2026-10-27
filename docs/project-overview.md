@@ -328,9 +328,9 @@ AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
-- mainマージ後のCD: `.github/workflows/deploy.yml` は `main` push を契機にする。マイグレーション変更がある push では migrate 成功後に本番 RPC 検証が必須で、その成功後にビルド/プッシュ → VPS へ compose 適用する。マイグレーション変更がなければ migrate も検証もスキップし、ビルドと deploy に進む。deploy は VPS の `.env` を書き換え、`.env.ai-quota` は転送も書き換えもしない。Compose 2.24.0 以降ではそのファイルが無くてもバックエンドは起動し、AI 利用枠だけが 503 になる。運用手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)。
-- AI利用制御 migration の事前確認: `.github/workflows/preflight-ai-quota.yml` は `workflow_dispatch` のみで、`main` 以外ではDB接続前に失敗する。既存のSupabase Session Pooler設定を使って上記preflight SQLだけを実行し、SQL出力はActionsログへ出さない。migration・DB変更・deployは行わない。
-- DB検証: `.github/workflows/verify-production-rpcs.yml` が `workflow_call` と `workflow_dispatch` の両方で `verify_s1_08_rpc_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` を順に実行する。手動実行は `main` 以外では失敗し、migration / build / deploy ジョブを持たない。接続は Supabase Session Pooler（ポート 5432、ユーザー `postgres.<project id>`、データベース `postgres`、SSL 必須）。パスワードと project id は既存シークレット `PROD_SUPABASE_DB_PASSWORD` と `PROD_SUPABASE_PROJECT_ID`。新しいシークレットは不要。ホスト名はリポジトリに書かず、リポジトリまたは Organization の Actions 変数 `PROD_SUPABASE_POOLER_HOST` が未設定なら検証は失敗する。この変数の設定が、検証を伴う本番リリースの前提である。
+- main push後のCD: `.github/workflows/deploy.yml` は全main pushでmigration履歴とreader roleを読み取り専用で検証する。履歴一致時はRPC/ACL検証成功後に承認なしでbuild/deployを続ける。未適用migration時はRPC/ACLのassertion mismatchだけを修復経路として許容し、`production-db-apply` Environmentの本人承認付きapply後に全検証を再実行する。接続・履歴・reader・検証実行エラーやpostflight失敗ではdeployしない。全DB操作とdeployは共通queueで直列化する。
+- 本番DB credentialは用途別Environmentに分離する。`production-db-check` はmain限定・承認なしの読み取り専用login、`production-db-apply` はmain限定・本人承認付きのwriter secretを持つ。初回reader作成は `.github/workflows/bootstrap-production-db-reader.yml` の一回限りの承認付きworkflowで行い、アプリdeployは行わない。
+- 初回切替、Environment設定順、reader bootstrap、旧repository secret削除条件、失敗復旧は [production database migration gate](./production-database-migration-gate.md) を参照する。PR #35のreader-role migrationと段階2workflowは別PRで、Environment設定を先に済ませてから順序どおり適用する。
 
 ### 7.4 認証フロー
 
