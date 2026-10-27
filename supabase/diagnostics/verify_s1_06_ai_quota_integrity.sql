@@ -216,17 +216,10 @@ BEGIN
     RAISE EXCEPTION 'finish_ai_request EXECUTE permissions do not match';
   END IF;
 
-  IF NOT EXISTS (
-      SELECT 1
-      FROM pg_catalog.pg_constraint AS ct
-      JOIN pg_catalog.pg_class AS c ON c.oid = ct.conrelid
-      JOIN pg_catalog.pg_namespace AS n ON n.oid = c.relnamespace
-      WHERE n.nspname = 'ai_quota'
-        AND c.relname = 'settings'
-        AND ct.contype = 'p'
-        AND pg_catalog.pg_get_constraintdef(ct.oid) = 'PRIMARY KEY (id)'
-    ) THEN
-    RAISE EXCEPTION 'ai_quota.settings singleton key is missing';
+  IF (SELECT pg_catalog.count(*)
+      FROM ai_quota.settings
+      WHERE id = 1) IS DISTINCT FROM 1 THEN
+    RAISE EXCEPTION 'ai_quota.settings singleton row is missing';
   END IF;
 
   IF (SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid)

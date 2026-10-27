@@ -68,6 +68,31 @@ BEGIN
     ) THEN
     RAISE EXCEPTION 'connected login can execute an application SECURITY DEFINER function';
   END IF;
+
+  IF NOT pg_catalog.has_column_privilege(
+       v_role, 'ai_quota.settings', 'id', 'SELECT'
+     ) THEN
+    RAISE EXCEPTION 'connected login cannot check the AI quota singleton row';
+  END IF;
+
+  IF EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_attribute AS a
+      WHERE a.attrelid = 'ai_quota.settings'::pg_catalog.regclass
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+        AND a.attname <> 'id'
+        AND pg_catalog.has_column_privilege(v_role, a.attrelid, a.attname, 'SELECT')
+    ) OR EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_attribute AS a
+      WHERE a.attrelid = 'ai_quota.requests'::pg_catalog.regclass
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+        AND pg_catalog.has_column_privilege(v_role, a.attrelid, a.attname, 'SELECT')
+    ) THEN
+    RAISE EXCEPTION 'connected login can read AI quota configuration or request data';
+  END IF;
 END
 $verify$;
 

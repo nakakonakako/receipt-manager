@@ -125,13 +125,20 @@ class MigrationHistoryTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("PENDING: 20260201000000", result.stderr)
 
-    def test_existing_verifiers_do_not_require_postgres_identity_or_read_quota_rows(self) -> None:
+    def test_existing_verifiers_do_not_require_postgres_identity_and_keep_singleton_check(self) -> None:
         diagnostics = SCRIPT.parent.parent / "supabase" / "diagnostics"
         f01 = (diagnostics / "verify_s1_f01_acl_integrity.sql").read_text()
         ai_quota = (diagnostics / "verify_s1_06_ai_quota_integrity.sql").read_text()
         self.assertNotIn("current_user <> 'postgres'", f01)
         self.assertNotIn("member.rolname = current_user", ai_quota)
-        self.assertNotIn("FROM ai_quota.settings", ai_quota)
+        self.assertIn("FROM ai_quota.settings\n      WHERE id = 1", ai_quota)
+        self.assertNotIn("SELECT emergency_stop", ai_quota)
+
+        reader_audit = (
+            diagnostics / "verify_migration_preflight_reader.sql"
+        ).read_text()
+        self.assertIn("has_column_privilege", reader_audit)
+        self.assertIn("a.attname <> 'id'", reader_audit)
 
 
 if __name__ == "__main__":

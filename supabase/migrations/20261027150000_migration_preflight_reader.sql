@@ -20,6 +20,19 @@ begin
   if pg_catalog.to_regclass('supabase_migrations.schema_migrations') is null then
     raise exception 'Supabase migration history table is unavailable';
   end if;
+
+  if pg_catalog.to_regclass('ai_quota.settings') is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_auth_members as m
+       join pg_catalog.pg_roles as granted on granted.oid = m.roleid
+       join pg_catalog.pg_roles as member on member.oid = m.member
+       where granted.rolname = 'ai_quota_owner'
+         and member.rolname = current_user
+         and m.admin_option
+     ) then
+    raise exception 'migration executor cannot temporarily SET ROLE ai_quota_owner to grant singleton-id access';
+  end if;
 end
 $preflight$;
 
@@ -37,5 +50,29 @@ grant usage on schema supabase_migrations to migration_preflight_reader;
 grant select (version)
   on table supabase_migrations.schema_migrations
   to migration_preflight_reader;
+
+-- Temporarily enable SET only to grant the safe singleton key column.
+grant ai_quota_owner to current_user with set true, inherit false;
+set local role ai_quota_owner;
+grant usage on schema ai_quota to migration_preflight_reader;
+grant select (id) on table ai_quota.settings to migration_preflight_reader;
+reset role;
+revoke ai_quota_owner from current_user;
+
+do $verify_membership$
+begin
+  if exists (
+    select 1
+    from pg_catalog.pg_auth_members as m
+    join pg_catalog.pg_roles as granted on granted.oid = m.roleid
+    join pg_catalog.pg_roles as member on member.oid = m.member
+    where granted.rolname = 'ai_quota_owner'
+      and member.rolname = current_user
+      and (m.set_option or m.inherit_option)
+  ) then
+    raise exception 'migration executor retained effective membership in ai_quota_owner';
+  end if;
+end
+$verify_membership$;
 
 commit;

@@ -19,13 +19,13 @@
 
 ## 読み取りロール
 
-`migration_preflight_reader` は `NOLOGIN` の権限グループです。migrationは `postgres` DBへのCONNECT、`supabase_migrations` schemaのUSAGE、`schema_migrations.version` 列だけのSELECTを付与します。アプリテーブル、migration本文列、`ai_quota` 行へのSELECT、書込み権限、role membershipは付与しません。`pg_catalog` の通常の公開カタログ情報は診断SQLに必要です。
+`migration_preflight_reader` は `NOLOGIN` の権限グループです。migrationは `postgres` DBへのCONNECT、`supabase_migrations` schemaのUSAGE、`schema_migrations.version` 列、`ai_quota.settings.id` 列だけのSELECTを付与します。`id` は設定値を読まずにsingleton行の存在だけを数えるためです。`ai_quota_owner` のADMIN membershipを用いてトランザクション内で一時的にSETし、この列権限だけを付与した後に実効membershipを取り消します。アプリ業務テーブル、migration本文列、AI quotaの設定値・request行へのSELECT、書込み権限、アプリrole membershipは付与しません。`pg_catalog` の通常の公開カタログ情報は診断SQLに必要です。
 
 認証用LOGIN roleはこのmigrationでは作りません。後述の初回bootstrap後に、別の非特権LOGINを作成してこの権限roleだけを付与します。Environment secretに保存するreaderパスワードは本番DB管理者が設定し、migrationファイルや通常のrepository secretには置きません。
 
 `verify_migration_preflight_reader.sql` は接続ユーザーの属性、所属role、publicテーブルのSELECT権限、persistent DDL権限、`public` / `ai_quota` の実行可能な SECURITY DEFINER 関数を検査します。発見時はfail closedです。セキュリティ判定は実DB上の実ロールで行う必要があり、このチェックはPostgreSQL/Supabase内部の全拡張スキーマに対する完全な攻撃面証明ではありません。
 
-既存の `verify_s1_f01_acl_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` は検証者が `postgres` であることに依存しないよう変更しました。AI quota verifierはsettings行をSELECTせず、PK等のカタログ定義を確認します。RPC/ACL verifierの全体実行はSupabase互換の隔離DBで検証してください。本段階の使い捨てPostgresテストはreaderの権限とrole verifierを検証し、Supabase固有の全RPC依存までは再現しません。
+既存の `verify_s1_f01_acl_integrity.sql` と `verify_s1_06_ai_quota_integrity.sql` は検証者が `postgres` であることに依存しないよう変更しました。AI quota verifierは `settings.id = 1` の行数だけを数え、値は読みません。RPC/ACL verifierの全体実行はSupabase互換の隔離DBで検証してください。本段階の使い捨てPostgresテストはreaderの権限とrole verifierを検証し、Supabase固有の全RPC依存までは再現しません。
 
 ## 段階2以降の本番切替順序
 
@@ -36,7 +36,7 @@
 3. **ゲートworkflowを先にmainへ導入**: workflowのmigration writer jobだけをEnvironment承認対象にし、通常のコードのみpushは承認待ちにしません。整合性preflightは毎回実行します。Environmentを確認してから、このworkflow変更を含むPRをmergeします。workflowだけのpushでDB接続・migrationが起動しないことを確認します。
 4. **排他・最新main検査を有効化**: main向けDB/release workflowに固定concurrency group、`cancel-in-progress: false`、待ち行列上限を設定します。承認後、migration適用直前とimage publish/deploy直前にremote main SHAがrun対象SHAと一致することを確認し、不一致なら停止します。checkoutは常にその承認済みSHAに固定します。独立した本番DB writer経路をなくします。
 5. **migrationを含む変更を承認付きで適用**: migration差分があり、履歴がlocal-onlyだけのときのみEnvironment承認後にwriter jobを動かします。完了後にreaderが再接続して履歴一致を確認し、RPC/ACL verifierを実行します。どれか失敗したらbuild/deployを開始しません。
-6. **reader LOGINを安全にbootstrap**: migration適用後、本番DB管理者が信頼された対話型 `psql` で `CREATE ROLE migration_preflight_login LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;` を実行し、直後に `\password migration_preflight_login` でエコーなしにpasswordを設定します。続けて `GRANT migration_preflight_reader TO migration_preflight_login WITH INHERIT TRUE, SET FALSE;`、`ALTER ROLE migration_preflight_login SET default_transaction_read_only = on;`、短い`statement_timeout`/`lock_timeout`を設定します。LOGINには `anon`、`authenticated`、`service_role`、`postgres` や他の権限roleを付与しません。
+6. **reader LOGINを安全にbootstrap**: migration適用後、本番DB管理者が信頼された対話型 `psql` で `CREATE ROLE migration_preflight_login LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS INHERIT;` を実行し、直後に `\password migration_preflight_login` でエコーなしにpasswordを設定します。続けて `GRANT migration_preflight_reader TO migration_preflight_login WITH INHERIT TRUE, SET FALSE;`、`ALTER ROLE migration_preflight_login SET default_transaction_read_only = on;`、`ALTER ROLE migration_preflight_login SET statement_timeout = '15s';`、`ALTER ROLE migration_preflight_login SET lock_timeout = '3s';` を設定します。LOGINには `anon`、`authenticated`、`service_role`、`postgres` や他の権限roleを付与しません。
 7. **reader secret設定後にpreflightを必須化**: Environmentにreader用の一意なusername/passwordとreader用接続先を登録します。値は表示・ログ出力せず、readerで `verify_migration_preflight_reader.sql` と履歴チェッカー・RPC/ACL診断を実行します。成功してから全main pushでpreflightを必須化します。未適用、remote-only、DB接続不能、診断失敗はすべて後続のコードのみpushも停止させます。
 8. **旧writer secretsを削除**: 旧repository secretsが他workflow、手動workflow、repo内外のwriter経路で参照されず、Environment経由の承認付きwriterだけが残り、reader-only workflowがwriter credentialsを一切受け取らないことをGitHub workflow全件で確認した後に限り削除します。
 

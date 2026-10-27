@@ -40,5 +40,8 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --directory backend --frozen
 
+      - name: Run isolated PostgreSQL migration reader tests
+        run: npm run test:db-migration-reader
+
       - name: Run quality checks
         run: npm run check

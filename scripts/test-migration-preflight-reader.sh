@@ -49,6 +49,9 @@ psql -X -w -v ON_ERROR_STOP=1 <<'SQL'
 CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN;
+CREATE ROLE ai_quota_owner NOLOGIN NOINHERIT;
+GRANT ai_quota_owner TO postgres WITH ADMIN TRUE, SET TRUE, INHERIT FALSE;
+GRANT CREATE ON DATABASE postgres TO ai_quota_owner;
 CREATE SCHEMA supabase_migrations;
 CREATE TABLE supabase_migrations.schema_migrations (
   version text PRIMARY KEY,
@@ -58,6 +61,17 @@ INSERT INTO supabase_migrations.schema_migrations (version, statements)
 VALUES ('20261027150000', ARRAY['fixture migration']);
 CREATE TABLE public.business_rows (id integer PRIMARY KEY, secret text NOT NULL);
 INSERT INTO public.business_rows VALUES (1, 'fixture-only-business-data');
+SET ROLE ai_quota_owner;
+CREATE SCHEMA ai_quota;
+CREATE TABLE ai_quota.settings (
+  id smallint PRIMARY KEY,
+  emergency_stop boolean NOT NULL,
+  configuration_value text NOT NULL
+);
+INSERT INTO ai_quota.settings VALUES (1, false, 'fixture-only-secret-setting');
+CREATE TABLE ai_quota.requests (request_id integer PRIMARY KEY, payload text);
+RESET ROLE;
+REVOKE CREATE ON DATABASE postgres FROM ai_quota_owner;
 CREATE FUNCTION public.migration_reader_secdef_probe()
 RETURNS void
 LANGUAGE plpgsql
@@ -72,6 +86,11 @@ SQL
 
 psql -X -w -v ON_ERROR_STOP=1 \
   -f "$repo_root/supabase/migrations/20261027150000_migration_preflight_reader.sql"
+if [[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  "SELECT coalesce(bool_or(m.set_option OR m.inherit_option), false) FROM pg_catalog.pg_auth_members AS m JOIN pg_catalog.pg_roles AS granted ON granted.oid = m.roleid JOIN pg_catalog.pg_roles AS member ON member.oid = m.member WHERE granted.rolname = 'ai_quota_owner' AND member.rolname = 'postgres'")" != f ]]; then
+  echo "Migration executor retained SET access to ai_quota_owner." >&2
+  exit 1
+fi
 
 psql -X -w -v ON_ERROR_STOP=1 <<SQL
 CREATE ROLE migration_preflight_login
@@ -86,6 +105,8 @@ psql -X -w -v ON_ERROR_STOP=1 -f \
   "$repo_root/supabase/diagnostics/verify_migration_preflight_reader.sql"
 [[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
   'SELECT version FROM supabase_migrations.schema_migrations')" == '20261027150000' ]]
+[[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  'SELECT count(*) FROM ai_quota.settings WHERE id = 1')" == '1' ]]
 [[ "$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c 'SHOW default_transaction_read_only')" == 'on' ]]
 
 mkdir -p "$test_root/migrations"
@@ -138,9 +159,23 @@ expect_denied() {
 expect_denied "business data SELECT" 'SELECT * FROM public.business_rows'
 expect_denied "business data DML" "INSERT INTO public.business_rows VALUES (3, 'blocked')"
 expect_denied "persistent DDL" 'CREATE TABLE public.reader_must_not_create (id integer)'
+expect_denied "AI quota setting value SELECT" 'SELECT configuration_value FROM ai_quota.settings'
+expect_denied "AI quota request data SELECT" 'SELECT * FROM ai_quota.requests'
 expect_denied "SECURITY DEFINER execution" 'SELECT public.migration_reader_secdef_probe()'
 
 export PGUSER=postgres PGPASSWORD=disposable-postgres-password
+psql -X -w -v ON_ERROR_STOP=1 -c 'DELETE FROM ai_quota.settings WHERE id = 1' >/dev/null
+export PGUSER=migration_preflight_login PGPASSWORD="$test_password"
+missing_singleton="$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
+  'SELECT count(*) FROM ai_quota.settings WHERE id = 1')"
+if [[ "$missing_singleton" != 0 ]]; then
+  echo "Reader did not detect the missing AI quota singleton row." >&2
+  exit 1
+fi
+export PGUSER=postgres PGPASSWORD=disposable-postgres-password
+psql -X -w -v ON_ERROR_STOP=1 -c \
+  "INSERT INTO ai_quota.settings VALUES (1, false, 'fixture-only-secret-setting')" >/dev/null
+
 remaining_rows="$(psql -X -w -A -t -v ON_ERROR_STOP=1 -c \
   'SELECT count(*) FROM public.business_rows')"
 if [[ "$remaining_rows" != 1 ]]; then
