@@ -165,6 +165,11 @@ When changing frontend UI:
   before considering the task complete.
 - When changing shared layout, form, or responsive styles,
   check other screens that reuse the affected component or CSS.
+- For Cursor UI checks, use the project Playwright MCP configured in
+  `.cursor/mcp.json`; its Chromium version, per-worktree profile, setup, and
+  troubleshooting are documented in `docs/worktree-development.md`.
+  Approve only the Playwright MCP and do not use `--approve-mcps` to approve
+  all servers.
 
 ## Cursor worker delegation (Codex supervisor only)
 
