@@ -159,7 +159,7 @@ jobs:
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"
           python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
           grep -qx 'state=PENDING' "$GITHUB_OUTPUT"
-      - name: Apply pending main migrations
+      - name: Prepare pending migration database URL
         env:
           PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
           PGPORT: "5432"
@@ -171,6 +171,11 @@ jobs:
           set -euo pipefail
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"
           python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
+      - name: Apply pending main migrations
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          test -n "$SUPABASE_DB_URL"
           supabase db push --db-url "$SUPABASE_DB_URL" --yes
 
   postflight:

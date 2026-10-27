@@ -67,17 +67,25 @@ jobs:
           if grep -qx 'result=MISMATCH' "$RUNNER_TEMP/bootstrap-integrity-before"; then
             echo "Existing RPC/ACL mismatch recorded; only the protected reader bootstrap may continue. Application build/deploy remains blocked until a forward repair passes postflight."
           fi
-      - name: Apply the reader bootstrap migration
+      - name: Recheck bootstrap migration before apply
         if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}
         run: |
           set -euo pipefail
           python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA" --bootstrap-version 20261027150000 --output "$RUNNER_TEMP/bootstrap-state"
           grep -qx 'bootstrap_action=apply' "$RUNNER_TEMP/bootstrap-state"
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"
-          python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
+      - name: Prepare bootstrap database URL
+        if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}
+        run: python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
+      - name: Apply the reader bootstrap migration
+        if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}
+        run: |
+          set -euo pipefail
+          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+          test -n "$SUPABASE_DB_URL"
           supabase db push --db-url "$SUPABASE_DB_URL" --yes
       - name: Restore the preflighted ADMIN-only executor membership
-        if: ${{ steps.state.outputs.bootstrap_action == 'apply' || steps.state.outputs.bootstrap_action == 'verify' }}
+        if: ${{ steps.state.outputs.bootstrap_action == 'apply' }}
         run: |
           set -euo pipefail
           python3 scripts/assert-latest-main.py "$GITHUB_SHA"

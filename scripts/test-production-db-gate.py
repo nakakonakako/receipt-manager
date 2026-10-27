@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -192,6 +194,10 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("preflight_migration_reader_bootstrap.sql", bootstrap)
         self.assertIn("Restore the preflighted ADMIN-only executor membership", bootstrap)
         self.assertIn("GRANT ai_quota_owner TO postgres WITH ADMIN TRUE, SET FALSE, INHERIT FALSE", bootstrap)
+        restore = self.workflow_step(bootstrap, "Restore the preflighted ADMIN-only executor membership")
+        self.assertIn("steps.state.outputs.bootstrap_action == 'apply'", restore)
+        self.assertIn("set -euo pipefail", restore)
+        self.assertIn("-v ON_ERROR_STOP=1", restore)
         self.assertIn("grep -qx 'state=BOOTSTRAP_APPLIED'", bootstrap)
         self.assertIn("grep -qx 'bootstrap_action=verify'", bootstrap)
         self.assertIn("verify_migration_reader_bootstrap.sql", bootstrap)
@@ -201,6 +207,99 @@ class ProductionGateTests(unittest.TestCase):
         self.assertNotIn("workflow_dispatch", verifier)
         self.assertIn("MIGRATION_READER_PASSWORD", verifier)
         self.assertNotIn("PROD_SUPABASE_DB_PASSWORD", deploy + verifier)
+
+    @staticmethod
+    def workflow_step(workflow: str, name: str) -> str:
+        steps = re.split(r"(?m)^      - name: ", workflow)[1:]
+        return next((step for step in steps if step.startswith(name + "\n")), "")
+
+    def test_workflows_export_db_url_for_the_following_apply_step(self) -> None:
+        for workflow_path, prepare_name, apply_name in (
+            (
+                ROOT / ".github/workflows/deploy.yml",
+                "Prepare pending migration database URL",
+                "Apply pending main migrations",
+            ),
+            (
+                ROOT / ".github/workflows/bootstrap-production-db-reader.yml",
+                "Prepare bootstrap database URL",
+                "Apply the reader bootstrap migration",
+            ),
+        ):
+            with self.subTest(workflow=workflow_path.name):
+                workflow = workflow_path.read_text(encoding="utf-8")
+                prepare = self.workflow_step(workflow, prepare_name)
+                apply = self.workflow_step(workflow, apply_name)
+                self.assertTrue(prepare)
+                self.assertTrue(apply)
+                self.assertIn('write-supabase-db-url.py --output "$GITHUB_ENV"', prepare)
+                self.assertNotIn("supabase db push", prepare)
+                self.assertIn('test -n "$SUPABASE_DB_URL"', apply)
+                self.assertIn('supabase db push --db-url "$SUPABASE_DB_URL" --yes', apply)
+                self.assertNotIn("write-supabase-db-url.py", apply)
+                self.assertLess(workflow.index(prepare_name), workflow.index(apply_name))
+                if workflow_path.name == "bootstrap-production-db-reader.yml":
+                    self.assertIn("steps.state.outputs.bootstrap_action == 'apply'", prepare)
+                    self.assertIn("steps.state.outputs.bootstrap_action == 'apply'", apply)
+
+    def test_database_url_crosses_step_boundary_without_printing_the_url(self) -> None:
+        output = self.root / "github-env"
+        fake_supabase = self.bin / "supabase"
+        captured_args = self.root / "supabase-args"
+        fake_supabase.write_text(
+            "#!/usr/bin/env python3\n"
+            "import json, os, sys\n"
+            "open(os.environ['CAPTURE_ARGS'], 'w', encoding='utf-8').write(json.dumps(sys.argv[1:]))\n"
+            "print('mock migration apply')\n",
+            encoding="utf-8",
+        )
+        fake_supabase.chmod(0o700)
+
+        first_step_env = os.environ.copy()
+        first_step_env.update(
+            {
+                "GITHUB_ACTIONS": "true",
+                "PGHOST": "aws-1-test.pooler.supabase.com",
+                "PGPORT": "5432",
+                "PGDATABASE": "postgres",
+                "PGUSER": "postgres.testref",
+                "PGPASSWORD": "dummy secret:/?#&",
+                "PGSSLMODE": "require",
+            }
+        )
+        prepared = subprocess.run(
+            [sys.executable, str(DB_URL_WRITER), "--output", str(output)],
+            env=first_step_env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        self.assertNotIn("dummy secret:/?#&", prepared.stdout + prepared.stderr)
+        self.assertNotIn("postgresql://", prepared.stdout + prepared.stderr)
+        self.assertIn("::add-mask::", prepared.stdout)
+
+        exported = output.read_text(encoding="utf-8").strip().split("=", 1)[1]
+        next_step_env = os.environ.copy()
+        next_step_env.update(
+            {
+                "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+                "SUPABASE_DB_URL": exported,
+                "CAPTURE_ARGS": str(captured_args),
+            }
+        )
+        applied = subprocess.run(
+            ["supabase", "db", "push", "--db-url", next_step_env["SUPABASE_DB_URL"], "--yes"],
+            env=next_step_env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(applied.returncode, 0, applied.stderr)
+        self.assertEqual(
+            json.loads(captured_args.read_text(encoding="utf-8")),
+            ["db", "push", "--db-url", exported, "--yes"],
+        )
+        self.assertNotIn(exported, applied.stdout + applied.stderr)
+        self.assertNotIn("dummy secret:/?#&", applied.stdout + applied.stderr)
 
     def test_integrity_runner_separates_assertion_mismatch_from_execution_failure(self) -> None:
         fake = self.bin / "psql"
