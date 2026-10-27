@@ -40,7 +40,10 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
       - name: Require migration history in sync
-        run: python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA"
+        run: |
+          set -euo pipefail
+          python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
+          grep -Fxq 'state=IN_SYNC' "$GITHUB_OUTPUT"
       - name: Verify reader and database integrity
         run: |
           set -euo pipefail

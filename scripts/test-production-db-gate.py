@@ -101,6 +101,46 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("state=PENDING", pending.stdout)
         self.assertIn("pending_versions=20261002000000", pending.stdout)
 
+    def test_postflight_requires_exact_in_sync_state(self) -> None:
+        self.migration("20261002000000_second.sql")
+
+        pending_output = self.root / "postflight-pending"
+        pending = self.run_checker(
+            "20261001000000\n", "--output", str(pending_output)
+        )
+        self.assertEqual(pending.returncode, 0, pending.stderr)
+        self.assertIn("state=PENDING\n", pending_output.read_text(encoding="utf-8"))
+        pending_gate = subprocess.run(
+            ["grep", "-Fxq", "state=IN_SYNC", str(pending_output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(pending_gate.returncode, 0)
+
+        in_sync_output = self.root / "postflight-in-sync"
+        in_sync = self.run_checker(
+            "20261001000000\n20261002000000\n", "--output", str(in_sync_output)
+        )
+        self.assertEqual(in_sync.returncode, 0, in_sync.stderr)
+        self.assertIn("state=IN_SYNC\n", in_sync_output.read_text(encoding="utf-8"))
+        in_sync_gate = subprocess.run(
+            ["grep", "-Fxq", "state=IN_SYNC", str(in_sync_output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(in_sync_gate.returncode, 0)
+
+        for history in (
+            "20261001000000\n20261009000000\n",
+            "malformed\n",
+        ):
+            with self.subTest(history=history):
+                output = self.root / f"postflight-invalid-{len(history)}"
+                invalid = self.run_checker(history, "--output", str(output))
+                self.assertNotEqual(invalid.returncode, 0)
+
     def test_remote_only_malformed_and_duplicate_history_fail_closed(self) -> None:
         remote_only = self.run_checker("20261001000000\n20261002000000\n")
         self.assertNotEqual(remote_only.returncode, 0)
@@ -351,6 +391,12 @@ class ProductionGateTests(unittest.TestCase):
         apply_block = deploy.split("  apply:", 1)[1].split("  postflight:", 1)[0]
         postflight_block = deploy.split("  postflight:", 1)[1].split("  build-and-push:", 1)[0]
         build_block = deploy.split("  build-and-push:", 1)[1].split("  deploy:", 1)[0]
+        postflight_workflow = (ROOT / ".github/workflows/verify-production-rpcs.yml").read_text(
+            encoding="utf-8"
+        )
+        history_gate = postflight_workflow.split(
+            "      - name: Require migration history in sync\n", 1
+        )[1].split("      - name: Verify reader and database integrity\n", 1)[0]
         self.assertIn("environment:\n      name: production-db-apply", apply_block)
         self.assertIn("needs.preflight.outputs.state == 'PENDING'", apply_block)
         self.assertIn("needs.preflight.outputs.state == 'PENDING'", postflight_block)
@@ -358,6 +404,9 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("needs.integrity.outputs.result == 'PASS'", build_block)
         self.assertIn("needs.integrity.outputs.result == 'MISMATCH'", build_block)
         self.assertIn("needs.postflight.result == 'success'", build_block)
+        self.assertIn('--output "$GITHUB_OUTPUT"', history_gate)
+        self.assertIn("grep -Fxq 'state=IN_SYNC' \"$GITHUB_OUTPUT\"", history_gate)
+        self.assertIn("state=PENDING", deploy)
 
     def test_bootstrap_integrity_mismatch_is_recorded_but_execution_errors_stop(self) -> None:
         bootstrap = (ROOT / ".github/workflows/bootstrap-production-db-reader.yml").read_text(
