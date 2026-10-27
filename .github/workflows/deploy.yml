@@ -87,13 +87,39 @@ jobs:
           set -euo pipefail
           psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_production_db_reader.sql >/dev/null
           psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_migration_reader_bootstrap.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_08_rpc_integrity.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_s1_f01_acl_integrity.sql >/dev/null
+
+  integrity:
+    needs: [quality, preflight]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production-db-check
+    env:
+      PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+      PGPORT: "5432"
+      PGDATABASE: postgres
+      PGUSER: migration_preflight_login.${{ vars.PROD_SUPABASE_PROJECT_REF }}
+      PGPASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}
+      PGSSLMODE: require
+      PGCONNECT_TIMEOUT: "10"
+    outputs:
+      result: ${{ steps.integrity.outputs.result }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require latest main commit
+        run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+      - name: Verify current RPC and ACL integrity
+        id: integrity
+        run: python3 scripts/verify-production-db-integrity.py --output "$GITHUB_OUTPUT"
 
   apply:
-    needs: [quality, preflight]
-    if: ${{ needs.preflight.outputs.state == 'PENDING' }}
+    needs: [quality, preflight, integrity]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && (needs.integrity.outputs.result == 'PASS' || needs.integrity.outputs.result == 'MISMATCH') }}
     runs-on: ubuntu-latest
     environment:
       name: production-db-apply
@@ -148,13 +174,13 @@ jobs:
           supabase db push --db-url "$SUPABASE_DB_URL" --yes
 
   postflight:
-    needs: [quality, preflight, apply]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && (needs.apply.result == 'success' || (needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC')) }}
+    needs: [quality, preflight, integrity, apply]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && needs.apply.result == 'success' }}
     uses: ./.github/workflows/verify-production-rpcs.yml
 
   build-and-push:
-    needs: [quality, preflight, apply, postflight]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && (needs.apply.result == 'success' || (needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC')) && needs.postflight.result == 'success' }}
+    needs: [quality, preflight, integrity, apply, postflight]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && ((needs.preflight.outputs.state == 'IN_SYNC' && needs.integrity.result == 'success' && needs.integrity.outputs.result == 'PASS' && needs.apply.result == 'skipped' && needs.postflight.result == 'skipped') || (needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && (needs.integrity.outputs.result == 'PASS' || needs.integrity.outputs.result == 'MISMATCH') && needs.apply.result == 'success' && needs.postflight.result == 'success')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -196,8 +222,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend
 
   deploy:
-    needs: [quality, preflight, apply, postflight, build-and-push]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && (needs.apply.result == 'success' || (needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC')) && needs.postflight.result == 'success' && needs.build-and-push.result == 'success' }}
+    needs: [quality, preflight, integrity, apply, postflight, build-and-push]
+    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && ((needs.preflight.outputs.state == 'IN_SYNC' && needs.integrity.result == 'success' && needs.integrity.outputs.result == 'PASS' && needs.apply.result == 'skipped' && needs.postflight.result == 'skipped') || (needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && (needs.integrity.outputs.result == 'PASS' || needs.integrity.outputs.result == 'MISMATCH') && needs.apply.result == 'success' && needs.postflight.result == 'success')) && needs.build-and-push.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

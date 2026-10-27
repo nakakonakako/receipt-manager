@@ -63,13 +63,18 @@ role password設定時は対話型 `\password` 等を使い、SQLやActionsロ�
 
 ## 日常運用と失敗復旧
 
-- 全main pushは固定concurrency queueに入り、readerでmigration履歴とRPC/ACLを検査する。
-  履歴一致ならwriter承認を要求せずにdeployする。
+- 全main pushは固定concurrency queueに入り、readerでmigration履歴とreader権限を検査する。
+  履歴一致ならRPC/ACL検査も必須で、成功時はwriter承認なしでdeployする。
+- 未適用migrationがある場合、適用前RPC/ACL検査の明確なassertion mismatchは、修復migration用の
+  承認付きapply経路を妨げない。接続・SQL実行・権限・timeoutのエラーはmismatchと区別して停止する。
+  apply後は完全なRPC/ACL postflightを必須とし、失敗時はbuild/deployしない。
 - 履歴が未適用なら `production-db-apply` の本人承認を要求する。承認拒否・未承認・apply失敗・
   postflight失敗ではbuild/deployは実行されない。後続のコードだけのpushも毎回DBを再検査するため、
   pendingまたは検証失敗が残る限り停止する。
 - remote-only、形式不正、接続失敗、migration削除/変更、reader検証失敗はfail closed。
   migration失敗時は原因を確認し、適用済みmigrationを編集・削除せず、新しいforward-fixを追加する。
+  PENDING時のRPC/ACL assertion mismatchを許可するのはEnvironment承認後のapplyに限り、
+  apply後の検証成功なしにアプリをbuild/deployしない。
   部分適用が疑われる場合はDB履歴と診断結果を人が確認し、手動DB変更でworkflowを迂回しない。
 - 同時runは `receipt-manager-production-db` queueで直列化し、実行中runをcancelしない。
   待機中にmainが進んだrunはapply直前およびdeploy直前のremote SHA確認で失敗し、最新runを使う。

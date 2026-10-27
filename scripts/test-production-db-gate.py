@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CHECKER = ROOT / "scripts/check-production-db-state.py"
 LATEST = ROOT / "scripts/assert-latest-main.py"
 DB_URL_WRITER = ROOT / "scripts/write-supabase-db-url.py"
+INTEGRITY_RUNNER = ROOT / "scripts/verify-production-db-integrity.py"
 
 
 class ProductionGateTests(unittest.TestCase):
@@ -171,16 +172,84 @@ class ProductionGateTests(unittest.TestCase):
         self.assertIn("MIGRATION_SUPABASE_DB_PASSWORD", deploy)
         self.assertIn("supabase db push --db-url", deploy)
         self.assertNotIn("MIGRATION_SUPABASE_ACCESS_TOKEN", deploy + bootstrap)
-        self.assertIn("needs.apply.result == 'skipped' && needs.preflight.outputs.state == 'IN_SYNC'", deploy)
+        self.assertIn("needs.apply.result == 'skipped' && needs.postflight.result == 'skipped'", deploy)
         self.assertIn("needs.preflight.result == 'success'", deploy)
         self.assertIn("needs.postflight.result == 'success'", deploy)
-        self.assertIn("if: ${{ needs.preflight.outputs.state == 'PENDING' }}", deploy)
+        self.assertIn("needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success'", deploy)
+        self.assertIn("needs.integrity.outputs.result == 'MISMATCH'", deploy)
+        self.assertIn("needs.integrity.outputs.result == 'PASS'", deploy)
+        self.assertIn("needs.preflight.outputs.state == 'IN_SYNC'", deploy)
+        self.assertIn("needs.apply.result == 'success' && needs.postflight.result == 'success'", deploy)
         self.assertIn("verify_migration_reader_bootstrap.sql", deploy)
+        self.assertNotIn("verify_s1_08_rpc_integrity.sql", deploy.split("  integrity:", 1)[0])
+        self.assertIn("verify-production-db-integrity.py", deploy)
         self.assertIn("grep -qx 'state=PENDING'", deploy)
         self.assertIn("--bootstrap-version 20261027150000", bootstrap)
         self.assertNotIn("workflow_dispatch", verifier)
         self.assertIn("MIGRATION_READER_PASSWORD", verifier)
         self.assertNotIn("PROD_SUPABASE_DB_PASSWORD", deploy + verifier)
+
+    def test_integrity_runner_separates_assertion_mismatch_from_execution_failure(self) -> None:
+        fake = self.bin / "psql"
+        fake.write_text(
+            "#!/usr/bin/env python3\n"
+            "import os, sys\n"
+            "state = os.environ.get('FAKE_SQLSTATE', '')\n"
+            "if state:\n"
+            " sys.stderr.write(f'ERROR:  {state}: diagnostic failed\\n')\n"
+            " sys.exit(1)\n",
+            encoding="utf-8",
+        )
+        fake.chmod(0o700)
+        output = self.root / "integrity-output"
+        env = os.environ.copy()
+        env["PATH"] = f"{self.bin}{os.pathsep}{env['PATH']}"
+
+        env["FAKE_SQLSTATE"] = "P0001"
+        mismatch = subprocess.run(
+            [sys.executable, str(INTEGRITY_RUNNER), "--output", str(output)],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(mismatch.returncode, 0, mismatch.stderr)
+        self.assertEqual(output.read_text(encoding="utf-8"), "result=MISMATCH\n")
+
+        for state in ("42501", "57014", "08006"):
+            with self.subTest(state=state):
+                env["FAKE_SQLSTATE"] = state
+                failed = subprocess.run(
+                    [sys.executable, str(INTEGRITY_RUNNER), "--output", str(output)],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(failed.returncode, 2)
+                self.assertIn("execution failed", failed.stderr)
+                self.assertNotIn(state, failed.stderr)
+
+        env.pop("FAKE_SQLSTATE")
+        passed = subprocess.run(
+            [sys.executable, str(INTEGRITY_RUNNER), "--output", str(output)],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(passed.returncode, 0, passed.stderr)
+        self.assertEqual(output.read_text(encoding="utf-8"), "result=PASS\n")
+
+    def test_gate_routes_require_approval_and_postflight_for_pending_repairs(self) -> None:
+        deploy = (ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+        apply_block = deploy.split("  apply:", 1)[1].split("  postflight:", 1)[0]
+        postflight_block = deploy.split("  postflight:", 1)[1].split("  build-and-push:", 1)[0]
+        build_block = deploy.split("  build-and-push:", 1)[1].split("  deploy:", 1)[0]
+        self.assertIn("environment:\n      name: production-db-apply", apply_block)
+        self.assertIn("needs.preflight.outputs.state == 'PENDING'", apply_block)
+        self.assertIn("needs.preflight.outputs.state == 'PENDING'", postflight_block)
+        self.assertIn("needs.apply.result == 'success'", postflight_block)
+        self.assertIn("needs.integrity.outputs.result == 'PASS'", build_block)
+        self.assertIn("needs.integrity.outputs.result == 'MISMATCH'", build_block)
+        self.assertIn("needs.postflight.result == 'success'", build_block)
 
     def test_database_url_builder_encodes_password_without_printing_it(self) -> None:
         output = self.root / "runner-env"
