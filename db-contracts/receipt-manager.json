@@ -62,7 +62,37 @@
         ],
         "rls": {
           "enabled": true,
-          "forced": false
+          "forced": false,
+          "policies": [
+            {
+              "name": "Users can delete own receipts",
+              "command": "DELETE",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can insert own receipts",
+              "command": "INSERT",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can update own receipts",
+              "command": "UPDATE",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can view own receipts",
+              "command": "SELECT",
+              "roles": [
+                "public"
+              ]
+            }
+          ]
         },
         "privileges": [
           {
@@ -76,7 +106,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           },
           {
@@ -85,7 +116,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           }
         ]
@@ -174,7 +206,37 @@
         ],
         "rls": {
           "enabled": true,
-          "forced": false
+          "forced": false,
+          "policies": [
+            {
+              "name": "Users can delete own receipt_items",
+              "command": "DELETE",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can insert own receipt_items",
+              "command": "INSERT",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can update own receipt_items",
+              "command": "UPDATE",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can view own receipt_items",
+              "command": "SELECT",
+              "roles": [
+                "public"
+              ]
+            }
+          ]
         },
         "privileges": [
           {
@@ -188,7 +250,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           },
           {
@@ -197,7 +260,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           }
         ]
@@ -248,7 +312,37 @@
         ],
         "rls": {
           "enabled": true,
-          "forced": false
+          "forced": false,
+          "policies": [
+            {
+              "name": "Users can delete own csv_transactions",
+              "command": "DELETE",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can insert own csv_transactions",
+              "command": "INSERT",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can update own csv_transactions",
+              "command": "UPDATE",
+              "roles": [
+                "public"
+              ]
+            },
+            {
+              "name": "Users can view own csv_transactions",
+              "command": "SELECT",
+              "roles": [
+                "public"
+              ]
+            }
+          ]
         },
         "privileges": [
           {
@@ -262,7 +356,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           },
           {
@@ -271,7 +366,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           }
         ]
@@ -327,7 +423,16 @@
         ],
         "rls": {
           "enabled": true,
-          "forced": false
+          "forced": false,
+          "policies": [
+            {
+              "name": "Enable ALL operations for users based on user_id",
+              "command": "ALL",
+              "roles": [
+                "authenticated"
+              ]
+            }
+          ]
         },
         "privileges": [
           {
@@ -341,7 +446,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           },
           {
@@ -350,7 +456,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           }
         ]
@@ -396,7 +503,16 @@
         ],
         "rls": {
           "enabled": true,
-          "forced": false
+          "forced": false,
+          "policies": [
+            {
+              "name": "Enable ALL operations for users based on user_id",
+              "command": "ALL",
+              "roles": [
+                "authenticated"
+              ]
+            }
+          ]
         },
         "privileges": [
           {
@@ -410,7 +526,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           },
           {
@@ -419,7 +536,8 @@
             "deny": [
               "TRUNCATE",
               "REFERENCES",
-              "TRIGGER"
+              "TRIGGER",
+              "MAINTAIN"
             ]
           }
         ]
