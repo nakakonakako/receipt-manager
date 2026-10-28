@@ -1,13 +1,13 @@
 # AI家計簿（receipt-manager）— プロジェクト概要
 
-> **このリポジトリは機能 A（レシート管理）である。**  
+> **このリポジトリは機能 A（レシート管理）である。**
 > 厳密な単価比較（機能 B）は本リポジトリの責務外。分離方針は [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) を参照。
 
 | 項目 | 内容 |
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-18 |
+| ドキュメント最終更新 | 2026-10-28 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -68,7 +68,7 @@ Supabase（Auth + Postgres + RLS）
 |----|------|------|
 | フロントエンド | `frontend/` | SPA。機能は `src/features/` 以下 |
 | バックエンド | `backend/app/` | FastAPI。Gemini / Supabase / CSV |
-| DB・Auth | `supabase/` | `config.toml`、マイグレーション |
+| DB・Auth | `supabase/` / `db-contracts/` | Supabase設定・現行Writer経路のmigration files・アプリDB契約。共有migration正本はshared-supabase-db |
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
 | PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build/test、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
@@ -148,10 +148,10 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 
 ## 5. データモデル（Supabase）
 
-マイグレーション: `supabase/migrations/`  
-RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
+共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリには現行Writer経路との互換性のためmigration filesを保持する。DB管理責任の移管完了を意味しない。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
+public data tableはRLS有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
-本番migrationの承認・整合性ゲートはmainに導入済み。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。reader secretがEnvironmentに設定されるまではmain pushのpreflightはfail closedで停止する。reader role migrationは未適用。Environment設定、bootstrap、切替順序、復旧手順は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
+Dev・Prodとも共有DB migration 14本の履歴はIN_SYNCで、Reader migrationも両環境に適用済み。本番ReaderのEnvironment設定済みで、shared-supabase-dbの本番Reader workflowによる読み取り専用検証も成功している。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。本番Writer経路は引き続きreceipt-managerにあり、Writer権限の移管は未実施。Environment、切替順序、復旧手順など既存の運用上の注意事項は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
 
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
@@ -331,8 +331,8 @@ AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - main push後のCD: `.github/workflows/deploy.yml` は全main pushでmigration履歴とreader roleを読み取り専用で検証する。履歴一致時はRPC/ACL検証成功後に承認なしでbuild/deployを続ける。未適用migration時はRPC/ACLのassertion mismatchだけを修復経路として許容し、`production-db-apply` Environmentの本人承認付きapply後に全検証を再実行する。接続・履歴・reader・検証実行エラーやpostflight失敗ではdeployしない。全DB操作とdeployは共通queueで直列化する。
-- 本番DB credentialは用途別Environmentに分離する。`production-db-check` はmain限定・承認なしの読み取り専用login、`production-db-apply` はmain限定・本人承認付きのwriter secretを持つ。初回reader作成は `.github/workflows/bootstrap-production-db-reader.yml` の一回限りの承認付きworkflowで行い、アプリdeployは行わない。
-- 初回切替、Environment設定順、reader bootstrap、旧repository secret削除条件、失敗復旧は [production database migration gate](./production-database-migration-gate.md) を参照する。PR #35のreader-role migrationは未適用であり、main pushのpreflightが成功する前にproduction deployは進まない。
+- 本番DB credentialは用途別Environmentに分離する。`production-db-check` はmain限定・承認なしの読み取り専用login、`production-db-apply` はmain限定・本人承認付きのwriter secretを持つ。ReaderはDev・Prodに適用済みで、本番Environment設定とshared-supabase-dbの読み取り専用workflowによる検証が完了している。Writer権限はreceipt-managerに残っている。
+- Environment設定順、reader bootstrapの経緯、旧repository secret削除条件、失敗復旧は [production database migration gate](./production-database-migration-gate.md) を参照する。main push後のpreflight・migration gateが失敗した場合は、記載のfail-closed動作によりproduction deployへ進まない。
 
 ### 7.4 認証フロー
 
@@ -390,6 +390,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-28 | receipt-managerのDB互換性契約v1とv1検証外の統合テスト対象を追加 |
 | 2026-10-23 | worktree削除前後にcwdベースの稼働プロセス検査を追加 |
 | 2026-10-23 | 開発サーバーの所有プロセス群について、SIGKILL後の終了確認とcleanup失敗の報告を追加 |
 | 2026-10-20 | 開発Supabase refの明示登録、receipt-managerのmigration dry-run計画、worktree移動後のPython仮想環境復旧を追加 |

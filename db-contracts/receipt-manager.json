@@ -1,0 +1,1042 @@
+{
+  "format_version": 1,
+  "app_id": "receipt-manager",
+  "contract_version": "1.0.0",
+  "capabilities": {
+    "tables": [
+      {
+        "schema": "public",
+        "name": "receipts",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "date",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "store_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "total_amount",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "payment_method",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "unique",
+            "columns": [
+              "user_id",
+              "id"
+            ]
+          }
+        ],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "privileges": [
+          {
+            "role": "authenticated",
+            "allow": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE"
+            ],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      },
+      {
+        "schema": "public",
+        "name": "receipt_items",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "receipt_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "item_name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "price",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "main_category",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "sub_category",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "search_tags",
+            "type": "text[]",
+            "nullable": true
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "id"
+            ]
+          },
+          {
+            "kind": "unique",
+            "columns": [
+              "user_id",
+              "id"
+            ]
+          },
+          {
+            "kind": "foreign_key",
+            "columns": [
+              "user_id",
+              "receipt_id"
+            ],
+            "references": {
+              "table": "public.receipts",
+              "columns": [
+                "user_id",
+                "id"
+              ]
+            },
+            "on_delete": "cascade",
+            "validated": true
+          }
+        ],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "privileges": [
+          {
+            "role": "authenticated",
+            "allow": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE"
+            ],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      },
+      {
+        "schema": "public",
+        "name": "csv_transactions",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "date",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "store",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "price",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "privileges": [
+          {
+            "role": "authenticated",
+            "allow": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE"
+            ],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      },
+      {
+        "schema": "public",
+        "name": "csv_presets",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "name",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "mapping",
+            "type": "jsonb",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "icon",
+            "type": "text",
+            "nullable": true
+          },
+          {
+            "name": "last_used_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "privileges": [
+          {
+            "role": "authenticated",
+            "allow": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE"
+            ],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      },
+      {
+        "schema": "public",
+        "name": "chat_messages",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "role",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "content",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "created_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "id"
+            ]
+          }
+        ],
+        "rls": {
+          "enabled": true,
+          "forced": false
+        },
+        "privileges": [
+          {
+            "role": "authenticated",
+            "allow": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE"
+            ],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      },
+      {
+        "schema": "ai_quota",
+        "name": "settings",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "id",
+            "type": "smallint",
+            "nullable": false
+          },
+          {
+            "name": "emergency_stop",
+            "type": "boolean",
+            "nullable": false
+          },
+          {
+            "name": "unknown_usage_breaker_threshold",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "lease_duration_seconds",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "monthly_cost_cap_micro_jpy",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "model_id",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "input_price_usd_per_million",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "output_price_usd_per_million",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "thought_price_usd_per_million",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "fx_jpy_per_usd",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "ocr_daily_limit_per_user",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "ocr_daily_limit_global",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "chat_daily_limit_per_user",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "chat_daily_limit_global",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "csv_estimate_daily_limit_per_user",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "csv_estimate_daily_limit_global",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "concurrent_limit_per_user",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "concurrent_limit_global",
+            "type": "integer",
+            "nullable": false
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "id"
+            ]
+          }
+        ],
+        "privileges": [
+          {
+            "role": "public",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "authenticated",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "service_role",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "ai_quota_backend",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      },
+      {
+        "schema": "ai_quota",
+        "name": "requests",
+        "relation_kind": "table",
+        "columns": [
+          {
+            "name": "request_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "user_id",
+            "type": "uuid",
+            "nullable": false
+          },
+          {
+            "name": "kind",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "started_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "jst_day",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "jst_month",
+            "type": "date",
+            "nullable": false
+          },
+          {
+            "name": "status",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "lease_expires_at",
+            "type": "timestamp with time zone",
+            "nullable": false
+          },
+          {
+            "name": "input_tokens",
+            "type": "bigint",
+            "nullable": true
+          },
+          {
+            "name": "output_tokens",
+            "type": "bigint",
+            "nullable": true
+          },
+          {
+            "name": "thought_tokens",
+            "type": "bigint",
+            "nullable": true
+          },
+          {
+            "name": "total_tokens",
+            "type": "bigint",
+            "nullable": true
+          },
+          {
+            "name": "estimated_cost_micro_jpy",
+            "type": "bigint",
+            "nullable": true
+          },
+          {
+            "name": "usage_available",
+            "type": "boolean",
+            "nullable": true
+          },
+          {
+            "name": "unknown_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          },
+          {
+            "name": "snapshot_model_id",
+            "type": "text",
+            "nullable": false
+          },
+          {
+            "name": "snapshot_input_price_usd_per_million",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "snapshot_output_price_usd_per_million",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "snapshot_thought_price_usd_per_million",
+            "type": "bigint",
+            "nullable": false
+          },
+          {
+            "name": "snapshot_fx_jpy_per_usd",
+            "type": "integer",
+            "nullable": false
+          },
+          {
+            "name": "finished_at",
+            "type": "timestamp with time zone",
+            "nullable": true
+          }
+        ],
+        "constraints": [
+          {
+            "kind": "primary_key",
+            "columns": [
+              "request_id"
+            ]
+          }
+        ],
+        "privileges": [
+          {
+            "role": "public",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "anon",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "authenticated",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "service_role",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          },
+          {
+            "role": "ai_quota_backend",
+            "allow": [],
+            "deny": [
+              "SELECT",
+              "INSERT",
+              "UPDATE",
+              "DELETE",
+              "TRUNCATE",
+              "REFERENCES",
+              "TRIGGER"
+            ]
+          }
+        ]
+      }
+    ],
+    "functions": [
+      {
+        "signature": "ai_quota.claim_ai_request(uuid, uuid, text)",
+        "returns": "record",
+        "returns_set": true,
+        "arguments": [
+          {
+            "name": "p_request_id",
+            "mode": "IN",
+            "type": "uuid"
+          },
+          {
+            "name": "p_user_id",
+            "mode": "IN",
+            "type": "uuid"
+          },
+          {
+            "name": "p_kind",
+            "mode": "IN",
+            "type": "text"
+          },
+          {
+            "name": "outcome",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "reject_reason",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "request_id",
+            "mode": "TABLE",
+            "type": "uuid"
+          },
+          {
+            "name": "user_id",
+            "mode": "TABLE",
+            "type": "uuid"
+          },
+          {
+            "name": "kind",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "status",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "lease_expires_at",
+            "mode": "TABLE",
+            "type": "timestamp with time zone"
+          },
+          {
+            "name": "started_at",
+            "mode": "TABLE",
+            "type": "timestamp with time zone"
+          }
+        ],
+        "security": "definer",
+        "search_path": "",
+        "execute": {
+          "allow": [
+            "ai_quota_backend"
+          ],
+          "deny": [
+            "public",
+            "anon",
+            "authenticated",
+            "service_role"
+          ]
+        }
+      },
+      {
+        "signature": "ai_quota.renew_ai_lease(uuid)",
+        "returns": "record",
+        "returns_set": true,
+        "arguments": [
+          {
+            "name": "p_request_id",
+            "mode": "IN",
+            "type": "uuid"
+          },
+          {
+            "name": "outcome",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "reject_reason",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "request_id",
+            "mode": "TABLE",
+            "type": "uuid"
+          },
+          {
+            "name": "lease_expires_at",
+            "mode": "TABLE",
+            "type": "timestamp with time zone"
+          }
+        ],
+        "security": "definer",
+        "search_path": "",
+        "execute": {
+          "allow": [
+            "ai_quota_backend"
+          ],
+          "deny": [
+            "public",
+            "anon",
+            "authenticated",
+            "service_role"
+          ]
+        }
+      },
+      {
+        "signature": "ai_quota.finish_ai_request(uuid, boolean, boolean, bigint, bigint, bigint)",
+        "returns": "record",
+        "returns_set": true,
+        "arguments": [
+          {
+            "name": "p_request_id",
+            "mode": "IN",
+            "type": "uuid"
+          },
+          {
+            "name": "p_succeeded",
+            "mode": "IN",
+            "type": "boolean"
+          },
+          {
+            "name": "p_usage_available",
+            "mode": "IN",
+            "type": "boolean"
+          },
+          {
+            "name": "p_input_tokens",
+            "mode": "IN",
+            "type": "bigint"
+          },
+          {
+            "name": "p_output_tokens",
+            "mode": "IN",
+            "type": "bigint"
+          },
+          {
+            "name": "p_thought_tokens",
+            "mode": "IN",
+            "type": "bigint"
+          },
+          {
+            "name": "outcome",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "reject_reason",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "request_id",
+            "mode": "TABLE",
+            "type": "uuid"
+          },
+          {
+            "name": "status",
+            "mode": "TABLE",
+            "type": "text"
+          },
+          {
+            "name": "estimated_cost_micro_jpy",
+            "mode": "TABLE",
+            "type": "bigint"
+          },
+          {
+            "name": "finished_at",
+            "mode": "TABLE",
+            "type": "timestamp with time zone"
+          }
+        ],
+        "security": "definer",
+        "search_path": "",
+        "execute": {
+          "allow": [
+            "ai_quota_backend"
+          ],
+          "deny": [
+            "public",
+            "anon",
+            "authenticated",
+            "service_role"
+          ]
+        }
+      }
+    ],
+    "auth": {
+      "foreign_keys": [
+        {
+          "table": "public.receipts",
+          "columns": [
+            "user_id"
+          ],
+          "references": "auth.users",
+          "on_delete": "no_action",
+          "validated": true
+        },
+        {
+          "table": "public.receipt_items",
+          "columns": [
+            "user_id"
+          ],
+          "references": "auth.users",
+          "on_delete": "no_action",
+          "validated": true
+        },
+        {
+          "table": "public.csv_transactions",
+          "columns": [
+            "user_id"
+          ],
+          "references": "auth.users",
+          "on_delete": "no_action",
+          "validated": true
+        },
+        {
+          "table": "public.csv_presets",
+          "columns": [
+            "user_id"
+          ],
+          "references": "auth.users",
+          "on_delete": "no_action",
+          "validated": true
+        },
+        {
+          "table": "public.chat_messages",
+          "columns": [
+            "user_id"
+          ],
+          "references": "auth.users",
+          "on_delete": "no_action",
+          "validated": true
+        }
+      ],
+      "functions": [
+        "auth.uid()"
+      ]
+    }
+  }
+}
