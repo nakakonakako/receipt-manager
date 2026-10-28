@@ -1,13 +1,13 @@
 # AI家計簿（receipt-manager）— プロジェクト概要
 
-> **このリポジトリは機能 A（レシート管理）である。**  
+> **このリポジトリは機能 A（レシート管理）である。**
 > 厳密な単価比較（機能 B）は本リポジトリの責務外。分離方針は [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) を参照。
 
 | 項目 | 内容 |
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-18 |
+| ドキュメント最終更新 | 2026-10-28 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -68,7 +68,7 @@ Supabase（Auth + Postgres + RLS）
 |----|------|------|
 | フロントエンド | `frontend/` | SPA。機能は `src/features/` 以下 |
 | バックエンド | `backend/app/` | FastAPI。Gemini / Supabase / CSV |
-| DB・Auth | `supabase/` | `config.toml`、マイグレーション |
+| DB・Auth | `supabase/` / `db-contracts/` | Supabase設定・現行Writer経路のmigration files・アプリDB契約。共有migration正本はshared-supabase-db |
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
 | PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build/test、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
@@ -148,8 +148,8 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 
 ## 5. データモデル（Supabase）
 
-マイグレーション: `supabase/migrations/`  
-RLS 有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
+共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリには現行Writer経路との互換性のためmigration filesを保持する。DB管理責任の移管完了を意味しない。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
+public data tableはRLS有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
 本番migrationの承認・整合性ゲートはmainに導入済み。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。reader secretがEnvironmentに設定されるまではmain pushのpreflightはfail closedで停止する。reader role migrationは未適用。Environment設定、bootstrap、切替順序、復旧手順は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
 
@@ -390,6 +390,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-28 | receipt-managerのDB互換性契約v1とv1検証外の統合テスト対象を追加 |
 | 2026-10-23 | worktree削除前後にcwdベースの稼働プロセス検査を追加 |
 | 2026-10-23 | 開発サーバーの所有プロセス群について、SIGKILL後の終了確認とcleanup失敗の報告を追加 |
 | 2026-10-20 | 開発Supabase refの明示登録、receipt-managerのmigration dry-run計画、worktree移動後のPython仮想環境復旧を追加 |
