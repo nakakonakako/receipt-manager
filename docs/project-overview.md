@@ -148,10 +148,10 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 
 ## 5. データモデル（Supabase）
 
-共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリには現行Writer経路との互換性のためmigration filesを保持する。DB管理責任の移管完了を意味しない。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
+共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリには本番Writer経路との互換性のためmigration filesを保持する。Dev migration適用はshared-supabase-dbのWriter workflowへ集約する構成で、receipt-managerの旧ローカルDev適用コマンドは停止済み。`DEV_DB_WRITER_ENABLED=false` の間はDevへのmigration適用も停止する。本番Writerは引き続きreceipt-managerが担当する。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
 public data tableはRLS有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
-Dev・Prodとも共有DB migration 14本の履歴はIN_SYNCで、Reader migrationも両環境に適用済み。本番ReaderのEnvironment設定済みで、shared-supabase-dbの本番Reader workflowによる読み取り専用検証も成功している。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。本番Writer経路は引き続きreceipt-managerにあり、Writer権限の移管は未実施。Environment、切替順序、復旧手順など既存の運用上の注意事項は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
+Dev・Prodとも共有DB migration 14本の履歴はIN_SYNCで、Reader migrationも両環境に適用済み。本番ReaderのEnvironment設定済みで、shared-supabase-dbの本番Reader workflowによる読み取り専用検証も成功している。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。Dev Writer workflowはshared-supabase-dbにあり、`DEV_DB_WRITER_ENABLED=false` のため現在は適用不可。本番Writer経路は引き続きreceipt-managerが担当する。Environment、切替順序、復旧手順など既存の運用上の注意事項は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
 
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
@@ -273,7 +273,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 | GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
 | GitHub Actions 手動 workflow | main から本番DBのAI利用制御 migration 権限を読み取り専用で事前確認 |
 | 品質チェック | リポジトリルートで `npm run check` |
-| Supabase CLI | `npm run db:plan`（linked 開発プロジェクトの dry-run 確認） / `db:push` / `db:list` |
+| Supabase CLI | `npm run db:plan`（linked 開発プロジェクトの read-only dry-run 確認） / `db:list`。旧 `db:push` は停止し、Dev migration Writer は `shared-supabase-db` に集約 |
 
 ※ `gspread` は依存に残っているが、アプリ本体からは未使用。
 
@@ -296,7 +296,7 @@ npm run dev
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - DB 計画確認: `npm run db:plan`（DB専用env準備、許可された開発ref、共有 `frontend/.env` と worktree symlink/URL、worktree linkを照合し、migration listとdry-runを実行。`frontend/.env` が未作成の worktree では共有設定への symlink を自動作成）
-- DB 反映: `npm run db:push`（同じ接続先検証、dry-run表示、TTYで `apply` 入力後に適用。`SUPABASE_DB_PASSWORD` は環境変数または非表示プロンプト。明示依頼時のみ）
+- Dev DB 反映: `shared-supabase-db` の保護された Writer workflowが適用経路（現在は `DEV_DB_WRITER_ENABLED=false`）。receipt-manager の旧 `npm run db:push` は環境準備やSupabase CLI実行より前に停止し、`npm run db:plan` はread-onlyのmigration list / dry-run用途で維持
 
 ### 7.2 環境変数
 
@@ -393,6 +393,7 @@ receipt-manager/
 | 2026-10-28 | receipt-managerのDB互換性契約v1とv1検証外の統合テスト対象を追加 |
 | 2026-10-23 | worktree削除前後にcwdベースの稼働プロセス検査を追加 |
 | 2026-10-23 | 開発サーバーの所有プロセス群について、SIGKILL後の終了確認とcleanup失敗の報告を追加 |
+| 2026-10-29 | Dev migration Writerをshared-supabase-dbへ移管し、receipt-managerの旧ローカル適用経路を停止 |
 | 2026-10-20 | 開発Supabase refの明示登録、receipt-managerのmigration dry-run計画、worktree移動後のPython仮想環境復旧を追加 |
 | 2026-10-19 | Git worktree環境設定の明示移行、起動前検証、`origin/main`基準のCursor worktree作成を追加 |
 | 2026-10-18 | price-memo 4表のPrivate Broadcast無効化通知と本人topic限定の受信policyを追加 |

@@ -194,33 +194,25 @@ python3 "$repo/scripts/test-db-push-pty.py" "$repo" '__EOF__' 2 db-plan.sh "$for
 [[ ! -s "$log" ]]
 export SUPABASE_DB_PASSWORD='do-not-print-test-secret'
 
+# The legacy writer command is closed before env preparation, prompts, or CLI use.
 : >"$log"
-if bash "$repo/scripts/db-push.sh" >"$test_root/nontty.log" 2>&1; then exit 1; fi
-[[ "$(cat "$test_root/nontty.log")" == *'no DB request or push was run'* ]]
-[[ ! -s "$log" ]]
-
-unset SUPABASE_DB_PASSWORD
-printf '%s\n' "$wrong_ref" >"$repo/supabase/.temp/project-ref"
-if bash "$repo/scripts/db-push.sh" >"$test_root/mismatched-push-target.log" 2>&1; then exit 1; fi
-[[ "$(cat "$test_root/mismatched-push-target.log")" == *'does not match the allowed development target'* ]]
-[[ ! -s "$log" ]]
+: >"$env_log"
 export SUPABASE_DB_PASSWORD='do-not-print-test-secret'
-printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
+if bash "$repo/scripts/db-push.sh" >"$test_root/disabled-push.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/disabled-push.log")" == *'applied only by shared-supabase-db'* ]]
+[[ "$(cat "$test_root/disabled-push.log")" == *'No database connection or migration was attempted'* ]]
+[[ "$(cat "$test_root/disabled-push.log")" != *'do-not-print-test-secret'* ]]
+[[ ! -s "$log" && ! -s "$env_log" ]]
+if npm --prefix "$repo" run db:push >"$test_root/npm-disabled-push.log" 2>&1; then exit 1; fi
+[[ "$(cat "$test_root/npm-disabled-push.log")" == *'applied only by shared-supabase-db'* ]]
+[[ ! -s "$log" && ! -s "$env_log" ]]
 
+# Even an interactive caller typing the former confirmation cannot reach Supabase.
 : >"$log"
-: >"$cwd_log"
-python3 "$repo/scripts/test-db-push-pty.py" "$repo" apply 0 db-push.sh "$foreign_cwd"
-[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run\n--yes supabase db push --linked --yes' ]]
-[[ "$(cat "$cwd_log")" == "$repo"$'\n'"$repo"$'\n'"$repo" ]]
-: >"$log"
-python3 "$repo/scripts/test-db-push-pty.py" "$repo" wrong-confirmation 2
-[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
-printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
-: >"$log"
-DB_PLAN_TEST_MUTATE_LINK=wrong python3 "$repo/scripts/test-db-push-pty.py" "$repo" apply 2 db-push.sh "$foreign_cwd"
-[[ "$(cat "$log")" == $'--yes supabase migration list --linked\n--yes supabase db push --linked --dry-run' ]]
-[[ "$(cat "$repo/supabase/.temp/project-ref")" == "$wrong_ref" ]]
-printf '%s\n' "$allowed_ref" >"$repo/supabase/.temp/project-ref"
+: >"$env_log"
+python3 "$repo/scripts/test-db-push-pty.py" "$repo" apply 2 db-push.sh "$foreign_cwd"
+[[ ! -s "$log" && ! -s "$env_log" ]]
+
 grep -Fq 'supabase db push --db-url "$SUPABASE_DB_URL" --yes' "$source_root/.github/workflows/deploy.yml"
 if grep -Fq 'npm run db:push' "$source_root/.github/workflows/deploy.yml"; then
   echo 'Production deployment must keep its existing direct Supabase CLI migration path.' >&2

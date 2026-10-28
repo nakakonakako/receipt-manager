@@ -46,7 +46,7 @@ Missing, duplicated, non-literal, malformed, or mismatched URLs fail closed.
 Diagnostics show setting/file names and never print URL values. The validator
 does not invoke the Supabase CLI or make a network/database connection.
 
-Before `db:plan` or `db:push`, `scripts/db-env-prepare.sh` (also invoked at the
+Before `db:plan`, `scripts/db-env-prepare.sh` (also invoked at the
 start of both commands) runs a DB-only environment step. It does **not** run
 `dev-env.sh prepare`, backend `.venv` checks, or other application runtime
 preflight.
@@ -81,24 +81,24 @@ Receipt-manager only. The command:
    `supabase db push --linked --dry-run` for remote DB inspection. The dry-run
    is shown even when there are no pending migrations and never applies them.
 
-## Local development database push
+## Legacy local database push
 
-`npm run db:push` is a development-only guarded command. It repeats the target
-checks, displays migration status and a dry-run plan, then requires a TTY and
-the user to type `apply` once to confirm. The target is checked again
-immediately before the actual `supabase db push --linked`. Non-interactive runs
-and any ambiguous or mismatched target stop without applying migrations.
-Production CI/CD keeps its existing independent migration command and credentials.
+`npm run db:push` is retired for hosted Dev writes. `scripts/db-push.sh` exits
+before environment preparation, target lookup, password prompts, or Supabase
+CLI execution. Hosted Dev migrations use the protected Writer workflow in
+`shared-supabase-db` (currently disabled while `DEV_DB_WRITER_ENABLED=false`);
+the existing production CI/CD path remains independent
+and unchanged. Use `npm run db:plan` for migration list and dry-run review.
 
-Outside explicit `db:plan` or `db:push` invocations, worktree setup, `npm run dev`,
-and `npm run check` never link to Supabase or access a remote database.
+This guard closes the repository script path only. It cannot prevent a valid
+previously issued database credential from being used directly with Supabase
+CLI or another client. Revoking or rotating that credential is a separate
+operational action and is not performed by this code change.
 
-If `SUPABASE_DB_PASSWORD` is unset, `db:plan` and `db:push` prompt for it on a
-TTY with hidden input, export it only for the current process, and never print,
-log, or pass it on the CLI argument list. Non-interactive sessions without the
-variable stop with recovery steps instead of running Supabase. For temporary
-`cli_login_postgres` role permission failures, retry with the development DB
-password set this way.
+Outside explicit `db:plan` invocations, worktree setup, `npm run dev`, and
+`npm run check` never link to Supabase or access a remote database.
 
-Applying migrations remains `npm run db:push` and requires an explicit human or
-supervisor request per `AGENTS.md`.
+If `SUPABASE_DB_PASSWORD` is unset, `db:plan` prompts for it on a TTY with
+hidden input, exports it only for the current process, and never prints, logs,
+or passes it on the CLI argument list. Non-interactive sessions without the
+variable stop with recovery steps instead of running Supabase.

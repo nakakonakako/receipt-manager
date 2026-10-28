@@ -64,12 +64,14 @@ project. An unlinked worktree may be linked after interactive confirmation.
 The local command runs DB-only env preparation (not `dev-env.sh` / backend
 `.venv` preflight), validates the shared `frontend/.env` and worktree symlink
 (creating the symlink only when it is missing), URL, and worktree link; it runs
-only migration list and `db push --dry-run`. Local `npm run db:push` has the
-same target guard, displays the dry-run plan, and requires typing `apply` once
-on a TTY. `SUPABASE_DB_PASSWORD` may be set in the shell or entered with hidden
-input; it is never logged or passed as a CLI argument.
-Production CI migration execution remains separate. Never run a local DB push
-unless the user explicitly requests it.
+only migration list and `db push --dry-run`. The legacy local `npm run db:push` command is disabled and exits before
+environment preparation, password prompts, or Supabase CLI calls. Hosted Dev
+migrations use the protected Writer workflow in
+`shared-supabase-db`; `npm run db:plan` remains available for read-only planning.
+This code-path closure does not revoke or rotate previously issued database
+credentials. Direct Supabase CLI use or another client may still use a valid
+credential until it is rotated or revoked. Production CI migration execution
+remains separate.
 
 ## Git worktree and environment files
 
@@ -101,16 +103,16 @@ unless the user explicitly requests it.
   Worktree setup manages `backend/.venv` with relocation detection and safe
   repair; see `docs/spec-worktree-runtime.md`.
   The allowed development Supabase project ref is fixed in
-  `scripts/supabase-target.py`. `npm run db:plan` and `npm run db:push` require
-  DB-only env preparation, the shared `frontend/.env` and worktree symlink
-  (auto-creating the symlink only when missing), `VITE_SUPABASE_URL` against the
-  allowed ref, and the worktree Supabase CLI link; ambiguous Vite overrides fail
-  closed. It only lists migrations and runs a dry-run for `db:plan`. An unlinked
-  worktree requires interactive confirmation before linking to the allowed
-  development ref. Local `npm run db:push` repeats the checks, displays the
-  dry-run plan, and requires typing `apply` once in an interactive terminal.
-  Production CI
-  migration execution is unchanged. Outside these explicit DB commands, setup,
+  `scripts/supabase-target.py`. `npm run db:plan` uses DB-only env preparation,
+  the shared `frontend/.env` and
+  worktree symlink (auto-creating the symlink only when missing), the allowed
+  `VITE_SUPABASE_URL`, and the worktree Supabase CLI link; it only lists
+  migrations and runs a dry-run. An unlinked worktree requires interactive
+  confirmation before linking to the allowed development ref. The legacy local
+  `npm run db:push` now exits before environment preparation or any Supabase CLI
+  call. Hosted Dev migration writes are owned by the protected
+  `shared-supabase-db` Writer workflow. Production CI migration execution is
+  unchanged. Outside these explicit DB commands, setup,
   `npm run dev`, and `npm run check` do not link to Supabase or access a remote
   database.
   A symlink makes its target readable to any worker trusted with that workspace,
