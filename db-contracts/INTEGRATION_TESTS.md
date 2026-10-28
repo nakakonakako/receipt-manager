@@ -4,7 +4,7 @@
 
 ## publicスキーマ
 
-- RLS policy名・command・role・`USING` / `WITH CHECK`式。現行migrationのpolicy名は大文字・空白を含み、v1の小文字識別子形式に適合しない。現行metadataは`receipts`/`receipt_items`/`csv_transactions`の`Users can ... own ...` policy群（`PUBLIC`対象）と、`chat_messages`/`csv_presets`の`Enable ALL operations for users based on user_id`（`authenticated`対象）。v1拡張後にpolicy metadataを契約化する
+- `USING` / `WITH CHECK`式とpolicyのpermissive/restrictive属性。契約はpolicy name / command / rolesを照合するが、policy式や実アクセス結果は保証しない
 - `chat_messages_role_check`などのCHECK制約式。契約v1はcheck constraintを宣言できず、chat role値が`user` / `assistant`で制限されることを契約本文で保証できない
 - Auth/JWT claim下で各public tableのSELECT / INSERT / UPDATE / DELETEを実行し、本人の行のみ許可し別ユーザーの行を拒否すること。特に`PUBLIC`対象policyが未認証ユーザーへ行を許可しないこと
 - `receipt_items`から`receipts`へのPostgREST relationship/join解決と、複合FK `(user_id, receipt_id)` / `(user_id, id)`の同一所有者制約
@@ -23,7 +23,7 @@
 契約v1で検査できるもの:
 
 - 宣言した必須テーブルのrelkind、必須カラムの型/NULL許可、PK/UNIQUE/FKの列・参照・ON DELETE・validated状態
-- RLS enabled/forced flags、ACLの対応するtable privileges（relation単位）
+- RLS enabled/forced flags、宣言したpolicyの正確なname / command / roles、ACLの対応するtable privileges（relation単位。MAINTAINを含む）
 - RPCの正確な入力/出力引数名・順序・mode・型、`record`戻り型とSETOF、SECURITY DEFINER/INVOKER、`search_path`、EXECUTE role
 - 追加テーブル/カラムの存在は互換性違反にしない
 
@@ -33,10 +33,11 @@ v1では以下を契約として検証できない。検証済みの代替条件
 
 - role属性（LOGIN/NOLOGIN、SUPERUSER等）、role membershipとADMIN/SET/INHERIT option、function/table/schema ownership、database-level CREATE権限
 - `ai_quota` schema USAGE ACL、role password/TLS/connection設定、`pg_default_acl`、schema/table/function owner/default-privilegeの厳密な保証
-- PostgreSQL 17 `MAINTAIN` privilege（v1 privilege enumにない）
 - CHECK制約式、column default、partial index定義/predicate、settingsのsingleton行や値
 - AI quota helper function群・function body・戻りデータの意味、競合/transaction動作
-- RLS policy式、実際のAuthユーザー間分離、実行結果、例外時rollback
+- RLS policyの`USING` / `WITH CHECK`式、permissive/restrictive属性、契約に宣言されていない追加policyの不存在
+- Authユーザー間の実データ分離、各SQL/RPCの実行結果、例外時rollback
+- `MAINTAIN` denyは宣言roleに対する実効権限検査。role所有権・属性・membership構成そのものは保証しない
 
 ## 根拠
 
@@ -51,4 +52,4 @@ v1では以下を契約として検証できない。検証済みの代替条件
 - AI quota schema, tables, RPCs, grants: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`; read-only check: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`; isolated SQL: `supabase/tests/ai_quota/`
 - App-level quota orchestration and actual endpoint use: `backend/app/services/ai_quota_guard.py`, `backend/app/main.py`
 
-契約形式検証にはshared-supabase-db main commit `e61b5ff83539dca53cf21c8321f507480dea248c`の検証器を固定SHAで使用する。形式検証のみであり、DB接続やcatalog verificationの結果ではない。
+契約形式検証にはshared-supabase-db commit `0b85bc11ef7e23011204cc4d59509de38dab4d95`の検証器を固定SHAで使用する。形式検証のみであり、DB接続やcatalog verificationの結果ではない。
