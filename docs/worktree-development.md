@@ -198,21 +198,16 @@ its `browsers.json`, and update the three pins in
 that the MCP tools are listed, Chromium launches,
 `http://localhost:5174/` loads, and desktop/mobile viewport checks work. Do not infer successful Cursor or browser operation from static tests.
 
-## Development database planning
+## Development database migration plan
 
-The allowed development Supabase project ref is fixed in the repository
-(`irgahixsuvtopiwmtkku`). Shared development credentials live under
-`~/.config/receipt-manager/development/`; each worktree's `frontend/.env` must
-symlink to `~/.config/receipt-manager/development/frontend/.env` (created by
-`bash scripts/dev-env.sh prepare`, worktree setup, or automatically on the first
-`npm run db:plan` when the path is missing). The shared
-`development/frontend` directory must be a regular directory, not a symlink.
+`shared-supabase-db` owns the migration inventory and Dev DB history. Its
+Reader-only manual workflow is the official way to review pending migrations:
+[Dev migration plan](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml).
 
-`db:plan` validates the shared `frontend/.env` symlink and URL, then this
-worktree's Supabase CLI link. Vite URL overrides or unsupported URL formats fail
-closed. An unlinked worktree requires an interactive confirmation before it
-links to the allowed development ref; a mismatched link is never changed. It
-runs migration list and dry-run only:
+`npm run db:plan` prints this link and states clearly that no Dev DB history was
+checked. `npm run db:list` lists files in this receipt-manager checkout only;
+it does not represent the shared inventory or Dev DB history. Neither command
+reads DB credentials, invokes Supabase CLI, or accesses a hosted DB:
 
 ```bash
 npm run db:plan
@@ -220,17 +215,15 @@ npm run db:plan
 
 The legacy local `npm run db:push` command is disabled and exits before
 loading DB environment, prompting for credentials, or invoking Supabase CLI.
-Hosted Dev migration writes are routed through the protected Writer workflow in
-`shared-supabase-db` (currently disabled while `DEV_DB_WRITER_ENABLED=false`).
-`npm run db:plan` remains available for migration list and
-dry-run inspection. The production deployment workflow remains unchanged.
+Shared-supabase-db owns Dev migration inventory and history, uses its Reader
+workflow for plan checks, and its protected Writer workflow to apply migrations.
+Receipt-manager owns application development and DB contract verification. The
+production deployment workflow remains unchanged.
 
 Disabling this script closes only the repository's legacy command path. It does
 not revoke or rotate credentials that may already exist on a developer machine;
 a valid database password can still be used with the Supabase CLI directly or
 another database client. Credential rotation/revocation is a separate
-operational step. `db:plan` may still read `SUPABASE_DB_PASSWORD` from the shell
-or prompt with hidden input on a TTY; never put it in command arguments,
-repository files, logs, or shell history.
+operational step.
 
 Details and safety constraints: [spec-worktree-runtime.md](./spec-worktree-runtime.md).

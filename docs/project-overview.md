@@ -273,7 +273,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 | GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
 | GitHub Actions 手動 workflow | main から本番DBのAI利用制御 migration 権限を読み取り専用で事前確認 |
 | 品質チェック | リポジトリルートで `npm run check` |
-| Supabase CLI | `npm run db:plan`（linked 開発プロジェクトの read-only dry-run 確認） / `db:list`。旧 `db:push` は停止し、Dev migration Writer は `shared-supabase-db` に集約 |
+| Supabase CLI | Dev migration inventory・履歴確認・適用は `shared-supabase-db` が管理。receipt-manager の `db:plan` はReader workflowへ案内し、`db:list` はローカルmigrationファイルのみ表示 |
 
 ※ `gspread` は依存に残っているが、アプリ本体からは未使用。
 
@@ -295,8 +295,8 @@ npm run dev
 - `scripts/worktree.sh remove` は確認プロンプト前と削除直前に `/proc` のcwdを検査し、対象worktree内の稼働プロセスや検査不能な同一ユーザーPIDがあれば削除を拒否する。cwdを読めず関連を確認できないPIDは検出限界として扱う。詳細は [worktree-development.md](./worktree-development.md)
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
-- DB 計画確認: `npm run db:plan`（DB専用env準備、許可された開発ref、共有 `frontend/.env` と worktree symlink/URL、worktree linkを照合し、migration listとdry-runを実行。`frontend/.env` が未作成の worktree では共有設定への symlink を自動作成）
-- Dev DB 反映: `shared-supabase-db` の保護された Writer workflowが適用経路（現在は `DEV_DB_WRITER_ENABLED=false`）。receipt-manager の旧 `npm run db:push` は環境準備やSupabase CLI実行より前に停止し、`npm run db:plan` はread-onlyのmigration list / dry-run用途で維持
+- Dev DB 計画確認: `shared-supabase-db` の[Reader専用workflow](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml)が正式経路。`npm run db:plan` はこのworkflowへ案内し、ローカルからDB履歴を確認しない。`npm run db:list` はreceipt-manager内のファイル一覧のみを表示
+- Dev DB migrationの正本と適用: `shared-supabase-db` がmigration inventory・Dev DB履歴を管理し、Reader workflowで計画確認、保護されたWriter workflowで適用。receipt-managerはアプリ開発とDB契約検証を担当し、旧 `npm run db:push` は停止
 
 ### 7.2 環境変数
 

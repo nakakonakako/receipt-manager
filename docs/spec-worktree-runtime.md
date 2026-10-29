@@ -46,59 +46,36 @@ Missing, duplicated, non-literal, malformed, or mismatched URLs fail closed.
 Diagnostics show setting/file names and never print URL values. The validator
 does not invoke the Supabase CLI or make a network/database connection.
 
-Before `db:plan`, `scripts/db-env-prepare.sh` (also invoked at the
-start of both commands) runs a DB-only environment step. It does **not** run
-`dev-env.sh prepare`, backend `.venv` checks, or other application runtime
-preflight.
+## Migration plan and local inventory commands
 
-That step checks that:
+The official source for migration inventory and Dev database history is
+`shared-supabase-db`. Run its Reader-only manual workflow to check the plan:
+[Dev migration plan](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml).
 
-- Shared `~/.config/receipt-manager/development/frontend/.env` exists with mode
-  `0600` and parent directory mode `0700`.
-- `frontend/.env` in the current worktree is a symlink to that shared file when
-  it already exists. If `frontend/.env` is missing entirely, the command creates
-  an absolute symlink to the shared file. Regular files, broken symlinks, and
-  mismatched symlinks are never changed.
-- `VITE_SUPABASE_URL` in that shared file resolves to
-  `https://irgahixsuvtopiwmtkku.supabase.co` with no Vite override files or
-  process-level URL overrides.
-- `~/.config/receipt-manager/development/frontend` is a regular directory, not
-  a symlink.
-
-## npm run db:plan
-
-Receipt-manager only. The command:
-
-1. Refuses to run outside the `receipt-manager` repository.
-2. Requires local `supabase/migrations/*.sql` files.
-3. Rejects project/database/workdir environment overrides, Vite URL overrides,
-   unsupported URL forms, a non-symlink or mismatched `frontend/.env`, and a
-   frontend URL that does not match the allowed development ref.
-4. Requires the current worktree CLI link to match the allowed development ref.
-   An unlinked worktree can be linked only after an interactive confirmation;
-   an existing mismatched or partial link is never repaired.
-5. Runs only `supabase migration list --linked` and
-   `supabase db push --linked --dry-run` for remote DB inspection. The dry-run
-   is shown even when there are no pending migrations and never applies them.
+`npm run db:plan` prints that link and states that it did not check Dev database
+history. It does not read a database password, prepare a CLI link, or connect
+to Supabase. `npm run db:list` lists only SQL migration files present in this
+receipt-manager checkout, labels them as local files (not the shared inventory
+or Dev history), and prints the same workflow link. Neither command invokes
+Supabase CLI. The repository's `scripts/supabase-target.py` remains in use for
+validating app development URLs; it is not part of DB plan/list commands.
 
 ## Legacy local database push
 
 `npm run db:push` is retired for hosted Dev writes. `scripts/db-push.sh` exits
 before environment preparation, target lookup, password prompts, or Supabase
-CLI execution. Hosted Dev migrations use the protected Writer workflow in
-`shared-supabase-db` (currently disabled while `DEV_DB_WRITER_ENABLED=false`);
-the existing production CI/CD path remains independent
-and unchanged. Use `npm run db:plan` for migration list and dry-run review.
+CLI execution. Shared-supabase-db owns the migration inventory and Dev DB
+history, its Reader-only workflow checks the plan, and its protected Writer
+workflow applies Dev migrations. Receipt-manager owns application development
+and DB contract verification. Production CI/CD remains independent and
+unchanged.
 
 This guard closes the repository script path only. It cannot prevent a valid
 previously issued database credential from being used directly with Supabase
 CLI or another client. Revoking or rotating that credential is a separate
 operational action and is not performed by this code change.
 
-Outside explicit `db:plan` invocations, worktree setup, `npm run dev`, and
-`npm run check` never link to Supabase or access a remote database.
-
-If `SUPABASE_DB_PASSWORD` is unset, `db:plan` prompts for it on a TTY with
-hidden input, exports it only for the current process, and never prints, logs,
-or passes it on the CLI argument list. Non-interactive sessions without the
-variable stop with recovery steps instead of running Supabase.
+Worktree setup, `npm run dev`, `npm run check`, `npm run db:plan`, and
+`npm run db:list` do not use a linked Supabase CLI project or access a remote
+database. The local `frontend/.env` still supports app development, but the DB
+plan/list commands do not read it or require `SUPABASE_DB_PASSWORD`.
