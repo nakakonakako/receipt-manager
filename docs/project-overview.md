@@ -330,7 +330,7 @@ AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
-- main後のCD: `.github/workflows/deploy.yml` はquality、固定SHAのshared Reader gate、RPC・AI quota・ACL integrityがすべて成功した場合だけbuild/deployする。shared migration履歴が`IN_SYNC`でない場合、契約不一致、診断`MISMATCH`、接続・実行エラーでは停止する。本番migrationは適用しない。
+- main後のCD: `.github/workflows/deploy.yml` はquality、固定SHAのshared Reader gate、Reader権限・role構成、RPC・AI quota・ACL integrityがすべて成功した場合だけbuild/deployする。shared migration履歴が`IN_SYNC`でない場合、契約不一致、診断`MISMATCH`、接続・実行エラーでは停止する。本番migrationは適用しない。
 - 本番deployは`production-db-check` EnvironmentのReader資格情報だけを使う。旧`production-db-apply` Environmentとwriter secretは未削除だが、receipt-managerのworkflowから参照しない。shared Production WriterはEnvironment準備と実適用検証が未完了で、有効化していない。GitHub Environment設定の実状態は別途確認が必要。
 - Environment要件、migration移管の残作業、fail-closed動作は [production database migration gate](./production-database-migration-gate.md) を参照する。
 

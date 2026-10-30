@@ -81,10 +81,22 @@ class ProductionGateTests(unittest.TestCase):
 
     def test_deploy_uses_pinned_shared_reader_and_receipt_manager_contract(self) -> None:
         deploy = DEPLOY.read_text(encoding="utf-8")
+        preflight = deploy.split("  preflight:\n", 1)[1].split("  integrity:\n", 1)[0]
         action = (
             "nakakonakako/shared-supabase-db/.github/actions/"
             f"consumer-production-db-check@{SHARED_ACTION_SHA}"
         )
+        setup_python = preflight.index("uses: actions/setup-python@v7.1.0")
+        install_tools = preflight.index("name: Install Git and PostgreSQL client")
+        checkout = preflight.index("uses: actions/checkout@v7")
+        shared_action = preflight.index(f"uses: {action}")
+        self.assertIn('python-version: "3.12"', preflight)
+        self.assertIn("apt-get install -y -qq git postgresql-client", preflight)
+        self.assertIn("command -v git", preflight)
+        self.assertIn("command -v psql", preflight)
+        self.assertLess(setup_python, install_tools)
+        self.assertLess(install_tools, checkout)
+        self.assertLess(checkout, shared_action)
         self.assertIn(action, deploy)
         self.assertIn("app-id: receipt-manager", deploy)
         self.assertIn("app-commit-sha: ${{ github.sha }}", deploy)
@@ -97,6 +109,32 @@ class ProductionGateTests(unittest.TestCase):
         )
         self.assertIn("reader-password: ${{ secrets.MIGRATION_READER_PASSWORD }}", deploy)
         self.assertEqual(len(SHARED_ACTION_SHA), 40)
+
+    def test_reader_role_audits_run_before_integrity_pass_gate(self) -> None:
+        deploy = DEPLOY.read_text(encoding="utf-8")
+        integrity = deploy.split("  integrity:\n", 1)[1].split("  build-and-push:\n", 1)[0]
+        reader_login = integrity.index("supabase/diagnostics/verify_production_db_reader.sql")
+        bootstrap_role = integrity.index("supabase/diagnostics/verify_migration_reader_bootstrap.sql")
+        app_integrity = integrity.index("scripts/verify-production-db-integrity.py")
+
+        self.assertIn("environment:\n      name: production-db-check", integrity)
+        self.assertIn("PGUSER: migration_preflight_login.", integrity)
+        self.assertIn("PGPASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}", integrity)
+        self.assertIn("psql -X -w -v ON_ERROR_STOP=1", integrity)
+        self.assertLess(reader_login, bootstrap_role)
+        self.assertLess(bootstrap_role, app_integrity)
+        self.assertIn("grep -Fxq 'result=PASS'", integrity)
+
+        reader_sql = (ROOT / "supabase/diagnostics/verify_production_db_reader.sql").read_text(
+            encoding="utf-8"
+        )
+        bootstrap_sql = (ROOT / "supabase/diagnostics/verify_migration_reader_bootstrap.sql").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("reader login must default to read-only transactions", reader_sql)
+        self.assertIn("reader login can read application or AI quota data", reader_sql)
+        self.assertIn("reader role is missing its required version or singleton-id access", bootstrap_sql)
+        self.assertIn("postgres must retain ADMIN OPTION on ai_quota_owner", bootstrap_sql)
 
     def test_reader_gate_and_integrity_are_required_before_build_and_deploy(self) -> None:
         deploy = DEPLOY.read_text(encoding="utf-8")

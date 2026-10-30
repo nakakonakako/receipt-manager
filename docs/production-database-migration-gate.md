@@ -12,6 +12,8 @@ shared actionは、Production DB identity、shared-supabase-dbのmigration inven
 
 `integrity` jobは `verify_s1_08_rpc_integrity.sql`、`verify_s1_06_ai_quota_integrity.sql`、`verify_s1_f01_acl_integrity.sql` を実行する。検証不一致は`MISMATCH`として区別されるが、workflowは`PASS`以外をbuild/deployへ通さない。接続やSQL実行エラーも失敗する。
 
+同jobでは `verify_production_db_reader.sql` と `verify_migration_reader_bootstrap.sql` もReader接続で実行する。これらはReader loginの実効権限、最小権限role属性、Reader roleの狭いGRANT、`postgres` の`ai_quota_owner` ADMIN-only membershipを監査する。共通actionのDB identity・共有migration履歴・アプリ契約検証では保証されないため、両SQLの失敗もbuild/deployを停止する。
+
 全jobとdeployは`receipt-manager-production-db` concurrency queueを共有し、実行中runをcancelしない。各段階で最新main SHAを再確認する。
 
 ## `production-db-check` Environment

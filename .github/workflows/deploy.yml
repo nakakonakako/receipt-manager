@@ -52,6 +52,20 @@ jobs:
     environment:
       name: production-db-check
     steps:
+      - name: Set up Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Install Git and PostgreSQL client
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git postgresql-client
+          command -v git
+          command -v psql
+          python3 --version
+          git --version
+          psql --version
       - name: Checkout
         uses: actions/checkout@v7
         with:
@@ -90,6 +104,11 @@ jobs:
         run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
       - name: Install PostgreSQL client
         run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+      - name: Verify Reader login privileges and bootstrap role
+        run: |
+          set -euo pipefail
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_production_db_reader.sql >/dev/null
+          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_migration_reader_bootstrap.sql >/dev/null
       - name: Verify current RPC, AI quota, and ACL integrity
         run: |
           set -euo pipefail
