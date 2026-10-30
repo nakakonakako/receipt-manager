@@ -72,7 +72,7 @@ Supabase（Auth + Postgres + RLS）
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
 | PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build/test、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
-| main後CD | `.github/workflows/deploy.yml` | `main` push 後に quality を実行し、マイグレーション変更時は migrate → 読み取り専用RPC検証、その後 GHCR build → VPS deploy。VPSの `.env` は umask 077 で0600を確認した同一ディレクトリの一時ファイルから原子的に置換する。変更がなければ migrate と検証をスキップ。手動検証は `verify-production-rpcs.yml` |
+| main後CD | `.github/workflows/deploy.yml` | `main` push / `workflow_dispatch` 後にquality、固定SHAのshared Reader DB契約gate、RPC・AI quota・ACL integrityを通過した場合だけGHCR buildとVPS deploy。本番migration自動適用なし。VPSの `.env` は umask 077・0600確認後に原子的に置換 |
 | ドキュメント | `docs/` | 本ファイルおよび仕様メモ |
 
 ---
@@ -148,10 +148,10 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 
 ## 5. データモデル（Supabase）
 
-共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリには本番Writer経路との互換性のためmigration filesを保持する。Dev migration適用はshared-supabase-dbのWriter workflowへ集約する構成で、receipt-managerの旧ローカルDev適用コマンドは停止済み。`DEV_DB_WRITER_ENABLED=false` の間はDevへのmigration適用も停止する。本番Writerは引き続きreceipt-managerが担当する。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
+共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリにはアプリ開発用のmigration filesを保持するが、DB全体の履歴判定には使わない。Dev migration適用はshared-supabase-dbのWriter workflowへ集約する構成で、receipt-managerの旧ローカルDev適用コマンドは停止済み。`DEV_DB_WRITER_ENABLED=false` の間はDevへのmigration適用も停止する。本番deployはshared Reader gateで共有履歴を検証し、migrationを適用しない。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
 public data tableはRLS有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
-Dev・Prodとも共有DB migration 14本の履歴はIN_SYNCで、Reader migrationも両環境に適用済み。本番ReaderのEnvironment設定済みで、shared-supabase-dbの本番Reader workflowによる読み取り専用検証も成功している。`scripts/check-migration-history.py` はローカルmigration versionとDB履歴を比較し、`migration_preflight_reader` はmigration履歴version列など必要最小限だけを読むNOLOGIN role。Dev Writer workflowはshared-supabase-dbにあり、`DEV_DB_WRITER_ENABLED=false` のため現在は適用不可。本番Writer経路は引き続きreceipt-managerが担当する。Environment、切替順序、復旧手順など既存の運用上の注意事項は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
+shared-supabase-dbのmigration inventoryとDB履歴が共有DB全体の正本。本番deployは固定SHAの共通Reader actionでProduction DB identity、shared履歴の`IN_SYNC`、対象commitのreceipt-manager DB契約を確認し、個別のRPC・AI quota・ACL integrityも検証する。`PENDING`、`REMOTE_ONLY`、不一致、実行エラーで停止し、本番migrationを自動適用しない。shared Production WriterのEnvironment準備と実適用検証は未完了で、有効化していない。Reader Environmentの実設定は別途GitHub Settingsで確認する。運用境界と残作業は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
 
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
@@ -201,7 +201,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 - 仕様: [spec-ai-quota-database.md](./spec-ai-quota-database.md)
 - 未知利用ブレーカーの初期閾値は 3。同一 JST 日の未解決 `unknown_usage` だけを数え、日付境界で解除する。行は残し、日次回数は claim 日のまま。緊急停止と計測済み月額 800 円上限は維持する
 - 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。`.github/workflows/preflight-ai-quota.yml` を `main` から手動実行し、同じ migration ロールの既存Secretsで確認する。preflight は migration 成功を保証しない。適用後は integrity verifier を使う
-- 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（`verify-production-rpcs.yml` で S1-08 と併走）
+- 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（deploy workflowでS1-08/S1-F01と併走）
 - 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
 - `ai_quota_backend` のパスワードは、認可された Supabase データベース管理者の psql で `\password ai_quota_backend` を実行し、エコーなしプロンプトで設定する。入力した値はセキュアなエディタで VPS の `.env.ai-quota`（`0600`）へ直接書き写す。シェルコマンド、SQL 履歴、ログ、リポジトリ、GitHub または VPS のデプロイ用環境変数には置かない。手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)
 
@@ -209,16 +209,16 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 
 `20261015120000_s1_f01_revoke_excess_table_privileges.sql` は、既存9テーブルと `postgres` が `public` で作成する今後のテーブルについて、`anon`・`authenticated` の `TRUNCATE`、`REFERENCES`、`TRIGGER`、`MAINTAIN` を取り消す。CRUD、RLS、RPC、`service_role`、関数・シーケンスの権限は変更しない。migrationは実行ロール、対象テーブルの所有者・付与元、global default ACLを事前確認し、実効権限とCRUDを事後確認する。
 
-- 読み取り専用検証: `supabase/diagnostics/verify_s1_f01_acl_integrity.sql`。既存の `verify-production-rpcs.yml` から S1-06/S1-08 と併せて実行する。
+- 読み取り専用検証: `supabase/diagnostics/verify_s1_f01_acl_integrity.sql`。本番deployのintegrity jobでS1-06/S1-08と併せて実行する。
 - `supabase_admin` の `public` default privilegesは変更しない。Supabase管理ロールが将来 `public` に作るテーブルには対象権限が残る可能性がある。検証SQLは残存する直接付与数を表示する。
-- migrationを含むmainへのマージは既存CDから本番DBへの `supabase db push` を起動する。
+- 本番migration適用はshared-supabase-dbのWriter運用に従う。receipt-managerのmain mergeは本番DBへの書き込みを起動しない。
 
 ### 5.5 price-memo のユーザー自身による全データ削除
 
 `20261016100000_delete_my_price_memo_data.sql` は `public.delete_my_price_memo_data()` を追加する。引数を受け取らず `auth.uid()` がNULLなら拒否し、`SECURITY INVOKER` と既存RLSのもとで本人の `price_memo_items`、`price_records`、`price_folders`、`price_stores` だけを1回のRPC内で削除する。Authアカウント、レシート関連テーブル、他ユーザーの行は対象外。`PUBLIC`、`anon`、`service_role` の実行権限を取り消し、`authenticated` のみに付与する。
 
 - 隔離SQLテスト: `scripts/run-price-memo-data-deletion-sql-tests.sh`。名前が指定条件に一致するlocalhost上の新規使い捨てPostgreSQL DBだけで実行する。ユーザー分離、未認証拒否、途中失敗のロールバック、Auth/receiptデータの維持、空データの成功、関数権限を確認する。
-- 本マイグレーションを含む `main` へのマージは既存CDから本番DBへ自動適用される。price-memo側のUIを利用する前に、このmigrationが反映済みであることを確認する。
+- 本マイグレーションを本番へ適用する場合はshared-supabase-dbのmigration運用に従う。price-memo側のUIを利用する前に、このmigrationが反映済みであることを確認する。
 
 ### 5.6 price-memo Private Broadcast 通知
 
@@ -228,7 +228,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 - 4表の行triggerはINSERT/UPDATE/DELETEを処理し、所有者変更では旧・新ユーザーへ通知。フォルダCASCADEと `delete_my_price_memo_data()` の削除も子表を含め通知
 - `realtime.send()` の失敗はSQLSTATEを警告記録して元のDMLを継続。切断・欠落時の再取得はprice-memo側の責務
 - 隔離SQLテスト: `scripts/run-price-memo-private-broadcast-sql-tests.sh`。実Supabase RealtimeサーバーとのWebSocket結合テストではない
-- 本マイグレーションを含む `main` へのマージは既存CDから本番DBへ自動適用される。本番適用前にRealtime設定・既存policy・権限とprice-memo側private購読を確認する。ロールバックは通知trigger・関数・policyを削除するforward migrationで行う
+- 本マイグレーションを本番へ適用する場合はshared-supabase-dbのmigration運用に従う。本番適用前にRealtime設定・既存policy・権限とprice-memo側private購読を確認する。ロールバックは通知trigger・関数・policyを削除するforward migrationで行う
 
 ---
 
@@ -330,9 +330,9 @@ AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-
 - イメージ: `ghcr.io/nakakonakako/receipt-manager-frontend|backend:latest`
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
-- main push後のCD: `.github/workflows/deploy.yml` は全main pushでmigration履歴とreader roleを読み取り専用で検証する。履歴一致時はRPC/ACL検証成功後に承認なしでbuild/deployを続ける。未適用migration時はRPC/ACLのassertion mismatchだけを修復経路として許容し、`production-db-apply` Environmentの本人承認付きapply後に全検証を再実行する。接続・履歴・reader・検証実行エラーやpostflight失敗ではdeployしない。全DB操作とdeployは共通queueで直列化する。
-- 本番DB credentialは用途別Environmentに分離する。`production-db-check` はmain限定・承認なしの読み取り専用login、`production-db-apply` はmain限定・本人承認付きのwriter secretを持つ。ReaderはDev・Prodに適用済みで、本番Environment設定とshared-supabase-dbの読み取り専用workflowによる検証が完了している。Writer権限はreceipt-managerに残っている。
-- Environment設定順、reader bootstrapの経緯、旧repository secret削除条件、失敗復旧は [production database migration gate](./production-database-migration-gate.md) を参照する。main push後のpreflight・migration gateが失敗した場合は、記載のfail-closed動作によりproduction deployへ進まない。
+- main後のCD: `.github/workflows/deploy.yml` はquality、固定SHAのshared Reader gate、RPC・AI quota・ACL integrityがすべて成功した場合だけbuild/deployする。shared migration履歴が`IN_SYNC`でない場合、契約不一致、診断`MISMATCH`、接続・実行エラーでは停止する。本番migrationは適用しない。
+- 本番deployは`production-db-check` EnvironmentのReader資格情報だけを使う。旧`production-db-apply` Environmentとwriter secretは未削除だが、receipt-managerのworkflowから参照しない。shared Production WriterはEnvironment準備と実適用検証が未完了で、有効化していない。GitHub Environment設定の実状態は別途確認が必要。
+- Environment要件、migration移管の残作業、fail-closed動作は [production database migration gate](./production-database-migration-gate.md) を参照する。
 
 ### 7.4 認証フロー
 

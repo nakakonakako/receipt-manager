@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 
-# All production DB checks, migration applies, and deployments share this queue.
+# Production DB checks and deployments share this queue.
 concurrency:
   group: receipt-manager-production-db
   cancel-in-progress: false
@@ -51,46 +51,25 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production-db-check
-    env:
-      PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
-      PGPORT: "5432"
-      PGDATABASE: postgres
-      PGUSER: migration_preflight_login.${{ vars.PROD_SUPABASE_PROJECT_REF }}
-      PGPASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}
-      PGSSLMODE: require
-      PGCONNECT_TIMEOUT: "10"
-    outputs:
-      state: ${{ steps.history.outputs.state }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Require latest main commit and reader environment
-        env:
-          READER_PASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}
-          PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
-        run: |
-          set -euo pipefail
-          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
-          if [[ "$GITHUB_REF" != refs/heads/main || -z "$PGHOST" || "$PGHOST" =~ [[:space:]] || ! "$PROJECT_REF" =~ ^[A-Za-z0-9]+$ || -z "$READER_PASSWORD" ]]; then
-            echo "Production DB reader environment is missing or this is not main; deployment is blocked." >&2
-            exit 1
-          fi
-      - name: Install PostgreSQL client
-        run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
-      - name: Compare migration history with main
-        id: history
-        run: python3 scripts/check-production-db-state.py --base-ref "${{ github.event.before || github.sha }}" --output "$GITHUB_OUTPUT"
-      - name: Verify reader role and production database baseline
-        run: |
-          set -euo pipefail
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_production_db_reader.sql >/dev/null
-          psql -X -w -v ON_ERROR_STOP=1 -f supabase/diagnostics/verify_migration_reader_bootstrap.sql >/dev/null
+      - name: Require latest main commit
+        run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
+      - name: Verify shared production DB contract
+        uses: nakakonakako/shared-supabase-db/.github/actions/consumer-production-db-check@c06454f78cc3db27964829fd0e357cbb0d3536f8
+        with:
+          app-id: receipt-manager
+          app-commit-sha: ${{ github.sha }}
+          reader-pooler-host: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+          reader-project-ref: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
+          reader-username: migration_preflight_login.${{ vars.PROD_SUPABASE_PROJECT_REF }}
+          reader-password: ${{ secrets.MIGRATION_READER_PASSWORD }}
 
   integrity:
     needs: [quality, preflight]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' }}
     runs-on: ubuntu-latest
     environment:
       name: production-db-check
@@ -102,8 +81,6 @@ jobs:
       PGPASSWORD: ${{ secrets.MIGRATION_READER_PASSWORD }}
       PGSSLMODE: require
       PGCONNECT_TIMEOUT: "10"
-    outputs:
-      result: ${{ steps.integrity.outputs.result }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -113,79 +90,14 @@ jobs:
         run: python3 scripts/assert-latest-main.py "$GITHUB_SHA"
       - name: Install PostgreSQL client
         run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
-      - name: Verify current RPC and ACL integrity
-        id: integrity
-        run: python3 scripts/verify-production-db-integrity.py --output "$GITHUB_OUTPUT"
-
-  apply:
-    needs: [quality, preflight, integrity]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && (needs.integrity.outputs.result == 'PASS' || needs.integrity.outputs.result == 'MISMATCH') }}
-    runs-on: ubuntu-latest
-    environment:
-      name: production-db-apply
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-      - name: Require latest main commit and writer environment
-        env:
-          DB_PASSWORD: ${{ secrets.MIGRATION_SUPABASE_DB_PASSWORD }}
-          PROJECT_REF: ${{ vars.PROD_SUPABASE_PROJECT_REF }}
-          POOLER_HOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
+      - name: Verify current RPC, AI quota, and ACL integrity
         run: |
           set -euo pipefail
-          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
-          if [[ "$GITHUB_REF" != refs/heads/main || -z "$DB_PASSWORD" || ! "$PROJECT_REF" =~ ^[A-Za-z0-9]+$ || -z "$POOLER_HOST" ]]; then
-            echo "Production DB apply environment is incomplete; migration is blocked." >&2
-            exit 1
-          fi
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v3
-        with:
-          version: 2.115.0
-      - name: Install PostgreSQL client
-        run: sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
-      - name: Recheck pending history after approval
-        id: pending
-        env:
-          PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
-          PGPORT: "5432"
-          PGDATABASE: postgres
-          PGUSER: postgres.${{ vars.PROD_SUPABASE_PROJECT_REF }}
-          PGPASSWORD: ${{ secrets.MIGRATION_SUPABASE_DB_PASSWORD }}
-          PGSSLMODE: require
-          PGCONNECT_TIMEOUT: "10"
-        run: |
-          set -euo pipefail
-          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
-          python3 scripts/check-production-db-state.py --base-ref "$GITHUB_SHA" --output "$GITHUB_OUTPUT"
-          grep -qx 'state=PENDING' "$GITHUB_OUTPUT"
-      - name: Prepare pending migration database URL
-        env:
-          PGHOST: ${{ vars.PROD_SUPABASE_POOLER_HOST }}
-          PGPORT: "5432"
-          PGDATABASE: postgres
-          PGUSER: postgres.${{ vars.PROD_SUPABASE_PROJECT_REF }}
-          PGPASSWORD: ${{ secrets.MIGRATION_SUPABASE_DB_PASSWORD }}
-          PGSSLMODE: require
-        run: |
-          set -euo pipefail
-          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
-          python3 scripts/write-supabase-db-url.py --output "$GITHUB_ENV"
-      - name: Apply pending main migrations
-        run: |
-          set -euo pipefail
-          python3 scripts/assert-latest-main.py "$GITHUB_SHA"
-          test -n "$SUPABASE_DB_URL"
-          supabase db push --db-url "$SUPABASE_DB_URL" --yes
-
-  postflight:
-    needs: [quality, preflight, integrity, apply]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && needs.apply.result == 'success' }}
-    uses: ./.github/workflows/verify-production-rpcs.yml
+          python3 scripts/verify-production-db-integrity.py --output "$RUNNER_TEMP/integrity-result"
+          grep -Fxq 'result=PASS' "$RUNNER_TEMP/integrity-result"
 
   build-and-push:
-    needs: [quality, preflight, integrity, apply, postflight]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && ((needs.preflight.outputs.state == 'IN_SYNC' && needs.integrity.result == 'success' && needs.integrity.outputs.result == 'PASS' && needs.apply.result == 'skipped' && needs.postflight.result == 'skipped') || (needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && (needs.integrity.outputs.result == 'PASS' || needs.integrity.outputs.result == 'MISMATCH') && needs.apply.result == 'success' && needs.postflight.result == 'success')) }}
+    needs: [quality, preflight, integrity]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -227,8 +139,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=backend
 
   deploy:
-    needs: [quality, preflight, integrity, apply, postflight, build-and-push]
-    if: ${{ always() && needs.quality.result == 'success' && needs.preflight.result == 'success' && ((needs.preflight.outputs.state == 'IN_SYNC' && needs.integrity.result == 'success' && needs.integrity.outputs.result == 'PASS' && needs.apply.result == 'skipped' && needs.postflight.result == 'skipped') || (needs.preflight.outputs.state == 'PENDING' && needs.integrity.result == 'success' && (needs.integrity.outputs.result == 'PASS' || needs.integrity.outputs.result == 'MISMATCH') && needs.apply.result == 'success' && needs.postflight.result == 'success')) && needs.build-and-push.result == 'success' }}
+    needs: [quality, preflight, integrity, build-and-push]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
