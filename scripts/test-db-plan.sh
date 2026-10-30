@@ -53,9 +53,8 @@ if (!p.scripts.dev.startsWith('bash scripts/dev-env.sh prepare')) throw new Erro
 if (!p.scripts.check.includes('check:frontend') || !p.scripts.check.includes('check:backend')) throw new Error('npm run check changed');
 NODE
 
-grep -Fq 'supabase db push --db-url "$SUPABASE_DB_URL" --yes' "$source_root/.github/workflows/deploy.yml"
-if grep -Fq 'npm run db:push' "$source_root/.github/workflows/deploy.yml"; then
-  echo 'Production deployment must keep its existing direct Supabase CLI migration path.' >&2
+if grep -REn 'supabase db push|MIGRATION_SUPABASE_DB_PASSWORD' "$source_root/.github/workflows"; then
+  echo 'Receipt-manager production workflows must not apply migrations or use Writer credentials.' >&2
   exit 1
 fi
 echo 'db plan/list isolation and push guard tests passed.'

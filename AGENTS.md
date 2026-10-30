@@ -71,8 +71,10 @@ The legacy local `npm run db:push` command is disabled and exits before
 environment preparation, password prompts, or Supabase CLI calls.
 This code-path closure does not revoke or rotate previously issued database
 credentials. Direct Supabase CLI use or another client may still use a valid
-credential until it is rotated or revoked. Production CI migration execution
-remains separate.
+credential until it is rotated or revoked. Production deployment performs only
+the pinned shared Reader gate and read-only integrity checks; it does not apply
+migrations. The shared Production Writer has not completed environment setup and
+application validation.
 
 ## Git worktree and environment files
 
@@ -111,8 +113,9 @@ remains separate.
   credentials, prepares Supabase CLI state, or connects remotely. The legacy
   local `npm run db:push` exits before environment preparation or any Supabase
   CLI call. Shared-supabase-db owns Dev migration inventory, Reader plan checks,
-  and protected Writer application; receipt-manager owns app development and
-  DB contract verification. Production CI migration execution is unchanged. Outside these explicit DB commands, setup,
+and protected Writer application; receipt-manager owns app development and
+DB contract verification. Production deployment uses the pinned shared Reader
+gate and never applies migrations. Outside these explicit DB commands, setup,
   `npm run dev`, and `npm run check` do not link to Supabase or access a remote
   database.
   A symlink makes its target readable to any worker trusted with that workspace,

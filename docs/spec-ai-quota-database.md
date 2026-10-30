@@ -79,7 +79,7 @@ DB の正本は `ai_quota` スキーマのマイグレーション、RPC、診�
 ## マイグレーションと本番
 
 - 正本: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`
-- `main` へマイグレーション付き push 時、既存 CD は `supabase db push` 後に読み取り専用検証を実行（S1-08 + 本 PR の `verify_s1_06_ai_quota_integrity.sql`）。preflight は適用後の検証ではない。
+- 本番へのmigration適用はshared-supabase-dbが管理する。本番deployはmigrationを適用せず、`verify_s1_06_ai_quota_integrity.sql`を含むRPC/AI quota/ACL integrityを読み取り専用で検証する。
 - PostgREST 公開スキーマは変更なし（`ai_quota` は API に出さない）。
 
 ## マイグレーション操作ごとの権限要件
@@ -136,7 +136,7 @@ DB の正本は `ai_quota` スキーマのマイグレーション、RPC、診�
 1. マイグレーションを適用するのと同じロールで、適用前にこのファイルを一度だけ実行する。
 2. `ai_quota_owner` または `ai_quota_backend` が既にある場合、preflight は `insufficient` で失敗する。既存ロールの ALTER や流用へ進まない。
 3. 例外、`insufficient`、表示の欠落、または判断できない結果なら、マイグレーション適用とデプロイを止める。
-4. 現行の `.github/workflows/deploy.yml` は `supabase db push` の前に preflight を実行しない。`migrate` ジョブは link のあと `supabase db push --yes --linked` のみである。運用者が同じ migration ロールで手動実行する。隔離 SQL テスト以外で secrets や本番接続を使わない。
+4. このrepositoryのproduction deploy workflowはmigrationを適用しない。migrationはshared-supabase-dbのinventoryと承認済みWriter手順に従う。隔離SQLテスト以外でsecretsや本番接続を使わない。
 
 ## FastAPI ランタイム統合
 

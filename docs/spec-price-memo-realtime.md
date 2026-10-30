@@ -50,7 +50,7 @@ trigger関数は`SECURITY DEFINER`、所有者`postgres`、空の`search_path`�
 
 ## 5. 適用・ロールバック
 
-このマイグレーションを含むPRのmainマージは既存CDから本番migrationを自動適用する。PR段階では適用しない。本番適用前に、既存`realtime.messages`ポリシー、Realtime公開設定、`realtime.send`の署名・実行権限、対象表・RPCの本番定義、隔離SQLテストの結果を再確認する。
+このマイグレーションを含むPRのmainマージは本番migrationを適用しない。共有DB migrationはshared-supabase-dbのWriter運用で適用する。適用前に、既存`realtime.messages`ポリシー、Realtime公開設定、`realtime.send`の署名・実行権限、対象表・RPCの本番定義、隔離SQLテストの結果を再確認する。
 
 適用後に通知を止める場合は、共有DB管理手順として4表の`price_memo_broadcast_invalidation` triggerを削除し、`public.broadcast_price_memo_invalidation()`関数と本ポリシーを削除する。これはデータを変更しないが、price-memoのリアルタイム無効化を停止する。履歴を書き換えず、必要なら新しいforward migrationで行う。
 
