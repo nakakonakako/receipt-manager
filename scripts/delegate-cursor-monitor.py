@@ -62,7 +62,22 @@ _TOOL_CATEGORY_BY_SHAPE = {
     "readToolCall": FILE_READ_CATEGORY,
     "read_tool_call": FILE_READ_CATEGORY,
 }
-_TOOL_SHAPE_PRIORITY = tuple(_TOOL_CATEGORY_BY_SHAPE)
+_TOOL_SHAPE_PRIORITY = (
+    "readToolCall",
+    "read_tool_call",
+    "editToolCall",
+    "edit_tool_call",
+    "writeToolCall",
+    "write_tool_call",
+    "deleteToolCall",
+    "delete_tool_call",
+    "shellToolCall",
+    "shell_tool_call",
+    "bashToolCall",
+    "bash_tool_call",
+    "mcpToolCall",
+    "mcp_tool_call",
+)
 _FAILURE_KEYS = {"error", "failure", "failed"}
 _CALL_ID_KEYS = ("call_id", "callId", "tool_call_id", "toolCallId")
 _COALESCED_EVENT_TYPES = {"assistant", "thinking"}
