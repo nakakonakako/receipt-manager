@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import selectors
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -148,7 +149,9 @@ def safe_event_name(event: object) -> tuple[str, str | None]:
         return "unparsed_output", None
     subtype = event.get("subtype")
     safe_type = event_type if event_type in EVENT_TYPES else "other"
-    safe_subtype = subtype if isinstance(subtype, str) and subtype in EVENT_SUBTYPES else None
+    safe_subtype = (
+        subtype if isinstance(subtype, str) and subtype in EVENT_SUBTYPES else None
+    )
     return safe_type, safe_subtype
 
 
@@ -191,11 +194,15 @@ def _has_failure_marker(node: object, depth: int = 0, budget: int = 200) -> bool
         for key, value in node.items():
             if isinstance(key, str) and key in _FAILURE_KEYS:
                 return True
-            if isinstance(value, (dict, list)) and _has_failure_marker(value, depth + 1, budget - 1):
+            if isinstance(value, (dict, list)) and _has_failure_marker(
+                value, depth + 1, budget - 1
+            ):
                 return True
     elif isinstance(node, list):
         for item in node[:50]:
-            if isinstance(item, (dict, list)) and _has_failure_marker(item, depth + 1, budget - 1):
+            if isinstance(item, (dict, list)) and _has_failure_marker(
+                item, depth + 1, budget - 1
+            ):
                 return True
     return False
 
@@ -237,7 +244,14 @@ def extract_call_id(event: dict[str, object]) -> str | None:
         if isinstance(value, dict):
             containers.append(value)
             for nested_key, nested in value.items():
-                if nested_key in {"args", "arguments", "parameters", "input", "result", "output"}:
+                if nested_key in {
+                    "args",
+                    "arguments",
+                    "parameters",
+                    "input",
+                    "result",
+                    "output",
+                }:
                     continue
                 if isinstance(nested, dict):
                     containers.append(nested)
@@ -463,7 +477,9 @@ class StderrDiagnostics:
     def excerpts(self) -> list[str]:
         return [*self.leading_excerpts, *self.trailing_excerpts]
 
-    def _consume_line(self, raw_line: bytes, truncated: bool = False) -> list[dict[str, str]]:
+    def _consume_line(
+        self, raw_line: bytes, truncated: bool = False
+    ) -> list[dict[str, str]]:
         text = raw_line.decode("utf-8", errors="replace")
         if truncated:
             text += " [line truncated]"
@@ -523,7 +539,9 @@ class StderrDiagnostics:
     def finish(self) -> list[dict[str, str]]:
         if not self.buffer:
             return []
-        added = self._consume_line(bytes(self.buffer), truncated=self.discarding_long_line)
+        added = self._consume_line(
+            bytes(self.buffer), truncated=self.discarding_long_line
+        )
         self.buffer.clear()
         return added
 
@@ -538,10 +556,71 @@ def prune_diagnostic_logs(state_dir: Path, preserve: Path | None = None) -> None
     max_files = MAX_DIAGNOSTIC_FILES - 1 if preserve else MAX_DIAGNOSTIC_FILES
     for index, path in enumerate(logs):
         try:
-            if now - path.stat().st_mtime > MAX_DIAGNOSTIC_AGE_SECONDS or index >= max_files:
+            if (
+                now - path.stat().st_mtime > MAX_DIAGNOSTIC_AGE_SECONDS
+                or index >= max_files
+            ):
                 path.unlink(missing_ok=True)
         except OSError:
             continue
+
+
+def ensure_private_state_directory(path: Path) -> None:
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    if not getattr(os, "O_DIRECTORY", 0) or not getattr(os, "O_NOFOLLOW", 0):
+        raise OSError("safe state directory flags are unavailable")
+    descriptor = os.open(path, flags)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+            raise OSError("unsafe state directory owner or type")
+        os.fchmod(descriptor, 0o700)
+    finally:
+        os.close(descriptor)
+
+
+def open_lock_file(path: Path):
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    if not getattr(os, "O_NOFOLLOW", 0):
+        raise OSError("safe lock file flags are unavailable")
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(path, flags, 0o600)
+    try:
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+        ):
+            raise OSError("unsafe lock file owner or type")
+        os.fchmod(descriptor, 0o600)
+        return os.fdopen(descriptor, "r+")
+    except Exception:
+        os.close(descriptor)
+        raise
+
+
+def acquire_file_lock(path: Path, *, nonblocking: bool):
+    handle = open_lock_file(path)
+    operation = fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0)
+    try:
+        fcntl.flock(handle.fileno(), operation)
+    except Exception:
+        handle.close()
+        raise
+    return handle
+
+
+def prune_diagnostics_safely(state_dir: Path) -> None:
+    try:
+        lock = acquire_file_lock(state_dir / "diagnostics.lock", nonblocking=False)
+    except OSError:
+        return
+    try:
+        prune_diagnostic_logs(state_dir)
+    finally:
+        lock.close()
 
 
 def _log_mtime(path: Path) -> float:
@@ -551,9 +630,24 @@ def _log_mtime(path: Path) -> float:
         return 0
 
 
-def save_failure_diagnostics(state_dir: Path, pid: int, diagnostics: StderrDiagnostics) -> Path | None:
+def save_failure_diagnostics(
+    state_dir: Path, pid: int, diagnostics: StderrDiagnostics
+) -> Path | None:
     if not diagnostics.excerpts:
         return None
+    try:
+        lock = acquire_file_lock(state_dir / "diagnostics.lock", nonblocking=False)
+    except OSError:
+        return None
+    try:
+        return _save_failure_diagnostics_locked(state_dir, pid, diagnostics)
+    finally:
+        lock.close()
+
+
+def _save_failure_diagnostics_locked(
+    state_dir: Path, pid: int, diagnostics: StderrDiagnostics
+) -> Path | None:
     prune_diagnostic_logs(state_dir)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     path = state_dir / f"cursor-stderr-{timestamp}-{pid}.log"
@@ -589,22 +683,42 @@ def main() -> int:
         print("[delegate-cursor] heartbeat interval must be positive", file=sys.stderr)
         return 2
 
-    checkout = Path(args.checkout).resolve()
+    try:
+        checkout = Path(args.checkout).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError):
+        print("[delegate-cursor] workspace path could not be resolved", file=sys.stderr)
+        return 2
+    if not checkout.is_dir():
+        print("[delegate-cursor] workspace is not a directory", file=sys.stderr)
+        return 2
     key = hashlib.sha256(os.fsencode(checkout)).hexdigest()
     state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
     state_dir = state_root / "receipt-manager" / "delegate-cursor"
-    state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(state_dir, 0o700)
-    prune_diagnostic_logs(state_dir)
+    try:
+        ensure_private_state_directory(state_dir)
+    except OSError:
+        print(
+            "[delegate-cursor] secure lock storage is unavailable; Cursor was not started",
+            file=sys.stderr,
+        )
+        return 5
     status_path = state_dir / f"{key}.json"
     lock_path = state_dir / f"{key}.lock"
-    lock = lock_path.open("a", encoding="utf-8")
-    os.chmod(lock_path, 0o600)
     try:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock = acquire_file_lock(lock_path, nonblocking=True)
     except BlockingIOError:
-        print("[delegate-cursor] worker already active for this checkout; refusing duplicate run", file=sys.stderr)
+        print(
+            "[delegate-cursor] worker already active for this workspace; refusing duplicate run",
+            file=sys.stderr,
+        )
         return 4
+    except OSError:
+        print(
+            "[delegate-cursor] workspace lock could not be acquired; Cursor was not started",
+            file=sys.stderr,
+        )
+        return 5
+    prune_diagnostics_safely(state_dir)
 
     started_at = utc_now()
     started_mono = time.monotonic()
@@ -686,7 +800,9 @@ def main() -> int:
         nonlocal assistant_updates_reported
         if assistant_update_count == assistant_updates_reported:
             return
-        print(f"[delegate-cursor] assistant_updates: {assistant_update_count}", flush=True)
+        print(
+            f"[delegate-cursor] assistant_updates: {assistant_update_count}", flush=True
+        )
         assistant_updates_reported = assistant_update_count
 
     update()
@@ -694,7 +810,9 @@ def main() -> int:
     print(f"[delegate-cursor] tier/model: {args.tier}/{args.model}", flush=True)
     print(f"[delegate-cursor] status: {status_path}", flush=True)
 
-    old_handlers = {sig: signal.signal(sig, on_signal) for sig in (signal.SIGINT, signal.SIGTERM)}
+    old_handlers = {
+        sig: signal.signal(sig, on_signal) for sig in (signal.SIGINT, signal.SIGTERM)
+    }
     try:
         try:
             child = subprocess.Popen(
@@ -708,7 +826,10 @@ def main() -> int:
             )
         except OSError:
             update(process_exit_code=127, outcome="failed")
-            print("[delegate-cursor] Cursor process could not be started (details suppressed)", flush=True)
+            print(
+                "[delegate-cursor] Cursor process could not be started (details suppressed)",
+                flush=True,
+            )
             return 127
         pid = child.pid
         update(pid=pid)
@@ -731,9 +852,14 @@ def main() -> int:
                     pass
                 outcome = "interrupted"
                 update(outcome=outcome)
-                print(f"[delegate-cursor] interruption requested (signal {interrupted_signal}); waiting for worker exit", flush=True)
+                print(
+                    f"[delegate-cursor] interruption requested (signal {interrupted_signal}); waiting for worker exit",
+                    flush=True,
+                )
 
-            for key_event, _ in selector.select(timeout=min(1.0, max(0.0, next_heartbeat - now))):
+            for key_event, _ in selector.select(
+                timeout=min(1.0, max(0.0, next_heartbeat - now))
+            ):
                 stream = key_event.fileobj
                 chunk = os.read(stream.fileno(), 65536)
                 if not chunk:
@@ -768,7 +894,10 @@ def main() -> int:
                     quiet = _is_coalesced_event(event, last_event_subtype)
                     phase = None if quiet else tool_phase(event, last_event_subtype)
                     if isinstance(event, dict):
-                        if event.get("type") == "system" and event.get("subtype") == "init":
+                        if (
+                            event.get("type") == "system"
+                            and event.get("subtype") == "init"
+                        ):
                             raw_session_id = event.get("session_id")
                             if isinstance(raw_session_id, str) and re.fullmatch(
                                 r"[A-Za-z0-9_-]{1,200}", raw_session_id
@@ -777,13 +906,21 @@ def main() -> int:
                         if event.get("type") == "result":
                             raw_status = event.get("subtype")
                             if isinstance(raw_status, str):
-                                result_status = raw_status if raw_status in {"success", "error"} else "other"
+                                result_status = (
+                                    raw_status
+                                    if raw_status in {"success", "error"}
+                                    else "other"
+                                )
                             elif isinstance(event.get("is_error"), bool):
-                                result_status = "error" if event["is_error"] else "completed"
+                                result_status = (
+                                    "error" if event["is_error"] else "completed"
+                                )
                             raw_is_error = event.get("is_error")
-                            result_is_error = raw_is_error if isinstance(raw_is_error, bool) else None
-                            worker_result_text, worker_result_truncated = capture_result_text(
-                                event.get("result")
+                            result_is_error = (
+                                raw_is_error if isinstance(raw_is_error, bool) else None
+                            )
+                            worker_result_text, worker_result_truncated = (
+                                capture_result_text(event.get("result"))
                             )
                         if phase is not None:
                             if phase == TOOL_PHASE_STARTED:
@@ -842,7 +979,9 @@ def main() -> int:
                     unparsed_line_count=malformed_lines,
                 )
                 assistant_note = (
-                    f"、assistant_updates={assistant_update_count}" if assistant_update_count else ""
+                    f"、assistant_updates={assistant_update_count}"
+                    if assistant_update_count
+                    else ""
                 )
                 print(
                     f"[delegate-cursor] 稼働中、最終操作: {operation}、{idle}秒無出力{assistant_note}（heartbeatはworkerの進捗を保証しません）",
@@ -872,7 +1011,9 @@ def main() -> int:
         else:
             outcome = "failed"
         if outcome in {"failed", "interrupted"}:
-            stderr_diagnostic_log = save_failure_diagnostics(state_dir, pid, stderr_diagnostics)
+            stderr_diagnostic_log = save_failure_diagnostics(
+                state_dir, pid, stderr_diagnostics
+            )
         update(
             process_exit_code=exit_code,
             result_status=result_status,
@@ -886,18 +1027,29 @@ def main() -> int:
             last_event_idle_seconds=int(time.monotonic() - last_event_mono),
             stderr_bytes_read=stderr_bytes,
             stderr_error_events=list(stderr_diagnostics.error_events),
-            stderr_diagnostic_log=str(stderr_diagnostic_log) if stderr_diagnostic_log else None,
+            stderr_diagnostic_log=str(stderr_diagnostic_log)
+            if stderr_diagnostic_log
+            else None,
             unparsed_line_count=malformed_lines,
         )
         flush_assistant_summary()
         print(f"[delegate-cursor] exit_code: {exit_code}", flush=True)
-        print(f"[delegate-cursor] result_status: {result_status or 'missing'}", flush=True)
+        print(
+            f"[delegate-cursor] result_status: {result_status or 'missing'}", flush=True
+        )
         print(f"[delegate-cursor] outcome: {outcome}", flush=True)
         print(f"[delegate-cursor] stderr bytes read: {stderr_bytes}", flush=True)
         if stderr_diagnostic_log:
-            print(f"[delegate-cursor] sanitized stderr diagnostics: {stderr_diagnostic_log}", flush=True)
+            print(
+                f"[delegate-cursor] sanitized stderr diagnostics: {stderr_diagnostic_log}",
+                flush=True,
+            )
         emit_worker_report(worker_result_text, input_truncated=worker_result_truncated)
-        return (128 + interrupted_signal) if interrupted_signal is not None else (0 if outcome == "succeeded" else (exit_code or 1))
+        return (
+            (128 + interrupted_signal)
+            if interrupted_signal is not None
+            else (0 if outcome == "succeeded" else (exit_code or 1))
+        )
     finally:
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)

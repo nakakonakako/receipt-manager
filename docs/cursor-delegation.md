@@ -115,6 +115,14 @@ run in parallel, the checkout is dirty, edits are concurrent, or a large or
 risky change needs isolation. Existing worktrees in other locations are not
 moved or removed automatically.
 
+The delegation monitor locks the canonical path of the workspace passed to
+Cursor. Duplicate delegation to the same workspace is rejected, including
+requests that use a relative path or symlink; distinct worktrees can run
+concurrently. Direct delegation to the standard checkout is protected by its
+own workspace lock. Lock and per-workspace status files are stored under the
+private `~/.local/state/receipt-manager/delegate-cursor/` directory (or the
+configured `XDG_STATE_HOME`).
+
 Do not use `--allow-dirty` as a shortcut. It is only appropriate when mixing
 changes is intentional and explicitly approved by the supervisor or user.
 
