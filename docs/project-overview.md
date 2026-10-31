@@ -390,6 +390,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-31 | worktree環境リンク検証をPython化し、直接絶対symlinkの検証を3段階で実行 |
 | 2026-10-31 | 共有Dev/Prod Writerの現行状態に合わせ、旧本番apply/bootstrap説明と旧Production Writer Secretの保持条件を更新 |
 | 2026-10-28 | receipt-managerのDB互換性契約v1とv1検証外の統合テスト対象を追加 |
 | 2026-10-23 | worktree削除前後にcwdベースの稼働プロセス検査を追加 |

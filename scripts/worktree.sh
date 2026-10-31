@@ -8,7 +8,7 @@ Usage:
   scripts/worktree.sh create <task-name> --branch <branch> [--base <ref>] [--environment <name>] [--no-setup]
   scripts/worktree.sh reuse <path> [--environment <name>] [--no-setup]
   scripts/worktree.sh setup [path] [--environment <name>] [--env-only]
-  scripts/worktree.sh validate-env <path>
+  scripts/worktree.sh validate-env <path> [--environment <name>]
   scripts/worktree.sh remove <path>
 
 Worktrees are stored under ~/worktrees/<repository-name>/<task-name>.
@@ -112,44 +112,12 @@ validate_environment_links() {
   local target_path="$1"
   local validation_environment="$2"
   local allow_missing_managed_links="$3"
-  local source_dir="$HOME/.config/$repo_name/$validation_environment"
-  local relative_path source_path target_file
-
-  for relative_path in .env frontend/.env frontend/.env.local backend/.env; do
-    source_path="$source_dir/$relative_path"
-    target_file="$target_path/$relative_path"
-
-    if [[ -e "$source_path" || -L "$source_path" ]]; then
-      [[ -f "$source_path" && ! -L "$source_path" ]] \
-        || die "Selected environment source is not a regular file: $relative_path"
-      if [[ "$allow_missing_managed_links" -eq 1 && ! -e "$target_file" && ! -L "$target_file" ]]; then
-        continue
-      fi
-      [[ -L "$target_file" ]] \
-        || die "Expected development environment symlink is missing or is not a symlink: $relative_path"
-      [[ -e "$target_file" ]] \
-        || die "Broken development environment symlink: $relative_path"
-      [[ "$(readlink "$target_file")" == "$source_path" ]] \
-        || die "Environment symlink does not point to selected environment settings: $relative_path"
-    else
-      [[ ! -e "$target_file" && ! -L "$target_file" ]] \
-        || die "Unexpected environment file without a development source: $relative_path"
-    fi
-  done
-
-  local directory candidate relative_candidate
-  for directory in "$target_path" "$target_path/frontend" "$target_path/backend" \
-    "$target_path/backend/app" "$target_path/backend/app/services"; do
-    [[ -d "$directory" ]] || continue
-    for candidate in "$directory"/.env*; do
-      [[ -e "$candidate" || -L "$candidate" ]] || continue
-      relative_candidate="${candidate#"$target_path"/}"
-      case "$relative_candidate" in
-        .env|frontend/.env|frontend/.env.local|backend/.env) ;;
-        *) die "Unexpected .env-related path in Cursor workspace: $relative_candidate" ;;
-      esac
-    done
-  done
+  local mode="strict"
+  [[ "$allow_missing_managed_links" -eq 1 ]] && mode="pre"
+  python3 "$script_directory/worktree-env-validate.py" \
+    "$mode" "$target_path" \
+    --environment "$validation_environment" \
+    --repository "$repo_name"
 }
 
 setup_dependencies() {
@@ -294,10 +262,20 @@ case "$command_name" in
     setup_worktree "$target_path" "$@"
     ;;
   validate-env)
-    [[ $# -eq 1 ]] || die 'validate-env requires one worktree path.'
-    target_path="$(canonical_worktree "$1")"
-    validate_environment_links "$target_path" development 0
-    printf '[worktree] Environment links validated for development settings.\n'
+    [[ $# -ge 1 ]] || die 'validate-env requires one worktree path.'
+    target_path="$1"
+    shift
+    validation_environment="development"
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --environment) validation_environment="${2:?missing value for --environment}"; shift 2 ;;
+        *) die "Unknown validate-env option: $1" ;;
+      esac
+    done
+    validate_environment_name "$validation_environment"
+    target_path="$(canonical_worktree "$target_path")"
+    validate_environment_links "$target_path" "$validation_environment" 0
+    printf '[worktree] Environment links validated for %s settings.\n' "$validation_environment"
     ;;
   remove)
     [[ $# -eq 1 ]] || die "remove requires exactly one path."

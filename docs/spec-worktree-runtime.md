@@ -1,5 +1,31 @@
 # Worktree runtime and db:plan
 
+## Worktree environment link validation
+
+`scripts/worktree.sh` remains responsible for Git operations, dependency setup,
+and creating environment links. It invokes `scripts/worktree-env-validate.py`
+for both pre-setup and strict checks. The sequence is:
+
+1. Validate existing paths in `pre` mode before `npm ci` or `uv sync`. Missing
+   links are allowed for a new worktree; malformed or unexpected paths stop
+   setup.
+2. Create only configured links, without replacing existing paths.
+3. Validate in `strict` mode after link setup.
+4. Validate in `strict` mode again immediately before starting Cursor.
+
+The managed files are `.env`, `frontend/.env`, `frontend/.env.local`, and
+`backend/.env`. The validator checks receipt-manager's dotenv lookup
+directories: the repository root, `frontend`, `backend`, `backend/app`, and
+`backend/app/services`. It reads path metadata only, never environment values.
+Settings path components and dotenv lookup directories must not be symlinks.
+Configured source files must be regular files, not symlinks.
+
+Each managed workspace link must itself be a symlink and its direct
+`readlink` value must equal the expected absolute settings path. A relative link
+or an indirect symlink is rejected even if resolving it reaches the same file.
+Validation never removes, overwrites, or repairs an existing path. Resolve
+failures manually and rerun setup.
+
 ## Managed backend virtual environment
 
 - Worktree setup (`scripts/worktree.sh` setup / create without `--no-setup`) installs
