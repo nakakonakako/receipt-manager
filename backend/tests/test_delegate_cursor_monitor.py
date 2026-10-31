@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import re
@@ -16,6 +17,12 @@ import unittest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MONITOR = REPO_ROOT / "scripts" / "delegate-cursor-monitor.py"
+_MONITOR_SPEC = importlib.util.spec_from_file_location(
+    "delegate_cursor_monitor", MONITOR
+)
+assert _MONITOR_SPEC is not None and _MONITOR_SPEC.loader is not None
+MONITOR_MODULE = importlib.util.module_from_spec(_MONITOR_SPEC)
+_MONITOR_SPEC.loader.exec_module(MONITOR_MODULE)
 
 
 class DelegateCursorMonitorTests(unittest.TestCase):
@@ -96,6 +103,101 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             end_at += 1
         return stdout[start:end_at]
 
+    def test_bounded_stdout_lines_accept_limit_and_recover_after_oversize(self) -> None:
+        limit = MONITOR_MODULE.MAX_EVENT_BYTES
+        prefix = b'{"type":"system","subtype":"init","padding":"'
+        suffix = b'"}'
+        exact = prefix + (b"x" * (limit - len(prefix) - len(suffix))) + suffix
+        self.assertEqual(len(exact), limit)
+        reader = MONITOR_MODULE.BoundedStdoutLines()
+        lines = []
+        for offset in range(0, len(exact), 65536):
+            lines.extend(reader.feed(exact[offset : offset + 65536]))
+            self.assertLessEqual(reader.buffered_bytes, limit)
+        self.assertEqual(lines, [])
+        lines.extend(reader.feed(b"\n"))
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(len(lines[0]), limit)
+        self.assertEqual(json.loads(lines[0])["type"], "system")
+        self.assertEqual(reader.oversized_lines, 0)
+
+        exact_crlf = MONITOR_MODULE.BoundedStdoutLines()
+        self.assertEqual(list(exact_crlf.feed(exact + b"\r")), [])
+        self.assertEqual(exact_crlf.buffered_bytes, limit)
+        crlf_exact_lines = list(exact_crlf.feed(b"\n"))
+        self.assertEqual(len(crlf_exact_lines), 1)
+        self.assertEqual(len(crlf_exact_lines[0]), limit)
+
+        below_limit = MONITOR_MODULE.BoundedStdoutLines()
+        below = b'{"type":"system"}'
+        self.assertEqual(list(below_limit.feed(below + b"\n")), [below])
+
+        crlf = MONITOR_MODULE.BoundedStdoutLines()
+        crlf_lines = list(crlf.feed(b'{"type":"system"}\r\n'))
+        self.assertEqual(json.loads(crlf_lines[0])["type"], "system")
+
+        next_event = b'{"type":"result","subtype":"success"}\r\n'
+        recovered = list(reader.feed(b"x" * (limit + 1) + b"\n" + next_event))
+        self.assertEqual(recovered, [next_event[:-2]])
+        self.assertEqual(reader.oversized_lines, 1)
+        self.assertLessEqual(reader.buffered_bytes, limit)
+
+    def test_bounded_stdout_lines_count_unterminated_oversize_and_parse_final_json(
+        self,
+    ) -> None:
+        reader = MONITOR_MODULE.BoundedStdoutLines()
+        list(reader.feed(b"z" * (MONITOR_MODULE.MAX_EVENT_BYTES + 1)))
+        self.assertEqual(reader.buffered_bytes, 0)
+        self.assertEqual(reader.oversized_lines, 1)
+        self.assertEqual(list(reader.finish()), [])
+        self.assertEqual(reader.oversized_lines, 1)
+
+        final = MONITOR_MODULE.BoundedStdoutLines()
+        list(final.feed(b'{"type":"result","subtype":"success"}'))
+        pending = list(final.finish())
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(json.loads(pending[0])["subtype"], "success")
+
+    def test_status_snapshot_updates_are_memory_only_until_checkpoint(self) -> None:
+        writes: list[dict[str, object]] = []
+        snapshot = MONITOR_MODULE.StatusSnapshot(
+            {}, lambda data: writes.append(data.copy())
+        )
+        for index in range(500):
+            snapshot.update(last_event_type="tool_call", event_count=index)
+        self.assertEqual(writes, [])
+        snapshot.persist()
+        self.assertEqual(len(writes), 1)
+        self.assertEqual(writes[0]["event_count"], 499)
+
+    def test_stream_events_are_persisted_at_heartbeat_and_exit_not_per_event(
+        self,
+    ) -> None:
+        observed = self.root / "status-during-events.json"
+        agent = self.fake_agent(
+            "import hashlib,json,os,time\nfrom pathlib import Path\n"
+            "checkout=Path.cwd().resolve()\n"
+            "key=hashlib.sha256(os.fsencode(checkout)).hexdigest()\n"
+            "status=Path(os.environ['XDG_STATE_HOME'])/'receipt-manager'/'delegate-cursor'/f'{key}.json'\n"
+            "for _ in range(120): print(json.dumps({'type':'assistant','subtype':'delta','message':'PRIVATE'}))\n"
+            "time.sleep(.2)\n"
+            "Path(os.environ['OBSERVED_STATUS']).write_text(json.dumps(json.loads(status.read_text())))\n"
+            "print(json.dumps({'type':'result','subtype':'success'}),flush=True)\n"
+        )
+        result = self.run_agent(
+            agent,
+            "--heartbeat-seconds",
+            "1",
+            env_updates={"OBSERVED_STATUS": str(observed)},
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        during_events = json.loads(observed.read_text())
+        self.assertEqual(during_events["last_event_type"], "none")
+        self.assertEqual(during_events["assistant_update_count"], 0)
+        final_status = self.status()
+        self.assertEqual(final_status["assistant_update_count"], 120)
+        self.assertEqual(final_status["result_status"], "success")
+
     def test_success_keeps_only_minimal_metadata(self) -> None:
         agent = self.fake_agent(
             "import json,sys\n"
@@ -140,6 +242,112 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             ),
             [],
         )
+
+    def test_oversized_stdout_record_is_discarded_and_next_result_is_parsed(
+        self,
+    ) -> None:
+        agent = self.fake_agent(
+            "import sys\n"
+            "sys.stdout.buffer.write(b'{\"type\":\"assistant\",\"message\":\"' + b'PRIVATE_SENTINEL' + b'x' * (300 * 1024) + b'\\\"}\\n')\n"
+            'sys.stdout.buffer.write(b\'{"type":"result","subtype":"success","result":"done"}\\n\')\n'
+            "sys.stdout.flush()\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("oversized_stream_lines: 1", result.stdout)
+        self.assertIn("result_status: success", result.stdout)
+        self.assertNotIn("PRIVATE_SENTINEL", result.stdout + result.stderr)
+
+    def test_oversized_unterminated_result_is_counted_and_not_treated_as_success(
+        self,
+    ) -> None:
+        agent = self.fake_agent(
+            "import sys\n"
+            'sys.stdout.buffer.write(b\'{"type":"result","subtype":"success","result":"\' + b\'x\' * (300 * 1024))\n'
+            "sys.stdout.flush()\n"
+        )
+        result = self.run_agent(agent)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("oversized_stream_lines: 1", result.stdout)
+        self.assertIn('"outcome":"failed"', self.status_text())
+
+    def test_malformed_and_unknown_stream_content_is_not_printed(self) -> None:
+        agent = self.fake_agent(
+            "import json\n"
+            "print('MALFORMED_PRIVATE_SENTINEL {', flush=True)\n"
+            "print(json.dumps({'type':'private_unknown','body':'UNKNOWN_PRIVATE_SENTINEL'}), flush=True)\n"
+            "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("MALFORMED_PRIVATE_SENTINEL", result.stdout + result.stderr)
+        self.assertNotIn("UNKNOWN_PRIVATE_SENTINEL", result.stdout + result.stderr)
+
+    def test_progress_output_is_bounded_and_final_report_is_not_suppressed(
+        self,
+    ) -> None:
+        agent = self.fake_agent(
+            "import json\n"
+            "for index in range(400):\n"
+            " print(json.dumps({'type':'tool_call','subtype':'started','call_id':str(index),'shellToolCall':{}}))\n"
+            "print(json.dumps({'type':'result','subtype':'success','result':'1. root cause / implementation intent\\nimplemented\\n2. verification performed and results\\nVERIFICATION RESULTS\\nCOVERAGE: COMPLETE\\nPASS: mock worker — returned success\\nEND VERIFICATION RESULTS'}))\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        progress_lines = [
+            line
+            for line in result.stdout.splitlines()
+            if line.startswith(
+                (
+                    "[delegate-cursor] event:",
+                    "[delegate-cursor] tool:",
+                    "[delegate-cursor] assistant_updates:",
+                    "[delegate-cursor] 稼働中、",
+                    "[delegate-cursor] stderr_error:",
+                )
+            )
+        ]
+        self.assertLessEqual(len(progress_lines), 300)
+        self.assertRegex(result.stdout, r"progress_lines_suppressed: [1-9][0-9]*")
+        self.assertIn(
+            "verification PASS: mock worker", self.report_block(result.stdout)
+        )
+        self.assertIn("outcome: succeeded", result.stdout)
+
+    def test_initial_status_save_failure_prevents_worker_start(self) -> None:
+        key = hashlib.sha256(os.fsencode(self.checkout.resolve())).hexdigest()
+        status_path = (
+            self.state_home / "receipt-manager" / "delegate-cursor" / f"{key}.json"
+        )
+        status_path.parent.mkdir(parents=True)
+        status_path.mkdir()
+        marker = self.checkout / "worker-started"
+        agent = self.fake_agent(
+            "from pathlib import Path\nPath('worker-started').touch()\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 5, result.stdout + result.stderr)
+        self.assertFalse(marker.exists())
+
+    def test_post_start_status_save_failure_does_not_stop_monitoring(self) -> None:
+        agent = self.fake_agent(
+            "import hashlib,json,os,time\nfrom pathlib import Path\n"
+            "checkout=Path.cwd().resolve()\n"
+            "key=hashlib.sha256(os.fsencode(checkout)).hexdigest()\n"
+            "status=Path(os.environ['XDG_STATE_HOME'])/'receipt-manager'/'delegate-cursor'/f'{key}.json'\n"
+            "deadline=time.monotonic()+5\n"
+            "while time.monotonic()<deadline:\n"
+            " try:\n"
+            "  if json.loads(status.read_text())['pid'] is not None: break\n"
+            " except (FileNotFoundError,json.JSONDecodeError): pass\n"
+            " time.sleep(.01)\n"
+            "status.unlink()\nstatus.mkdir()\n"
+            "print(json.dumps({'type':'result','subtype':'success'}),flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("status storage became unavailable", result.stdout)
+        self.assertIn("outcome: succeeded", result.stdout)
 
     def test_failure_classifies_and_scrubs_bounded_stderr_diagnostics(self) -> None:
         agent = self.fake_agent(

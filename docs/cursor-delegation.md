@@ -132,6 +132,34 @@ private regular files. State storage failures before launch prevent Cursor
 from starting; a status write failure after launch is reported while worker
 monitoring and signal cleanup continue.
 
+## Monitor stream, progress, and status bounds
+
+Each stdout stream-json record is limited to 256 KiB by byte count. An
+oversized record is discarded through its next newline and counted once; parsing
+resumes with the next record. An unterminated final record within the limit is
+parsed, including CRLF-delimited records. Malformed JSON and unknown event
+contents are never printed. The final worker report retains its separate 64 KiB
+input and 4 KiB output limits.
+
+Ordinary progress output is capped at 300 lines across event and tool notices,
+assistant update summaries, heartbeat messages, and stderr category notices.
+Excess lines are counted and reported in the final summary. Startup and safety
+failures, signal/interruption notices, status storage errors, final state and
+exit code, and the verification report are not suppressed.
+
+Status JSON keeps its existing filename and fields. It is saved before worker
+startup, after startup, when a signal arrives, at each heartbeat, and when the
+worker exits. Events and stderr chunks update the in-memory snapshot and do not
+trigger individual status writes. The default heartbeat interval is 30 seconds;
+it indicates that the monitor is alive and does not guarantee worker progress.
+
+Raw stderr is never saved or displayed. On failure or interruption, a
+best-effort diagnostic excerpt may be saved after secret redaction, limited to
+12 lines and 8 KiB. At most 20 diagnostic files are retained for 7 days. The
+redaction is best-effort, so these bounded excerpts remain sensitive diagnostic
+data. If diagnostic persistence fails, worker result classification and
+cleanup are unchanged.
+
 Do not use `--allow-dirty` as a shortcut. It is only appropriate when mixing
 changes is intentional and explicitly approved by the supervisor or user.
 

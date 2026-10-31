@@ -18,9 +18,12 @@ import sys
 import time
 import uuid
 from datetime import datetime, timezone
+from typing import Callable, Iterator
 
 
 HEARTBEAT_SECONDS = 30
+MAX_EVENT_BYTES = 256 * 1024
+MAX_PROGRESS_LINES = 300
 EVENT_TYPES = {"system", "assistant", "tool_call", "result"}
 EVENT_SUBTYPES = {
     "init",
@@ -151,6 +154,123 @@ SECRET_PATTERNS = (
     re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
 )
 _interrupted: int | None = None
+
+
+class BoundedStdoutLines:
+    """Yield newline-delimited records without retaining oversized rows."""
+
+    def __init__(self, max_bytes: int = MAX_EVENT_BYTES) -> None:
+        self.max_bytes = max_bytes
+        self.buffer = bytearray()
+        self.discarding = False
+        self.pending_cr = False
+        self.oversized_lines = 0
+
+    @property
+    def buffered_bytes(self) -> int:
+        return len(self.buffer)
+
+    def feed(self, chunk: bytes) -> Iterator[bytes]:
+        remaining = chunk
+        while remaining:
+            if self.discarding:
+                newline = remaining.find(b"\n")
+                if newline < 0:
+                    return
+                remaining = remaining[newline + 1 :]
+                self.discarding = False
+                continue
+
+            newline = remaining.find(b"\n")
+            end = len(remaining) if newline < 0 else newline
+            segment = remaining[:end]
+            has_newline = newline >= 0
+            if self.pending_cr:
+                if not (has_newline and not segment):
+                    segment = b"\r" + segment
+                self.pending_cr = False
+            if has_newline and segment.endswith(b"\r"):
+                segment = segment[:-1]
+            elif not has_newline and segment.endswith(b"\r"):
+                segment = segment[:-1]
+                self.pending_cr = True
+            if len(self.buffer) + len(segment) > self.max_bytes:
+                self.buffer.clear()
+                self.pending_cr = False
+                self.oversized_lines += 1
+                self.discarding = not has_newline
+                if has_newline:
+                    remaining = remaining[newline + 1 :]
+                    continue
+                return
+
+            self.buffer.extend(segment)
+            if not has_newline:
+                return
+            yield bytes(self.buffer)
+            self.buffer.clear()
+            self.pending_cr = False
+            remaining = remaining[newline + 1 :]
+
+    def finish(self) -> Iterator[bytes]:
+        if self.discarding:
+            self.discarding = False
+            return
+        if self.pending_cr:
+            if len(self.buffer) == self.max_bytes:
+                self.buffer.clear()
+                self.pending_cr = False
+                self.oversized_lines += 1
+                return
+            self.buffer.extend(b"\r")
+            self.pending_cr = False
+        if self.buffer:
+            if self.buffer.strip():
+                yield bytes(self.buffer)
+            self.buffer.clear()
+
+
+class StatusSnapshot:
+    """Separate in-memory event aggregation from durable checkpoint writes."""
+
+    def __init__(
+        self,
+        data: dict[str, object],
+        writer: Callable[[dict[str, object]], None],
+    ) -> None:
+        self.data = data
+        self.writer = writer
+
+    def update(self, **changes: object) -> None:
+        self.data.update(changes)
+
+    def persist(self) -> None:
+        self.writer(self.data)
+
+
+class ProgressOutput:
+    """Bound routine progress while allowing important/final notices through."""
+
+    def __init__(self, limit: int = MAX_PROGRESS_LINES) -> None:
+        self.limit = limit
+        self.emitted = 0
+        self.suppressed = 0
+
+    def emit(self, line: str, *, important: bool = False) -> None:
+        if important:
+            print(line, flush=True)
+        elif self.emitted < self.limit:
+            print(line, flush=True)
+            self.emitted += 1
+        else:
+            self.suppressed += 1
+
+    def report_suppressed(self) -> None:
+        if self.suppressed:
+            print(
+                f"[delegate-cursor] progress_lines_suppressed: {self.suppressed}",
+                flush=True,
+            )
 
 
 def utc_now() -> str:
@@ -302,7 +422,11 @@ def set_status(dir_fd: int, name: str, data: dict[str, object]) -> None:
     descriptor = os.open(temporary, flags, 0o600, dir_fd=dir_fd)
     try:
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+        ):
             raise OSError("unsafe status temporary file")
         os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
@@ -849,7 +973,11 @@ def _diagnostic_records(dir_fd: int) -> list[tuple[str, float]]:
 def prune_diagnostic_logs(dir_fd: int, preserve: str | None = None) -> None:
     now = time.time()
     logs = sorted(
-        ((name, modified) for name, modified in _diagnostic_records(dir_fd) if name != preserve),
+        (
+            (name, modified)
+            for name, modified in _diagnostic_records(dir_fd)
+            if name != preserve
+        ),
         key=lambda item: item[1],
         reverse=True,
     )
@@ -889,9 +1017,7 @@ def _open_state_directory(path: Path) -> int:
                     dir_fd=descriptor,
                 )
             info = os.fstat(next_descriptor)
-            root_sticky_parent = (
-                info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX)
-            )
+            root_sticky_parent = info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX)
             if not stat.S_ISDIR(info.st_mode) or (
                 info.st_uid not in {0, os.getuid()} and not root_sticky_parent
             ):
@@ -991,7 +1117,11 @@ def _save_failure_diagnostics_locked(
         descriptor = os.open(name, flags, 0o600, dir_fd=dir_fd)
         created = True
         info = os.fstat(descriptor)
-        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or info.st_uid != os.getuid()
+            or info.st_nlink != 1
+        ):
             raise OSError("unsafe diagnostic file")
         os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "wb") as handle:
@@ -1058,7 +1188,9 @@ def main() -> int:
             file=sys.stderr,
         )
         return 5
-    state_root = Path(state_root_value) if state_root_value else Path.home() / ".local/state"
+    state_root = (
+        Path(state_root_value) if state_root_value else Path.home() / ".local/state"
+    )
     state_dir = state_root / "receipt-manager" / "delegate-cursor"
     try:
         state_dir_fd = _open_state_directory(state_dir)
@@ -1152,23 +1284,30 @@ def main() -> int:
         "unparsed_line_count": 0,
     }
 
-    status_persistence_failed = False
+    status_warning_emitted = False
+    progress = ProgressOutput()
+    status_snapshot = StatusSnapshot(
+        data, lambda current: set_status(state_dir_fd, status_name, current)
+    )
 
     def update(**changes: object) -> None:
-        nonlocal status_persistence_failed
-        data.update(changes)
-        if status_persistence_failed:
-            return
+        status_snapshot.update(**changes)
+
+    def persist_status(*, required: bool = False) -> bool:
+        nonlocal status_warning_emitted
         try:
-            set_status(state_dir_fd, status_name, data)
+            status_snapshot.persist()
+            return True
         except OSError:
-            if pid is None:
+            if required:
                 raise
-            status_persistence_failed = True
-            print(
-                "[delegate-cursor] status storage became unavailable; continuing worker monitoring",
-                flush=True,
-            )
+            if pid is not None and not status_warning_emitted:
+                progress.emit(
+                    "[delegate-cursor] status storage became unavailable; continuing worker monitoring",
+                    important=True,
+                )
+                status_warning_emitted = True
+            return False
 
     def current_active() -> int:
         return len(active_call_ids) + anonymous_active
@@ -1193,16 +1332,93 @@ def main() -> int:
         nonlocal assistant_updates_reported
         if assistant_update_count == assistant_updates_reported:
             return
-        print(
-            f"[delegate-cursor] assistant_updates: {assistant_update_count}", flush=True
-        )
+        progress.emit(f"[delegate-cursor] assistant_updates: {assistant_update_count}")
         assistant_updates_reported = assistant_update_count
+
+    def process_stdout_line(raw_line: bytes) -> None:
+        nonlocal malformed_lines, last_event_type, last_event_subtype
+        nonlocal last_event_at, last_event_mono, session_id, result_status
+        nonlocal result_is_error, worker_result_text, worker_result_truncated
+        nonlocal active_tool_count, last_operation_category
+        nonlocal last_operation_status, last_operation_at, assistant_update_count
+        try:
+            event = json.loads(raw_line)
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            malformed_lines += 1
+            event = None
+        last_event_type, last_event_subtype = safe_event_name(event)
+        last_event_at = utc_now()
+        last_event_mono = time.monotonic()
+        quiet = _is_coalesced_event(event, last_event_subtype)
+        phase = None if quiet else tool_phase(event, last_event_subtype)
+        if isinstance(event, dict):
+            if event.get("type") == "system" and event.get("subtype") == "init":
+                raw_session_id = event.get("session_id")
+                if isinstance(raw_session_id, str) and re.fullmatch(
+                    r"[A-Za-z0-9_-]{1,200}", raw_session_id
+                ):
+                    session_id = raw_session_id
+            if event.get("type") == "result":
+                raw_status = event.get("subtype")
+                if isinstance(raw_status, str):
+                    result_status = (
+                        raw_status if raw_status in {"success", "error"} else "other"
+                    )
+                elif isinstance(event.get("is_error"), bool):
+                    result_status = "error" if event["is_error"] else "completed"
+                raw_is_error = event.get("is_error")
+                result_is_error = (
+                    raw_is_error if isinstance(raw_is_error, bool) else None
+                )
+                worker_result_text, worker_result_truncated = capture_result_text(
+                    event.get("result")
+                )
+            if phase is not None:
+                if phase == TOOL_PHASE_STARTED:
+                    note_tool_start(extract_call_id(event))
+                else:
+                    note_tool_finish(extract_call_id(event))
+                active_tool_count = current_active()
+                last_operation_category = tool_category(event)
+                last_operation_status = phase
+                last_operation_at = last_event_at
+        if quiet:
+            assistant_update_count += 1
+        update(
+            session_id=session_id,
+            last_event_type=last_event_type,
+            last_event_subtype=last_event_subtype,
+            last_event_at=last_event_at,
+            last_event_idle_seconds=0,
+            result_status=result_status,
+            result_is_error=result_is_error,
+            active_tool_count=active_tool_count,
+            last_operation_category=last_operation_category,
+            last_operation_status=last_operation_status,
+            last_operation_at=last_operation_at,
+            assistant_update_count=assistant_update_count,
+            stderr_bytes_read=stderr_bytes,
+            unparsed_line_count=malformed_lines,
+        )
+        if phase is not None:
+            flush_assistant_summary()
+            progress.emit(
+                f"[delegate-cursor] tool: {last_operation_category} {phase} at {last_event_at} active={active_tool_count}"
+            )
+        elif not quiet:
+            if last_event_type in {"system", "result"}:
+                flush_assistant_summary()
+            progress.emit(
+                f"[delegate-cursor] event: {last_event_type}"
+                f"{('/' + last_event_subtype) if last_event_subtype else ''} at {last_event_at}"
+            )
 
     old_handlers = {
         sig: signal.signal(sig, on_signal) for sig in (signal.SIGINT, signal.SIGTERM)
     }
     try:
         update()
+        persist_status(required=True)
     except OSError:
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)
@@ -1213,10 +1429,12 @@ def main() -> int:
             file=sys.stderr,
         )
         return 5
-    print(f"[delegate-cursor] started_at: {started_at}", flush=True)
-    print(f"[delegate-cursor] route: {args.route}", flush=True)
-    print(f"[delegate-cursor] tier/model: {args.tier}/{args.model}", flush=True)
-    print(f"[delegate-cursor] status: {status_path}", flush=True)
+    progress.emit(f"[delegate-cursor] started_at: {started_at}", important=True)
+    progress.emit(f"[delegate-cursor] route: {args.route}", important=True)
+    progress.emit(
+        f"[delegate-cursor] tier/model: {args.tier}/{args.model}", important=True
+    )
+    progress.emit(f"[delegate-cursor] status: {status_path}", important=True)
 
     try:
         try:
@@ -1231,20 +1449,22 @@ def main() -> int:
             )
         except OSError:
             update(process_exit_code=127, outcome="failed")
-            print(
+            persist_status()
+            progress.emit(
                 "[delegate-cursor] Cursor process could not be started (details suppressed)",
-                flush=True,
+                important=True,
             )
             return 127
         pid = child.pid
         update(pid=pid)
-        print(f"[delegate-cursor] pid: {pid}", flush=True)
+        persist_status()
+        progress.emit(f"[delegate-cursor] pid: {pid}", important=True)
 
         assert child.stdout is not None and child.stderr is not None
         selector = selectors.DefaultSelector()
         selector.register(child.stdout, selectors.EVENT_READ, "stdout")
         selector.register(child.stderr, selectors.EVENT_READ, "stderr")
-        stdout_buffer = bytearray()
+        stdout_lines = BoundedStdoutLines()
         next_heartbeat = time.monotonic() + args.heartbeat_seconds
 
         while selector.get_map() or child.poll() is None:
@@ -1257,9 +1477,10 @@ def main() -> int:
                     pass
                 outcome = "interrupted"
                 update(outcome=outcome)
-                print(
+                persist_status()
+                progress.emit(
                     f"[delegate-cursor] interruption requested (signal {interrupted_signal}); waiting for worker exit",
-                    flush=True,
+                    important=True,
                 )
 
             for key_event, _ in selector.select(
@@ -1279,95 +1500,12 @@ def main() -> int:
                         stderr_error_events=list(stderr_diagnostics.error_events),
                     )
                     for error in added_errors:
-                        print(
+                        progress.emit(
                             f"[delegate-cursor] stderr_error: {error['category']} at {error['occurred_at']}",
-                            flush=True,
                         )
                     continue
-                stdout_buffer.extend(chunk)
-                while b"\n" in stdout_buffer:
-                    raw_line, _, remainder = stdout_buffer.partition(b"\n")
-                    stdout_buffer = bytearray(remainder)
-                    try:
-                        event = json.loads(raw_line)
-                    except (json.JSONDecodeError, UnicodeDecodeError):
-                        malformed_lines += 1
-                        event = None
-                    last_event_type, last_event_subtype = safe_event_name(event)
-                    last_event_at = utc_now()
-                    last_event_mono = time.monotonic()
-                    quiet = _is_coalesced_event(event, last_event_subtype)
-                    phase = None if quiet else tool_phase(event, last_event_subtype)
-                    if isinstance(event, dict):
-                        if (
-                            event.get("type") == "system"
-                            and event.get("subtype") == "init"
-                        ):
-                            raw_session_id = event.get("session_id")
-                            if isinstance(raw_session_id, str) and re.fullmatch(
-                                r"[A-Za-z0-9_-]{1,200}", raw_session_id
-                            ):
-                                session_id = raw_session_id
-                        if event.get("type") == "result":
-                            raw_status = event.get("subtype")
-                            if isinstance(raw_status, str):
-                                result_status = (
-                                    raw_status
-                                    if raw_status in {"success", "error"}
-                                    else "other"
-                                )
-                            elif isinstance(event.get("is_error"), bool):
-                                result_status = (
-                                    "error" if event["is_error"] else "completed"
-                                )
-                            raw_is_error = event.get("is_error")
-                            result_is_error = (
-                                raw_is_error if isinstance(raw_is_error, bool) else None
-                            )
-                            worker_result_text, worker_result_truncated = (
-                                capture_result_text(event.get("result"))
-                            )
-                        if phase is not None:
-                            if phase == TOOL_PHASE_STARTED:
-                                note_tool_start(extract_call_id(event))
-                            else:
-                                note_tool_finish(extract_call_id(event))
-                            active_tool_count = current_active()
-                            last_operation_category = tool_category(event)
-                            last_operation_status = phase
-                            last_operation_at = last_event_at
-                    if quiet:
-                        assistant_update_count += 1
-                    update(
-                        session_id=session_id,
-                        last_event_type=last_event_type,
-                        last_event_subtype=last_event_subtype,
-                        last_event_at=last_event_at,
-                        last_event_idle_seconds=0,
-                        result_status=result_status,
-                        result_is_error=result_is_error,
-                        active_tool_count=active_tool_count,
-                        last_operation_category=last_operation_category,
-                        last_operation_status=last_operation_status,
-                        last_operation_at=last_operation_at,
-                        assistant_update_count=assistant_update_count,
-                        stderr_bytes_read=stderr_bytes,
-                        unparsed_line_count=malformed_lines,
-                    )
-                    if phase is not None:
-                        flush_assistant_summary()
-                        print(
-                            f"[delegate-cursor] tool: {last_operation_category} {phase} at {last_event_at} active={active_tool_count}",
-                            flush=True,
-                        )
-                    elif not quiet:
-                        if last_event_type in {"system", "result"}:
-                            flush_assistant_summary()
-                        print(
-                            f"[delegate-cursor] event: {last_event_type}"
-                            f"{('/' + last_event_subtype) if last_event_subtype else ''} at {last_event_at}",
-                            flush=True,
-                        )
+                for raw_line in stdout_lines.feed(chunk):
+                    process_stdout_line(raw_line)
 
             now = time.monotonic()
             if now >= next_heartbeat and child.poll() is None:
@@ -1383,14 +1521,14 @@ def main() -> int:
                     stderr_bytes_read=stderr_bytes,
                     unparsed_line_count=malformed_lines,
                 )
+                persist_status()
                 assistant_note = (
                     f"、assistant_updates={assistant_update_count}"
                     if assistant_update_count
                     else ""
                 )
-                print(
+                progress.emit(
                     f"[delegate-cursor] 稼働中、最終操作: {operation}、{idle}秒無出力{assistant_note}（heartbeatはworkerの進捗を保証しません）",
-                    flush=True,
                 )
                 next_heartbeat = now + args.heartbeat_seconds
 
@@ -1399,13 +1537,12 @@ def main() -> int:
             if child.poll() is not None and selector.get_map():
                 continue
 
-        if stdout_buffer.strip():
-            malformed_lines += 1
+        for raw_line in stdout_lines.finish():
+            process_stdout_line(raw_line)
         exit_code = child.wait()
         for error in stderr_diagnostics.finish():
-            print(
+            progress.emit(
                 f"[delegate-cursor] stderr_error: {error['category']} at {error['occurred_at']}",
-                flush=True,
             )
         if interrupted_signal is not None:
             outcome = "interrupted"
@@ -1437,19 +1574,29 @@ def main() -> int:
             else None,
             unparsed_line_count=malformed_lines,
         )
+        persist_status()
         flush_assistant_summary()
-        print(f"[delegate-cursor] exit_code: {exit_code}", flush=True)
-        print(
-            f"[delegate-cursor] result_status: {result_status or 'missing'}", flush=True
+        progress.emit(f"[delegate-cursor] exit_code: {exit_code}", important=True)
+        progress.emit(
+            f"[delegate-cursor] result_status: {result_status or 'missing'}",
+            important=True,
         )
-        print(f"[delegate-cursor] outcome: {outcome}", flush=True)
-        print(f"[delegate-cursor] stderr bytes read: {stderr_bytes}", flush=True)
+        progress.emit(f"[delegate-cursor] outcome: {outcome}", important=True)
+        progress.emit(
+            f"[delegate-cursor] stderr bytes read: {stderr_bytes}", important=True
+        )
+        if stdout_lines.oversized_lines:
+            progress.emit(
+                f"[delegate-cursor] oversized_stream_lines: {stdout_lines.oversized_lines}",
+                important=True,
+            )
         if stderr_diagnostic_log:
-            print(
+            progress.emit(
                 f"[delegate-cursor] sanitized stderr diagnostics: {stderr_diagnostic_log}",
-                flush=True,
+                important=True,
             )
         emit_worker_report(worker_result_text, input_truncated=worker_result_truncated)
+        progress.report_suppressed()
         return (
             (128 + interrupted_signal)
             if interrupted_signal is not None
