@@ -52,29 +52,36 @@ Run individual checks additionally when needed to investigate a failure.
 
 ## Database safety
 
-Do not run:
+Do not run `npm run db:push`. The command is disabled and exits before
+environment preparation, password prompts, or Supabase CLI calls. It does not
+connect to a hosted database or apply migrations.
 
-    npm run db:push
+shared-supabase-db owns the hosted migration inventory and Dev/Prod Writer
+application. receipt-manager owns application development and DB contract
+verification. Its legacy production apply and one-time Reader bootstrap
+workflows are removed. Do not apply migrations to a linked hosted project from
+this repository. New hosted migrations belong in shared-supabase-db and require
+separate approval there. Production app deployment runs only the pinned shared
+Reader gate and read-only integrity checks, and never applies migrations.
 
-unless the user explicitly requests a database push.
-
-Prefer creating/reviewing migrations separately from applying them to a linked project.
 Use `npm run db:plan` to find the official Reader-only migration plan workflow:
 https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml
 The local command does not query the Dev database and must not be described as
 a successful history check. `npm run db:list` lists receipt-manager's local
-migration files only; shared-supabase-db owns the migration inventory and Dev
-database history. Its Reader workflow is the official Dev migration plan
-check, and its protected Writer workflow owns Dev migration application.
-receipt-manager owns application development and DB contract verification.
-The legacy local `npm run db:push` command is disabled and exits before
-environment preparation, password prompts, or Supabase CLI calls.
-This code-path closure does not revoke or rotate previously issued database
-credentials. Direct Supabase CLI use or another client may still use a valid
-credential until it is rotated or revoked. Production deployment performs only
-the pinned shared Reader gate and read-only integrity checks; it does not apply
-migrations. The shared Production Writer has not completed environment setup and
-application validation.
+migration files only. shared-supabase-db's Reader workflow is the official Dev
+migration plan check, and its protected Writer workflows own Dev and Prod
+migration application. Dev and Prod Reader checks, and Writer credential
+read-only connection identity probes, have succeeded. Actual Dev and Prod
+PENDING migration apply remains unverified. A Dev `IN_SYNC` no-op is not proof
+that apply works. `DEV_DB_WRITER_ENABLED` and `PROD_DB_WRITER_ENABLED` stay
+false until a separately approved apply.
+
+Keep the existing receipt-manager Production Writer Secret until shared
+Production PENDING apply, Reader postflight, both apps' DB compatibility and
+production deployment success, and an audit confirming no old Writer reference
+paths. Deletion still requires separate approval. Do not print credential
+values. Disabling `db:push` does not delete that retained Secret. The Dev
+database password has been rotated and the old local Writer password removed.
 
 ## Git worktree and environment files
 
@@ -112,10 +119,14 @@ application validation.
   workflow for the official inventory/history. Neither command reads DB
   credentials, prepares Supabase CLI state, or connects remotely. The legacy
   local `npm run db:push` exits before environment preparation or any Supabase
-  CLI call. Shared-supabase-db owns Dev migration inventory, Reader plan checks,
-and protected Writer application; receipt-manager owns app development and
-DB contract verification. Production deployment uses the pinned shared Reader
-gate and never applies migrations. Outside these explicit DB commands, setup,
+  CLI call. shared-supabase-db owns the hosted migration inventory, Reader plan
+  checks, and protected Dev/Prod Writer application. receipt-manager owns app
+  development and DB contract verification. Its legacy production apply and
+  Reader bootstrap paths are removed. Production deployment uses the pinned
+  shared Reader gate and read-only integrity checks, and never applies
+  migrations. Dev/Prod Reader checks and Writer credential read-only identity
+  probes have succeeded. PENDING migration apply remains unverified, and a Dev
+  `IN_SYNC` no-op is not apply proof. Outside these explicit DB commands, setup,
   `npm run dev`, and `npm run check` do not link to Supabase or access a remote
   database.
   A symlink makes its target readable to any worker trusted with that workspace,

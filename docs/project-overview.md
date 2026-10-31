@@ -68,7 +68,7 @@ Supabase（Auth + Postgres + RLS）
 |----|------|------|
 | フロントエンド | `frontend/` | SPA。機能は `src/features/` 以下 |
 | バックエンド | `backend/app/` | FastAPI。Gemini / Supabase / CSV |
-| DB・Auth | `supabase/` / `db-contracts/` | Supabase設定・現行Writer経路のmigration files・アプリDB契約。共有migration正本はshared-supabase-db |
+| DB・Auth | `supabase/` / `db-contracts/` | Supabase設定、アプリ開発用migration files、アプリDB契約。hosted migration inventoryとDev/Prod Writer適用の正本はshared-supabase-db |
 | Nginx | `nginx-config/` | 静的配信 + `/api/` リバースプロキシ |
 | Compose | `docker-compose.production.yml` | 本番 FE + BE |
 | PR品質チェック | `.github/workflows/ci.yml` | `main` 向けPRの作成・更新・再オープン時に frontend ESLint/build/test、backend Ruff check/format、unittest を実行。読み取り権限のみで、Secrets・本番DB・Docker push・deploy は使わない |
@@ -148,10 +148,10 @@ GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions
 
 ## 5. データモデル（Supabase）
 
-共有DB migrationの正本は `shared-supabase-db/supabase/migrations/`。このリポジトリにはアプリ開発用のmigration filesを保持するが、DB全体の履歴判定には使わない。Dev migration適用はshared-supabase-dbのWriter workflowへ集約する構成で、receipt-managerの旧ローカルDev適用コマンドは停止済み。`DEV_DB_WRITER_ENABLED=false` の間はDevへのmigration適用も停止する。本番deployはshared Reader gateで共有履歴を検証し、migrationを適用しない。receipt-managerが必要とするDB契約は `db-contracts/receipt-manager.json`。
+hosted migration inventoryとDev/Prod Writer適用の正本は `shared-supabase-db/supabase/migrations/`。このリポジトリのmigration filesはアプリ開発用であり、DB全体の履歴判定には使わない。旧ローカルDev適用コマンド `npm run db:push` は停止済みで、DB接続やSupabase CLI呼び出しの前に終了する。`DEV_DB_WRITER_ENABLED` と `PROD_DB_WRITER_ENABLED` は `false`。shared WriterによるDev/ProdのPENDING migration実適用は未検証で、Dev historyが `IN_SYNC` のno-op成功は適用能力の証拠にならない。本番アプリdeployは固定SHAのshared Reader gateと読み取り専用integrityだけを実行し、migrationを適用しない。receipt-managerのDB契約は `db-contracts/receipt-manager.json`。
 public data tableはRLS有効。各テーブルは概ね `user_id` → `auth.users` でユーザー分離。
 
-shared-supabase-dbのmigration inventoryとDB履歴が共有DB全体の正本。本番deployは固定SHAの共通Reader actionでProduction DB identity、shared履歴の`IN_SYNC`、対象commitのreceipt-manager DB契約を確認し、個別のRPC・AI quota・ACL integrityも検証する。`PENDING`、`REMOTE_ONLY`、不一致、実行エラーで停止し、本番migrationを自動適用しない。shared Production WriterのEnvironment準備と実適用検証は未完了で、有効化していない。Reader Environmentの実設定は別途GitHub Settingsで確認する。運用境界と残作業は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
+本番deployは固定SHAの共通Reader actionでProduction DB identity、shared履歴の `IN_SYNC`、対象commitのreceipt-manager DB契約を確認し、RPC・AI quota・ACL integrityも読み取り専用で検証する。`PENDING`、`REMOTE_ONLY`、不一致、実行エラーで停止する。Dev/ProdのReader検証とWriter資格情報のread-only接続・identity probeは成功済み。旧Production apply/bootstrap経路は撤去済み。receipt-managerの旧Production Writer Secretは、shared ProductionのPENDING実適用、Reader postflight、両アプリのDB互換性と本番配信成功、旧Writer参照経路がないことの再監査が終わるまで保持し、その後の削除も別途承認が必要。手順と現在の状態は [production-database-migration-gate.md](./production-database-migration-gate.md) を参照。
 
 | テーブル | 概要 | 主なカラム | 備考 |
 |----------|------|------------|------|
@@ -200,7 +200,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 - 正本: `supabase/migrations/20261014120000_s1_06_ai_quota_foundation.sql`
 - 仕様: [spec-ai-quota-database.md](./spec-ai-quota-database.md)
 - 未知利用ブレーカーの初期閾値は 3。同一 JST 日の未解決 `unknown_usage` だけを数え、日付境界で解除する。行は残し、日次回数は claim 日のまま。緊急停止と計測済み月額 800 円上限は維持する
-- 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。`.github/workflows/preflight-ai-quota.yml` を `main` から手動実行し、同じ migration ロールの既存Secretsで確認する。preflight は migration 成功を保証しない。適用後は integrity verifier を使う
+- 適用前の読み取り専用権限 preflight: `supabase/diagnostics/preflight_ai_quota_migration_privileges.sql`。初回適用前だけ。`ai_quota_owner` または `ai_quota_backend` が既にある場合は不足として止め、マイグレーション自身も既存ロールを流用・変更しない。実行者は対象データベースの `CREATE` を owner ロールへ一時付与できる必要があり、読み取り専用のカタログ確認はその付与の成功を完全には証明できない。`rolcreaterole` や `CREATE WITH GRANT OPTION` だけでは本番適用を証明できない。このSQLは初回適用前の読み取り専用確認であり、hosted DBへの適用経路ではない。現行の本番deployは `verify_s1_06_ai_quota_integrity.sql` を含む読み取り専用integrityを実行する。hosted migrationの適用はshared-supabase-dbのWriter運用に従い、preflight成功は適用を証明しない
 - 本番読み取り専用検証: `supabase/diagnostics/verify_s1_06_ai_quota_integrity.sql`（deploy workflowでS1-08/S1-F01と併走）
 - 隔離 SQL テスト: `scripts/run-ai-quota-sql-tests.sh`
 - `ai_quota_backend` のパスワードは、認可された Supabase データベース管理者の psql で `\password ai_quota_backend` を実行し、エコーなしプロンプトで設定する。入力した値はセキュアなエディタで VPS の `.env.ai-quota`（`0600`）へ直接書き写す。シェルコマンド、SQL 履歴、ログ、リポジトリ、GitHub または VPS のデプロイ用環境変数には置かない。手順は [spec-ai-quota-database.md](./spec-ai-quota-database.md)
@@ -270,10 +270,10 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 | Supabase | Auth / Postgres / RLS |
 | Docker + Compose | 本番コンテナ |
 | Nginx | SPA + `/api` プロキシ（`client_max_body_size 20M`） |
-| GitHub Actions | `main` への push で migrate / GHCR push / VPS deploy |
-| GitHub Actions 手動 workflow | main から本番DBのAI利用制御 migration 権限を読み取り専用で事前確認 |
+| GitHub Actions | `main` push / `workflow_dispatch` で quality、固定SHAのshared Reader gate、読み取り専用integrityの後にGHCR pushとVPS deploy。migrationは適用しない |
+| 共有DB運用 | hosted Dev/ProdのReader確認、Writer identity probe、承認付きmigration適用は `shared-supabase-db` の手動workflow。receipt-managerに本番apply/bootstrap workflowはない |
 | 品質チェック | リポジトリルートで `npm run check` |
-| Supabase CLI | Dev migration inventory・履歴確認・適用は `shared-supabase-db` が管理。receipt-manager の `db:plan` はReader workflowへ案内し、`db:list` はローカルmigrationファイルのみ表示 |
+| Supabase CLI | hosted inventoryとDev/Prod Writer適用は `shared-supabase-db` が所有。receipt-manager の `db:plan` はReader workflowへ案内し、`db:list` はローカルmigrationファイルのみ表示。`db:push` は停止 |
 
 ※ `gspread` は依存に残っているが、アプリ本体からは未使用。
 
@@ -296,7 +296,7 @@ npm run dev
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
 - Dev DB 計画確認: `shared-supabase-db` の[Reader専用workflow](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml)が正式経路。`npm run db:plan` はこのworkflowへ案内し、ローカルからDB履歴を確認しない。`npm run db:list` はreceipt-manager内のファイル一覧のみを表示
-- Dev DB migrationの正本と適用: `shared-supabase-db` がmigration inventory・Dev DB履歴を管理し、Reader workflowで計画確認、保護されたWriter workflowで適用。receipt-managerはアプリ開発とDB契約検証を担当し、旧 `npm run db:push` は停止
+- Dev/Prod DB migrationの正本と適用: `shared-supabase-db` がhosted migration inventoryを所有し、Reader workflowで計画確認、保護されたWriter workflowでDev/Prodへ適用する。Writer enable flagは `false`。Reader検証とWriter資格情報のread-only identity probeは成功済みで、PENDING実適用は未検証。Devの `IN_SYNC` no-opは適用証明ではない。receipt-managerはアプリ開発とDB契約検証を担当し、旧 `npm run db:push` は停止
 
 ### 7.2 環境変数
 
@@ -331,8 +331,8 @@ AI 利用枠の DB 接続は `.env` に混ぜず、gitignore 対象の `.env.ai-
 - `docker-compose.production.yml` で FE は既定 network と外部 `edge` network に参加し、ホストポートは公開しない。edge-proxy は `edge` 経由で FE の `:80` に接続し、FE は既定 network 経由で BE の `:8000` に接続
 - PR時の品質チェック: `.github/workflows/ci.yml` が `main` 向けPRの opened / synchronize / reopened で `npm run check` を実行する。Node.js 22、uv / Python 3.12 とロック済み依存関係を使い、frontend ESLint/test/build、backend Ruff check/format、backend unittest を検証する。`contents: read` のみ許可し、本番Secrets・DB接続・migration・Docker push・VPS deploy は行わない。
 - main後のCD: `.github/workflows/deploy.yml` はquality、固定SHAのshared Reader gate、Reader権限・role構成、RPC・AI quota・ACL integrityがすべて成功した場合だけbuild/deployする。shared migration履歴が`IN_SYNC`でない場合、契約不一致、診断`MISMATCH`、接続・実行エラーでは停止する。本番migrationは適用しない。
-- 本番deployは`production-db-check` EnvironmentのReader資格情報だけを使う。旧`production-db-apply` Environmentとwriter secretは未削除だが、receipt-managerのworkflowから参照しない。shared Production WriterはEnvironment準備と実適用検証が未完了で、有効化していない。GitHub Environment設定の実状態は別途確認が必要。
-- Environment要件、migration移管の残作業、fail-closed動作は [production database migration gate](./production-database-migration-gate.md) を参照する。
+- 本番deployは`production-db-check` EnvironmentのReader資格情報だけを使う。旧Production apply/bootstrap経路は撤去済み。receipt-managerの旧`production-db-apply` EnvironmentとProduction Writer Secretは未削除だが、このリポジトリのworkflowから参照しない。shared ProductionのPENDING実適用、Reader postflight、両アプリのDB互換性と本番配信成功、旧Writer参照経路がないことの再監査が終わるまで保持し、削除は別途承認が必要。`DEV_DB_WRITER_ENABLED` と `PROD_DB_WRITER_ENABLED` は `false`。Dev/Prod Reader検証とWriter資格情報のread-only identity probeは成功済みで、PENDING実適用は未検証。
+- Environment要件、現在の状態、Secret保持条件、fail-closed動作は [production database migration gate](./production-database-migration-gate.md) を参照する。
 
 ### 7.4 認証フロー
 
@@ -390,6 +390,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-31 | 共有Dev/Prod Writerの現行状態に合わせ、旧本番apply/bootstrap説明と旧Production Writer Secretの保持条件を更新 |
 | 2026-10-28 | receipt-managerのDB互換性契約v1とv1検証外の統合テスト対象を追加 |
 | 2026-10-23 | worktree削除前後にcwdベースの稼働プロセス検査を追加 |
 | 2026-10-23 | 開発サーバーの所有プロセス群について、SIGKILL後の終了確認とcleanup失敗の報告を追加 |
