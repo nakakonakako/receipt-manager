@@ -1108,6 +1108,86 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertEqual(status["last_operation_at"], parsed[-1][3])
         self.assertNotIn("call_id", json.dumps(status))
 
+    def test_tool_category_priority_matches_price_memo(self) -> None:
+        conflict_events = (
+            (
+                "top-level",
+                {
+                    "type": "tool_call",
+                    "subtype": "started",
+                    "shellToolCall": {"args": {"command": "PRIORITY_PAYLOAD_SENTINEL"}},
+                    "readToolCall": {"args": {"path": "PRIORITY_PATH_SENTINEL"}},
+                },
+            ),
+            (
+                "tool_call",
+                {
+                    "type": "tool_call",
+                    "subtype": "started",
+                    "tool_call": {
+                        "shellToolCall": {
+                            "args": {"command": "PRIORITY_PAYLOAD_SENTINEL"}
+                        },
+                        "readToolCall": {"args": {"path": "PRIORITY_PATH_SENTINEL"}},
+                    },
+                },
+            ),
+            (
+                "toolCall list",
+                {
+                    "type": "tool_call",
+                    "subtype": "started",
+                    "toolCall": [
+                        {
+                            "shellToolCall": {
+                                "args": {"command": "PRIORITY_PAYLOAD_SENTINEL"}
+                            },
+                            "readToolCall": {
+                                "args": {"path": "PRIORITY_PATH_SENTINEL"}
+                            },
+                        }
+                    ],
+                },
+            ),
+        )
+        for shape, event in conflict_events:
+            with self.subTest(shape=shape):
+                self.assertEqual(
+                    MONITOR_MODULE.tool_category(event), "ファイル読み取り"
+                )
+
+        single_category_events = (
+            ({"type": "tool_call", "shellToolCall": {}}, "Shellコマンド"),
+            ({"type": "tool_call", "readToolCall": {}}, "ファイル読み取り"),
+            (
+                {"type": "tool_call", "tool_call": {"editToolCall": {}}},
+                "ファイル作成・編集",
+            ),
+            ({"type": "tool_call", "toolCall": [{"mcpToolCall": {}}]}, "MCPツール"),
+        )
+        for event, category in single_category_events:
+            with self.subTest(category=category):
+                self.assertEqual(MONITOR_MODULE.tool_category(event), category)
+
+        events = [
+            *(event for _, event in conflict_events),
+            {"type": "result", "subtype": "success"},
+        ]
+        agent = self.fake_agent(
+            "import json\n"
+            f"events = {events!r}\n"
+            "for event in events:\n"
+            "    print(json.dumps(event), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(
+            result.stdout.count("tool: ファイル読み取り started"),
+            len(conflict_events),
+        )
+        self.assertNotIn("PRIORITY_PAYLOAD_SENTINEL", result.stdout + result.stderr)
+        self.assertNotIn("PRIORITY_PATH_SENTINEL", result.stdout + result.stderr)
+
     def test_bash_tool_call_shape_is_shell_command_without_payload(self) -> None:
         events = [
             {
