@@ -110,7 +110,9 @@ setup_environment() {
 
 validate_environment_links() {
   local target_path="$1"
-  local source_dir="$HOME/.config/$repo_name/development"
+  local validation_environment="$2"
+  local allow_missing_managed_links="$3"
+  local source_dir="$HOME/.config/$repo_name/$validation_environment"
   local relative_path source_path target_file
 
   for relative_path in .env frontend/.env frontend/.env.local backend/.env; do
@@ -119,13 +121,16 @@ validate_environment_links() {
 
     if [[ -e "$source_path" || -L "$source_path" ]]; then
       [[ -f "$source_path" && ! -L "$source_path" ]] \
-        || die "Development environment source is not a regular file: $relative_path"
+        || die "Selected environment source is not a regular file: $relative_path"
+      if [[ "$allow_missing_managed_links" -eq 1 && ! -e "$target_file" && ! -L "$target_file" ]]; then
+        continue
+      fi
       [[ -L "$target_file" ]] \
         || die "Expected development environment symlink is missing or is not a symlink: $relative_path"
       [[ -e "$target_file" ]] \
         || die "Broken development environment symlink: $relative_path"
       [[ "$(readlink "$target_file")" == "$source_path" ]] \
-        || die "Environment symlink does not point to development settings: $relative_path"
+        || die "Environment symlink does not point to selected environment settings: $relative_path"
     else
       [[ ! -e "$target_file" && ! -L "$target_file" ]] \
         || die "Unexpected environment file without a development source: $relative_path"
@@ -179,10 +184,12 @@ setup_worktree() {
   done
   validate_environment_name "$environment_name"
   target_path="$(canonical_worktree "$target_path")"
+  validate_environment_links "$target_path" "$environment_name" 1
   if [[ "$run_deps" -eq 1 ]]; then
     setup_dependencies "$target_path"
   fi
   setup_environment "$target_path"
+  validate_environment_links "$target_path" "$environment_name" 0
 }
 
 command_name="${1:-}"
@@ -289,7 +296,7 @@ case "$command_name" in
   validate-env)
     [[ $# -eq 1 ]] || die 'validate-env requires one worktree path.'
     target_path="$(canonical_worktree "$1")"
-    validate_environment_links "$target_path"
+    validate_environment_links "$target_path" development 0
     printf '[worktree] Environment links validated for development settings.\n'
     ;;
   remove)

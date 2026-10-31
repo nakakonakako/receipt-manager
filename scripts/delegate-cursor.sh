@@ -90,7 +90,7 @@ fi
 if [[ -n "$worktree" ]]; then
   repo_name="$(basename "$(dirname "$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)")")"
   workspace="$HOME/worktrees/$repo_name/$worktree"
-  "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree" --base origin/main
+  "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree" --base origin/main --environment development
   workspace="$(cd "$workspace" && pwd -P)"
 elif [[ -n "$workspace" ]]; then
   if [[ ! -d "$workspace" ]]; then
@@ -98,7 +98,7 @@ elif [[ -n "$workspace" ]]; then
     exit 2
   fi
   workspace="$(cd "$workspace" && pwd -P)"
-  "$repo_root/scripts/worktree.sh" reuse "$workspace"
+  "$repo_root/scripts/worktree.sh" reuse "$workspace" --environment development
   origin_common="$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)"
   target_common="$(git -C "$workspace" rev-parse --path-format=absolute --git-common-dir)"
   if [[ "$origin_common" != "$target_common" ]]; then

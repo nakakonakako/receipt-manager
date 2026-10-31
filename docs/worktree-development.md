@@ -53,8 +53,16 @@ not hide its target from a trusted Cursor workspace; configure only development
 credentials needed for the task and do not link production credentials into a
 worker workspace.
 
-Before starting Cursor, `delegate-cursor.sh` validates the workspace's
-environment paths against `~/.config/receipt-manager/development/`. Each of
+Before dependency setup, worktree setup validates existing environment paths
+against the selected `~/.config/receipt-manager/<environment>/` directory.
+Missing managed links are allowed at this stage so a new worktree can proceed
+to dependency setup and link creation. Invalid existing paths stop setup
+before npm or backend environment preparation. Manual worktree commands retain
+their selected `--environment`; Cursor delegation explicitly uses `development`.
+After setup, strict validation requires every present managed source to have an
+exact symlink in the worktree, and every absent source to have no target. Before
+starting Cursor, `delegate-cursor.sh` validates the workspace's environment
+paths against `~/.config/receipt-manager/development/`. Each of
 the four managed paths above must either be absent both in the development
 settings and workspace, or be a symlink to the exact development settings
 file. Broken links, links to another environment, regular files at managed
