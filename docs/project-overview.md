@@ -7,7 +7,7 @@
 |------|------|
 | リポジトリ名 | `receipt-manager` |
 | プロダクト名（UI） | AI家計簿 / Receipt Manager |
-| ドキュメント最終更新 | 2026-10-28 |
+| ドキュメント最終更新 | 2026-10-31 |
 | 文書の扱い | **生きた概要**。機能の追加・削除・方針変更のたびに本ファイルを更新する |
 
 ---
@@ -390,6 +390,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-10-31 | Cursor委譲monitorのstate directory、workspace lock、status、診断ログ操作をdir_fd基準で安全化 |
 | 2026-10-31 | worktree環境リンク検証をPython化し、直接絶対symlinkの検証を3段階で実行 |
 | 2026-10-31 | 共有Dev/Prod Writerの現行状態に合わせ、旧本番apply/bootstrap説明と旧Production Writer Secretの保持条件を更新 |
 | 2026-10-28 | receipt-managerのDB互換性契約v1とv1検証外の統合テスト対象を追加 |

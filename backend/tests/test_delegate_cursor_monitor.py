@@ -208,14 +208,20 @@ class DelegateCursorMonitorTests(unittest.TestCase):
 
     def test_old_diagnostic_logs_are_pruned_on_next_run(self) -> None:
         log_dir = self.state_home / "receipt-manager/delegate-cursor"
-        log_dir.mkdir(parents=True)
-        old_log = log_dir / "cursor-stderr-expired.log"
+        log_dir.mkdir(parents=True, mode=0o700)
+        log_dir.chmod(0o700)
+        old_log = log_dir / "cursor-stderr-20261020T120000Z-1.log"
         old_log.write_text("old diagnostic", encoding="utf-8")
+        old_log.chmod(0o600)
         expired_at = time.time() - 8 * 24 * 60 * 60
         os.utime(old_log, (expired_at, expired_at))
         for index in range(21):
-            recent_log = log_dir / f"cursor-stderr-recent-{index}.log"
+            recent_log = (
+                log_dir
+                / f"cursor-stderr-2026102{index // 10}T1200{index % 60:02d}Z-{index + 2}.log"
+            )
             recent_log.write_text("bounded diagnostic", encoding="utf-8")
+            recent_log.chmod(0o600)
             recent_at = time.time() - (21 - index) * 60
             os.utime(recent_log, (recent_at, recent_at))
         agent = self.fake_agent(

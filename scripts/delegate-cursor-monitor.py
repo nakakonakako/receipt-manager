@@ -16,6 +16,7 @@ import stat
 import subprocess
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 
 
@@ -278,13 +279,48 @@ def extract_call_id(event: dict[str, object]) -> str | None:
     return None
 
 
-def set_status(path: Path, data: dict[str, object]) -> None:
-    temporary = path.with_suffix(".tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        os.chmod(temporary, 0o600)
-        json.dump(data, handle, ensure_ascii=True, separators=(",", ":"))
-        handle.write("\n")
-    temporary.replace(path)
+def _validate_private_regular_file(dir_fd: int, name: str) -> os.stat_result | None:
+    try:
+        info = os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) != 0o600
+        or info.st_nlink != 1
+    ):
+        raise OSError("unsafe state file")
+    return info
+
+
+def set_status(dir_fd: int, name: str, data: dict[str, object]) -> None:
+    _validate_private_regular_file(dir_fd, name)
+    temporary = f".{name}.{uuid.uuid4().hex}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(temporary, flags, 0o600, dir_fd=dir_fd)
+    try:
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
+            raise OSError("unsafe status temporary file")
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            descriptor = -1
+            json.dump(data, handle, ensure_ascii=True, separators=(",", ":"))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+        os.fsync(dir_fd)
+    except Exception:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            os.unlink(temporary, dir_fd=dir_fd)
+        except OSError:
+            pass
+        raise
 
 
 def _redact_known_secrets(text: str) -> str:
@@ -793,120 +829,191 @@ class StderrDiagnostics:
         return added
 
 
-def prune_diagnostic_logs(state_dir: Path, preserve: Path | None = None) -> None:
+_DIAGNOSTIC_NAME = re.compile(r"cursor-stderr-[0-9]{8}T[0-9]{6}Z-[0-9]+\.log\Z")
+
+
+def _diagnostic_records(dir_fd: int) -> list[tuple[str, float]]:
+    records: list[tuple[str, float]] = []
+    for name in os.listdir(dir_fd):
+        if not name.startswith("cursor-stderr-"):
+            continue
+        if not _DIAGNOSTIC_NAME.fullmatch(name):
+            raise OSError("unsafe diagnostic log name")
+        info = _validate_private_regular_file(dir_fd, name)
+        if info is None:
+            continue
+        records.append((name, info.st_mtime))
+    return records
+
+
+def prune_diagnostic_logs(dir_fd: int, preserve: str | None = None) -> None:
     now = time.time()
     logs = sorted(
-        (path for path in state_dir.glob("cursor-stderr-*.log") if path != preserve),
-        key=lambda path: _log_mtime(path),
+        ((name, modified) for name, modified in _diagnostic_records(dir_fd) if name != preserve),
+        key=lambda item: item[1],
         reverse=True,
     )
     max_files = MAX_DIAGNOSTIC_FILES - 1 if preserve else MAX_DIAGNOSTIC_FILES
-    for index, path in enumerate(logs):
-        try:
-            if (
-                now - path.stat().st_mtime > MAX_DIAGNOSTIC_AGE_SECONDS
-                or index >= max_files
-            ):
-                path.unlink(missing_ok=True)
-        except OSError:
-            continue
+    for index, (name, modified) in enumerate(logs):
+        if now - modified > MAX_DIAGNOSTIC_AGE_SECONDS or index >= max_files:
+            os.unlink(name, dir_fd=dir_fd)
 
 
-def ensure_private_state_directory(path: Path) -> None:
-    path.mkdir(mode=0o700, parents=True, exist_ok=True)
-    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-    if not getattr(os, "O_DIRECTORY", 0) or not getattr(os, "O_NOFOLLOW", 0):
+def _open_state_directory(path: Path) -> int:
+    """Open/create a private directory chain without following symlinks."""
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    directory = getattr(os, "O_DIRECTORY", 0)
+    if not nofollow or not directory:
         raise OSError("safe state directory flags are unavailable")
-    descriptor = os.open(path, flags)
+    if not path.is_absolute() or ".." in path.parts:
+        raise OSError("unsafe state directory path")
+    absolute = path
+    descriptor = os.open(os.sep, os.O_RDONLY | directory | nofollow)
     try:
-        info = os.fstat(descriptor)
-        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
-            raise OSError("unsafe state directory owner or type")
-        os.fchmod(descriptor, 0o700)
-    finally:
+        components = absolute.parts[1:]
+        for index, component in enumerate(components):
+            try:
+                next_descriptor = os.open(
+                    component,
+                    os.O_RDONLY | directory | nofollow,
+                    dir_fd=descriptor,
+                )
+            except FileNotFoundError:
+                try:
+                    os.mkdir(component, 0o700, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+                next_descriptor = os.open(
+                    component,
+                    os.O_RDONLY | directory | nofollow,
+                    dir_fd=descriptor,
+                )
+            info = os.fstat(next_descriptor)
+            root_sticky_parent = (
+                info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX)
+            )
+            if not stat.S_ISDIR(info.st_mode) or (
+                info.st_uid not in {0, os.getuid()} and not root_sticky_parent
+            ):
+                os.close(next_descriptor)
+                raise OSError("unsafe state directory owner or type")
+            if info.st_mode & 0o022 and not root_sticky_parent:
+                os.close(next_descriptor)
+                raise OSError("writable state directory parent")
+            if index == len(components) - 1 and (
+                info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700
+            ):
+                os.close(next_descriptor)
+                raise OSError("state directory must be owned and mode 0700")
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except Exception:
         os.close(descriptor)
+        raise
 
 
-def open_lock_file(path: Path):
-    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
-    if not getattr(os, "O_NOFOLLOW", 0):
+def open_lock_file(dir_fd: int, name: str) -> int:
+    nofollow = getattr(os, "O_NOFOLLOW", 0)
+    if not nofollow:
         raise OSError("safe lock file flags are unavailable")
-    flags |= getattr(os, "O_CLOEXEC", 0)
-    descriptor = os.open(path, flags, 0o600)
+    flags = os.O_RDWR | os.O_CREAT | nofollow | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(name, flags, 0o600, dir_fd=dir_fd)
     try:
         info = os.fstat(descriptor)
         if (
             not stat.S_ISREG(info.st_mode)
             or info.st_uid != os.getuid()
+            or stat.S_IMODE(info.st_mode) != 0o600
             or info.st_nlink != 1
         ):
             raise OSError("unsafe lock file owner or type")
-        os.fchmod(descriptor, 0o600)
-        return os.fdopen(descriptor, "r+")
+        return descriptor
     except Exception:
         os.close(descriptor)
         raise
 
 
-def acquire_file_lock(path: Path, *, nonblocking: bool):
-    handle = open_lock_file(path)
+def acquire_file_lock(dir_fd: int, name: str, *, nonblocking: bool) -> int:
+    descriptor = open_lock_file(dir_fd, name)
     operation = fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0)
     try:
-        fcntl.flock(handle.fileno(), operation)
+        fcntl.flock(descriptor, operation)
     except Exception:
-        handle.close()
+        os.close(descriptor)
         raise
-    return handle
+    return descriptor
 
 
-def prune_diagnostics_safely(state_dir: Path) -> None:
+def prune_diagnostics_safely(dir_fd: int, *, required: bool = False) -> bool:
     try:
-        lock = acquire_file_lock(state_dir / "diagnostics.lock", nonblocking=False)
+        lock = acquire_file_lock(dir_fd, "diagnostics.lock", nonblocking=False)
     except OSError:
-        return
+        if required:
+            raise
+        return False
     try:
-        prune_diagnostic_logs(state_dir)
+        prune_diagnostic_logs(dir_fd)
+        return True
     finally:
-        lock.close()
-
-
-def _log_mtime(path: Path) -> float:
-    try:
-        return path.stat().st_mtime
-    except OSError:
-        return 0
+        os.close(lock)
 
 
 def save_failure_diagnostics(
-    state_dir: Path, pid: int, diagnostics: StderrDiagnostics
+    dir_fd: int, state_dir: Path, pid: int, diagnostics: StderrDiagnostics
 ) -> Path | None:
     if not diagnostics.excerpts:
         return None
     try:
-        lock = acquire_file_lock(state_dir / "diagnostics.lock", nonblocking=False)
+        lock = acquire_file_lock(dir_fd, "diagnostics.lock", nonblocking=False)
     except OSError:
         return None
     try:
-        return _save_failure_diagnostics_locked(state_dir, pid, diagnostics)
+        return _save_failure_diagnostics_locked(dir_fd, state_dir, pid, diagnostics)
+    except OSError:
+        return None
     finally:
-        lock.close()
+        os.close(lock)
 
 
 def _save_failure_diagnostics_locked(
-    state_dir: Path, pid: int, diagnostics: StderrDiagnostics
+    dir_fd: int, state_dir: Path, pid: int, diagnostics: StderrDiagnostics
 ) -> Path | None:
-    prune_diagnostic_logs(state_dir)
+    prune_diagnostic_logs(dir_fd)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    path = state_dir / f"cursor-stderr-{timestamp}-{pid}.log"
+    name = f"cursor-stderr-{timestamp}-{pid}.log"
     content = "\n".join(diagnostics.excerpts).encode("utf-8")[:MAX_DIAGNOSTIC_BYTES]
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+    flags |= getattr(os, "O_CLOEXEC", 0)
+    descriptor: int | None = None
+    created = False
     try:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        descriptor = os.open(name, flags, 0o600, dir_fd=dir_fd)
+        created = True
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1:
+            raise OSError("unsafe diagnostic file")
+        os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "wb") as handle:
+            descriptor = None
             handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
     except OSError:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if created:
+            try:
+                os.unlink(name, dir_fd=dir_fd)
+            except OSError:
+                pass
         return None
-    prune_diagnostic_logs(state_dir, preserve=path)
-    return path
+    prune_diagnostic_logs(dir_fd, preserve=name)
+    os.fsync(dir_fd)
+    return state_dir / name
 
 
 def on_signal(signum: int, _frame: object) -> None:
@@ -944,33 +1051,52 @@ def main() -> int:
         print("[delegate-cursor] workspace is not a directory", file=sys.stderr)
         return 2
     key = hashlib.sha256(os.fsencode(checkout)).hexdigest()
-    state_root = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
+    state_root_value = os.environ.get("XDG_STATE_HOME")
+    if state_root_value is not None and not os.path.isabs(state_root_value):
+        print(
+            "[delegate-cursor] secure lock storage is unavailable; Cursor was not started",
+            file=sys.stderr,
+        )
+        return 5
+    state_root = Path(state_root_value) if state_root_value else Path.home() / ".local/state"
     state_dir = state_root / "receipt-manager" / "delegate-cursor"
     try:
-        ensure_private_state_directory(state_dir)
+        state_dir_fd = _open_state_directory(state_dir)
     except OSError:
         print(
             "[delegate-cursor] secure lock storage is unavailable; Cursor was not started",
             file=sys.stderr,
         )
         return 5
-    status_path = state_dir / f"{key}.json"
-    lock_path = state_dir / f"{key}.lock"
+    status_name = f"{key}.json"
+    status_path = state_dir / status_name
+    lock_name = f"{key}.lock"
     try:
-        lock = acquire_file_lock(lock_path, nonblocking=True)
+        lock = acquire_file_lock(state_dir_fd, lock_name, nonblocking=True)
     except BlockingIOError:
+        os.close(state_dir_fd)
         print(
             "[delegate-cursor] worker already active for this workspace; refusing duplicate run",
             file=sys.stderr,
         )
         return 4
     except OSError:
+        os.close(state_dir_fd)
         print(
             "[delegate-cursor] workspace lock could not be acquired; Cursor was not started",
             file=sys.stderr,
         )
         return 5
-    prune_diagnostics_safely(state_dir)
+    try:
+        prune_diagnostics_safely(state_dir_fd, required=True)
+    except OSError:
+        os.close(lock)
+        os.close(state_dir_fd)
+        print(
+            "[delegate-cursor] secure diagnostic storage is unavailable; Cursor was not started",
+            file=sys.stderr,
+        )
+        return 5
 
     started_at = utc_now()
     started_mono = time.monotonic()
@@ -1026,9 +1152,23 @@ def main() -> int:
         "unparsed_line_count": 0,
     }
 
+    status_persistence_failed = False
+
     def update(**changes: object) -> None:
+        nonlocal status_persistence_failed
         data.update(changes)
-        set_status(status_path, data)
+        if status_persistence_failed:
+            return
+        try:
+            set_status(state_dir_fd, status_name, data)
+        except OSError:
+            if pid is None:
+                raise
+            status_persistence_failed = True
+            print(
+                "[delegate-cursor] status storage became unavailable; continuing worker monitoring",
+                flush=True,
+            )
 
     def current_active() -> int:
         return len(active_call_ids) + anonymous_active
@@ -1058,15 +1198,26 @@ def main() -> int:
         )
         assistant_updates_reported = assistant_update_count
 
-    update()
+    old_handlers = {
+        sig: signal.signal(sig, on_signal) for sig in (signal.SIGINT, signal.SIGTERM)
+    }
+    try:
+        update()
+    except OSError:
+        for sig, handler in old_handlers.items():
+            signal.signal(sig, handler)
+        os.close(lock)
+        os.close(state_dir_fd)
+        print(
+            "[delegate-cursor] secure status storage is unavailable; Cursor was not started",
+            file=sys.stderr,
+        )
+        return 5
     print(f"[delegate-cursor] started_at: {started_at}", flush=True)
     print(f"[delegate-cursor] route: {args.route}", flush=True)
     print(f"[delegate-cursor] tier/model: {args.tier}/{args.model}", flush=True)
     print(f"[delegate-cursor] status: {status_path}", flush=True)
 
-    old_handlers = {
-        sig: signal.signal(sig, on_signal) for sig in (signal.SIGINT, signal.SIGTERM)
-    }
     try:
         try:
             child = subprocess.Popen(
@@ -1266,7 +1417,7 @@ def main() -> int:
             outcome = "failed"
         if outcome in {"failed", "interrupted"}:
             stderr_diagnostic_log = save_failure_diagnostics(
-                state_dir, pid, stderr_diagnostics
+                state_dir_fd, state_dir, pid, stderr_diagnostics
             )
         update(
             process_exit_code=exit_code,
@@ -1307,7 +1458,8 @@ def main() -> int:
     finally:
         for sig, handler in old_handlers.items():
             signal.signal(sig, handler)
-        lock.close()
+        os.close(lock)
+        os.close(state_dir_fd)
 
 
 if __name__ == "__main__":
