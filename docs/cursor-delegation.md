@@ -121,7 +121,16 @@ requests that use a relative path or symlink; distinct worktrees can run
 concurrently. Direct delegation to the standard checkout is protected by its
 own workspace lock. Lock and per-workspace status files are stored under the
 private `~/.local/state/receipt-manager/delegate-cursor/` directory (or the
-configured `XDG_STATE_HOME`).
+configured absolute `XDG_STATE_HOME`). The monitor opens every path component
+without following symlinks and rejects unsafe ownership or write permissions;
+the final state directory must be owned by the current user with mode `0700`.
+Unsafe existing paths stop delegation and are never chmodded, replaced, or
+removed automatically. Workspace locks, status updates, and diagnostic files
+use the validated directory descriptor. Status replacement uses a unique,
+exclusive temporary file, and diagnostic retention only removes validated
+private regular files. State storage failures before launch prevent Cursor
+from starting; a status write failure after launch is reported while worker
+monitoring and signal cleanup continue.
 
 Do not use `--allow-dirty` as a shortcut. It is only appropriate when mixing
 changes is intentional and explicitly approved by the supervisor or user.
