@@ -187,5 +187,7 @@ if [[ -n "$workspace" ]]; then
   monitor_workspace="$workspace"
 fi
 
+"$repo_root/scripts/worktree.sh" validate-env "$monitor_workspace"
+
 python3 "$repo_root/scripts/delegate-cursor-monitor.py" \
   --checkout "$monitor_workspace" --tier "$tier" --model "$model" -- "${cmd[@]}"

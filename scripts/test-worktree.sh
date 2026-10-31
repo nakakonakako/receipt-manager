@@ -260,6 +260,9 @@ python3 "$source_root/scripts/test-worktree-remove-guard.py"
 
 cat > "$fixture_bin/agent" <<'EOF'
 #!/usr/bin/env bash
+if [[ -n "${WORKER_STARTED_FILE:-}" ]]; then
+  : > "$WORKER_STARTED_FILE"
+fi
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"session_id":"worktree-test"}'
 exit 0
 EOF
@@ -292,5 +295,67 @@ if grep -Fq 'git fetch origin-main' "$command_log"; then
   echo "Expected delegate-cursor reuse not to fetch origin/main." >&2
   exit 1
 fi
+
+"$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >/dev/null
+
+empty_home="$test_root/empty-home"
+mkdir -p "$empty_home"
+HOME="$empty_home" "$fixture_repo/scripts/worktree.sh" validate-env "$fixture_repo" >/dev/null
+
+validation_target="$delegate_workspace/frontend/.env"
+development_source="$fixture_config/frontend/.env"
+production_source="$fixture_home/.config/$repository_name/production/frontend/.env"
+mkdir -p "$(dirname "$production_source")"
+touch "$production_source"
+
+rm "$validation_target"
+ln -s "$production_source" "$validation_target"
+if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/alternate-env.log" 2>&1; then
+  echo 'Expected an environment link to a different environment to be rejected.' >&2
+  exit 1
+fi
+grep -Fq 'does not point to development settings' "$test_root/alternate-env.log"
+
+rm "$validation_target"
+ln -s "$fixture_config/frontend/missing.env" "$validation_target"
+if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/broken-env.log" 2>&1; then
+  echo 'Expected a broken environment link to be rejected.' >&2
+  exit 1
+fi
+grep -Fq 'Broken development environment symlink' "$test_root/broken-env.log"
+
+rm "$validation_target"
+touch "$validation_target"
+if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/regular-env.log" 2>&1; then
+  echo 'Expected an existing regular environment file to be rejected.' >&2
+  exit 1
+fi
+grep -Fq 'missing or is not a symlink' "$test_root/regular-env.log"
+
+rm "$validation_target"
+ln -s "$development_source" "$validation_target"
+mv "$development_source" "$development_source.saved"
+if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/missing-source-env.log" 2>&1; then
+  echo 'Expected a stale link with a missing development source to be rejected.' >&2
+  exit 1
+fi
+grep -Fq 'Unexpected environment file without a development source' "$test_root/missing-source-env.log"
+mv "$development_source.saved" "$development_source"
+
+unexpected_env="$delegate_workspace/.env.ai-quota"
+printf 'SECRET_VALUE_MUST_NOT_APPEAR\n' > "$unexpected_env"
+worker_started="$test_root/unexpected-env-worker-started"
+if WORKER_STARTED_FILE="$worker_started" "$source_root/scripts/delegate-cursor.sh" \
+  --prompt 'unexpected env fixture' --workspace "$delegate_workspace" >"$test_root/unexpected-env-delegate.log" 2>&1; then
+  echo 'Expected Cursor delegation to stop for an unexpected environment file.' >&2
+  exit 1
+fi
+[[ ! -e "$worker_started" ]]
+grep -Fq 'Unexpected .env-related path in Cursor workspace' "$test_root/unexpected-env-delegate.log"
+if grep -Fq 'SECRET_VALUE_MUST_NOT_APPEAR' "$test_root/unexpected-env-delegate.log"; then
+  echo 'Environment file contents must not be included in validation errors.' >&2
+  exit 1
+fi
+rm "$unexpected_env"
 
 echo "Worktree workflow tests passed."

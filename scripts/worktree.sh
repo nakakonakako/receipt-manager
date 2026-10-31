@@ -8,6 +8,7 @@ Usage:
   scripts/worktree.sh create <task-name> --branch <branch> [--base <ref>] [--environment <name>] [--no-setup]
   scripts/worktree.sh reuse <path> [--environment <name>] [--no-setup]
   scripts/worktree.sh setup [path] [--environment <name>] [--env-only]
+  scripts/worktree.sh validate-env <path>
   scripts/worktree.sh remove <path>
 
 Worktrees are stored under ~/worktrees/<repository-name>/<task-name>.
@@ -105,6 +106,45 @@ setup_environment() {
   if [[ "$found_source" -eq 0 ]]; then
     printf '[worktree-setup] No environment files configured in %s\n' "$source_dir"
   fi
+}
+
+validate_environment_links() {
+  local target_path="$1"
+  local source_dir="$HOME/.config/$repo_name/development"
+  local relative_path source_path target_file
+
+  for relative_path in .env frontend/.env frontend/.env.local backend/.env; do
+    source_path="$source_dir/$relative_path"
+    target_file="$target_path/$relative_path"
+
+    if [[ -e "$source_path" || -L "$source_path" ]]; then
+      [[ -f "$source_path" && ! -L "$source_path" ]] \
+        || die "Development environment source is not a regular file: $relative_path"
+      [[ -L "$target_file" ]] \
+        || die "Expected development environment symlink is missing or is not a symlink: $relative_path"
+      [[ -e "$target_file" ]] \
+        || die "Broken development environment symlink: $relative_path"
+      [[ "$(readlink "$target_file")" == "$source_path" ]] \
+        || die "Environment symlink does not point to development settings: $relative_path"
+    else
+      [[ ! -e "$target_file" && ! -L "$target_file" ]] \
+        || die "Unexpected environment file without a development source: $relative_path"
+    fi
+  done
+
+  local directory candidate relative_candidate
+  for directory in "$target_path" "$target_path/frontend" "$target_path/backend" \
+    "$target_path/backend/app" "$target_path/backend/app/services"; do
+    [[ -d "$directory" ]] || continue
+    for candidate in "$directory"/.env*; do
+      [[ -e "$candidate" || -L "$candidate" ]] || continue
+      relative_candidate="${candidate#"$target_path"/}"
+      case "$relative_candidate" in
+        .env|frontend/.env|frontend/.env.local|backend/.env) ;;
+        *) die "Unexpected .env-related path in Cursor workspace: $relative_candidate" ;;
+      esac
+    done
+  done
 }
 
 setup_dependencies() {
@@ -245,6 +285,12 @@ case "$command_name" in
       shift
     fi
     setup_worktree "$target_path" "$@"
+    ;;
+  validate-env)
+    [[ $# -eq 1 ]] || die 'validate-env requires one worktree path.'
+    target_path="$(canonical_worktree "$1")"
+    validate_environment_links "$target_path"
+    printf '[worktree] Environment links validated for development settings.\n'
     ;;
   remove)
     [[ $# -eq 1 ]] || die "remove requires exactly one path."
