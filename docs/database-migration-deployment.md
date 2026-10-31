@@ -20,5 +20,14 @@ writer helper have been removed. Existing local disposable-database tests for
 Reader permissions remain separate from hosted DB operation.
 
 See [production-database-migration-gate.md](./production-database-migration-gate.md)
-for required Environment configuration, current verification limits, and the
-remaining manual work before shared Production Writer transfer is complete.
+for current Reader and Writer verification status, retained legacy Production
+Writer Secret conditions, and the shared Writer operating procedure.
+
+Dev and Prod Reader checks and Writer credential read-only identity probes have
+succeeded. Dev history is `IN_SYNC`; actual Dev and Prod `PENDING` migration
+application remains unverified, and the Dev no-op is not proof of apply
+capability. The shared Writer enable flags remain false. The receipt-manager
+Production Writer Secret stays until a shared Production `PENDING` apply,
+Reader postflight, both apps' DB compatibility and production deployment, and
+an audit for old Writer references have succeeded. Deletion still requires
+separate approval.
