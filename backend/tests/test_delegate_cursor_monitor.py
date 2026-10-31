@@ -1363,6 +1363,136 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertIn("exceeded 64 KiB", block)
         self.assertIn("verification PASS: tests — passed", block)
 
+    def test_many_failures_keep_each_category_and_report_omitted_counts(self) -> None:
+        findings = [
+            f"FAIL: failure {index:02d} — {'observed failure detail ' * 18}"
+            for index in range(20)
+        ]
+        findings.extend(
+            (
+                "UNCONFIRMED: browser — not launched",
+                "PASS: unit tests — 42 tests passed",
+            )
+        )
+        report = "\n".join(
+            (
+                "VERIFICATION RESULTS",
+                "COVERAGE: COMPLETE",
+                *findings,
+                "END VERIFICATION RESULTS",
+            )
+        )
+        result = self.run_agent(
+            self.fake_agent(
+                "import json\n"
+                f"text = {report!r}\n"
+                "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+            )
+        )
+        block = self.report_block(result.stdout)
+        self.assertLessEqual(len(block.encode("utf-8")), 4096)
+        self.assertIn("verification_counts: FAIL=20 UNCONFIRMED=1 PASS=1", block)
+        self.assertIn("verification FAIL: failure 00", block)
+        self.assertIn("verification UNCONFIRMED: browser", block)
+        self.assertIn("verification PASS: unit tests", block)
+        self.assertIn("verification_findings_omitted by 4 KiB output limit", block)
+        self.assertIn("FAIL=", block)
+        self.assertIn("[truncated]", block)
+
+    def test_mixed_result_categories_show_one_each_before_remaining_failures(
+        self,
+    ) -> None:
+        findings = [f"FAIL: failure {index} — {'detail ' * 70}" for index in range(8)]
+        findings.extend(
+            (
+                "UNCONFIRMED: visual check — evidence unavailable",
+                "PASS: API tests — 12 passed",
+            )
+        )
+        report = "\n".join(
+            (
+                "VERIFICATION RESULTS",
+                "COVERAGE: INCOMPLETE",
+                *findings,
+                "END VERIFICATION RESULTS",
+            )
+        )
+        result = self.run_agent(
+            self.fake_agent(
+                "import json\n"
+                f"text = {report!r}\n"
+                "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+            )
+        )
+        block = self.report_block(result.stdout)
+        first_unconfirmed = block.index("verification UNCONFIRMED: visual check")
+        first_pass = block.index("verification PASS: API tests")
+        second_fail = block.index("verification FAIL: failure 1")
+        self.assertLess(first_unconfirmed, first_pass)
+        self.assertLess(first_pass, second_fail)
+        self.assertIn("verification FAIL: failure 0", block)
+        self.assertIn("verification_findings_omitted by 4 KiB output limit", block)
+
+    def test_unshown_findings_are_explicitly_counted(self) -> None:
+        findings = [
+            f"FAIL: check {index} — {'failure evidence ' * 25}" for index in range(25)
+        ]
+        report = "\n".join(
+            (
+                "VERIFICATION RESULTS",
+                "COVERAGE: COMPLETE",
+                *findings,
+                "END VERIFICATION RESULTS",
+            )
+        )
+        result = self.run_agent(
+            self.fake_agent(
+                "import json\n"
+                f"text = {report!r}\n"
+                "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+            )
+        )
+        block = self.report_block(result.stdout)
+        notice = next(
+            line
+            for line in block.splitlines()
+            if "verification_findings_omitted" in line
+        )
+        self.assertRegex(notice, r"FAIL=[1-9][0-9]* UNCONFIRMED=0 PASS=0")
+        self.assertIn("verification_counts: FAIL=25 UNCONFIRMED=0 PASS=0", block)
+
+    def test_multibyte_findings_obey_utf8_output_limit(self) -> None:
+        findings = [
+            f"FAIL: 項目{index:02d} — {'確認失敗の詳細' * 45}" for index in range(12)
+        ]
+        findings.extend(
+            (
+                "UNCONFIRMED: 画面表示 — 表示確認を実施できず",
+                "PASS: 単体テスト — すべて成功",
+            )
+        )
+        report = "\n".join(
+            (
+                "VERIFICATION RESULTS",
+                "COVERAGE: INCOMPLETE",
+                *findings,
+                "END VERIFICATION RESULTS",
+            )
+        )
+        result = self.run_agent(
+            self.fake_agent(
+                "import json\n"
+                f"text = {report!r}\n"
+                "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+            )
+        )
+        block = self.report_block(result.stdout)
+        self.assertLessEqual(len(block.encode("utf-8")), 4096)
+        self.assertIn("verification FAIL: 項目00", block)
+        self.assertIn("verification UNCONFIRMED: 画面表示", block)
+        self.assertIn("verification PASS: 単体テスト", block)
+        self.assertIn("verification_findings_omitted by 4 KiB output limit", block)
+
     def test_report_is_absent_from_status_and_diagnostic_logs(self) -> None:
         agent = self.fake_agent(
             "import json, sys\n"

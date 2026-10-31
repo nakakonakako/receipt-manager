@@ -75,6 +75,7 @@ _REPORT_BEGIN = "[delegate-cursor] ----- worker completion report begin -----"
 _REPORT_END = "[delegate-cursor] ----- worker completion report end -----"
 _REPORT_PREFIX = "[delegate-cursor] report: "
 _REPORT_TRUNCATED = "[delegate-cursor] report: [truncated]"
+_REPORT_FINDINGS_OMITTED = "verification_findings_omitted by 4 KiB output limit"
 _REPORT_OMITTED = "[delegate-cursor] report: omitted (result text absent)"
 _REPORT_UNTRUSTED = (
     "[delegate-cursor] report: untrusted free-form result text; review the diff"
@@ -582,17 +583,35 @@ def _verification_report(
     else:
         coverage_status = "COMPLETE"
     prioritized = [
-        line for label in ("FAIL", "UNCONFIRMED", "PASS") for line in findings[label]
+        findings[label][0]
+        for label in ("FAIL", "UNCONFIRMED", "PASS")
+        if findings[label]
     ]
+    prioritized.extend(
+        line
+        for label in ("FAIL", "UNCONFIRMED", "PASS")
+        for line in findings[label][1:]
+    )
     context.sort(key=lambda line: not line.startswith("unscoped"))
     return coverage_status, prioritized, context
 
 
 def _report_body(text: str, *, input_truncated: bool) -> list[str]:
     coverage, findings, context = _verification_report(text, input_truncated)
+    counts = {
+        label: sum(f"verification {label}:" in line for line in findings)
+        for label in ("FAIL", "UNCONFIRMED", "PASS")
+    }
+    summary = [
+        f"{_REPORT_PREFIX}verification_coverage: {coverage}",
+        (
+            f"{_REPORT_PREFIX}verification_counts: FAIL={counts['FAIL']} "
+            f"UNCONFIRMED={counts['UNCONFIRMED']} PASS={counts['PASS']}"
+        ),
+    ]
     sections = _extract_report_sections(text)
     if sections is None:
-        body = [f"{_REPORT_PREFIX}verification_coverage: {coverage}"]
+        body = list(summary)
         body.extend(
             f"{_REPORT_PREFIX}{line.removeprefix('[delegate-cursor] ')}"
             for line in findings
@@ -607,7 +626,7 @@ def _report_body(text: str, *, input_truncated: bool) -> list[str]:
             for line in text.split("\n")[:8]
         )
         return body
-    body = [f"{_REPORT_PREFIX}verification_coverage: {coverage}"]
+    body = list(summary)
     body.extend(
         f"{_REPORT_PREFIX}{line.removeprefix('[delegate-cursor] ')}"
         for line in findings
@@ -622,6 +641,50 @@ def _report_body(text: str, *, input_truncated: bool) -> list[str]:
     return body
 
 
+def _visible_finding_counts(lines: list[str]) -> dict[str, int]:
+    counts = {label: 0 for label in ("FAIL", "UNCONFIRMED", "PASS")}
+    pattern = re.compile(
+        r"^\[delegate-cursor\] report: verification (FAIL|UNCONFIRMED|PASS):"
+    )
+    for line in lines:
+        match = pattern.match(line)
+        if match:
+            counts[match.group(1)] += 1
+    return counts
+
+
+def _fit_report_with_omission_notice(
+    body: list[str], *, force_truncated: bool
+) -> list[str]:
+    parts = _fit_report_lines(body, force_truncated=force_truncated)
+    expected = _visible_finding_counts(body)
+    visible = _visible_finding_counts(parts)
+    omitted = {label: expected[label] - visible[label] for label in expected}
+    if not any(omitted.values()):
+        return parts
+
+    notice = (
+        f"{_REPORT_PREFIX}{_REPORT_FINDINGS_OMITTED}: "
+        f"FAIL={omitted['FAIL']} UNCONFIRMED={omitted['UNCONFIRMED']} "
+        f"PASS={omitted['PASS']}"
+    )
+    insert_at = 2 if len(body) >= 2 else len(body)
+    body.insert(insert_at, notice)
+    for _ in range(3):
+        parts = _fit_report_lines(body, force_truncated=True)
+        visible = _visible_finding_counts(parts)
+        final_omitted = {label: expected[label] - visible[label] for label in expected}
+        if final_omitted == omitted:
+            break
+        omitted = final_omitted
+        body[insert_at] = (
+            f"{_REPORT_PREFIX}{_REPORT_FINDINGS_OMITTED}: "
+            f"FAIL={omitted['FAIL']} UNCONFIRMED={omitted['UNCONFIRMED']} "
+            f"PASS={omitted['PASS']}"
+        )
+    return parts
+
+
 def emit_worker_report(text: str | None, *, input_truncated: bool) -> None:
     """Print a bounded completion report. The text is not retained elsewhere."""
     sanitized = _sanitize_report_text(text) if text else ""
@@ -629,6 +692,7 @@ def emit_worker_report(text: str | None, *, input_truncated: bool) -> None:
         parts = [
             _REPORT_BEGIN,
             f"{_REPORT_PREFIX}verification_coverage: UNCONFIRMED",
+            f"{_REPORT_PREFIX}verification_counts: FAIL=0 UNCONFIRMED=1 PASS=0",
             f"{_REPORT_PREFIX}{_REPORT_MISSING_VERIFICATION.removeprefix('[delegate-cursor] ')}",
             _REPORT_OMITTED,
         ]
@@ -636,7 +700,7 @@ def emit_worker_report(text: str | None, *, input_truncated: bool) -> None:
             parts.append(_REPORT_TRUNCATED)
         parts.append(_REPORT_END)
     else:
-        parts = _fit_report_lines(
+        parts = _fit_report_with_omission_notice(
             _report_body(sanitized, input_truncated=input_truncated),
             force_truncated=(
                 input_truncated or len(sanitized.encode("utf-8")) > MAX_REPORT_BYTES

@@ -160,6 +160,9 @@ the form `STATUS: criterion — observed evidence`. A tool call by itself does
 not establish a passing result. The monitor displays explicit findings before
 the legacy intent, changed files, verification, risks, and supervisor-decision
 sections; those section headings remain supported for older reports.
+The monitor shows detected counts for each status, reserves the first finding
+from every present status before the remaining FAIL, UNCONFIRMED, and PASS
+findings, and reports per-status omissions when the 4 KiB display cap is reached.
 
 The monitor keeps the report in memory only, sanitizes known and environment
 secrets, caps captured input at 64 KiB, and caps displayed output at 4 KiB.
