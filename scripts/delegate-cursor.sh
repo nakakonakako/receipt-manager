@@ -74,6 +74,7 @@ repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
   echo "Not inside a Git repository." >&2
   exit 2
 }
+repo_root="$(cd "$repo_root" && pwd -P)"
 cd "$repo_root"
 
 if [[ -n "$task_file" ]]; then
@@ -90,6 +91,7 @@ if [[ -n "$worktree" ]]; then
   repo_name="$(basename "$(dirname "$(git -C "$repo_root" rev-parse --path-format=absolute --git-common-dir)")")"
   workspace="$HOME/worktrees/$repo_name/$worktree"
   "$repo_root/scripts/worktree.sh" create "$worktree" --branch "codex/$worktree" --base origin/main
+  workspace="$(cd "$workspace" && pwd -P)"
 elif [[ -n "$workspace" ]]; then
   if [[ ! -d "$workspace" ]]; then
     echo "Existing worktree not found: $workspace" >&2
@@ -169,5 +171,10 @@ else
   echo "[delegate-cursor] worktree: direct checkout" >&2
 fi
 
+monitor_workspace="$repo_root"
+if [[ -n "$workspace" ]]; then
+  monitor_workspace="$workspace"
+fi
+
 python3 "$repo_root/scripts/delegate-cursor-monitor.py" \
-  --checkout "$repo_root" --tier "$tier" --model "$model" -- "${cmd[@]}"
+  --checkout "$monitor_workspace" --tier "$tier" --model "$model" -- "${cmd[@]}"

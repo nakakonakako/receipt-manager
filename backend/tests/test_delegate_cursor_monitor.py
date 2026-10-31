@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -24,21 +25,25 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.checkout = self.root / "checkout"
         self.checkout.mkdir()
         self.state_home = self.root / "state"
+        self.agent_count = 0
 
     def tearDown(self) -> None:
         self.temp.cleanup()
 
     def fake_agent(self, source: str) -> Path:
-        path = self.root / "fake-agent.py"
+        self.agent_count += 1
+        path = self.root / f"fake-agent-{self.agent_count}.py"
         path.write_text(source, encoding="utf-8")
         return path
 
-    def command(self, agent: Path, *extra: str) -> list[str]:
+    def command(
+        self, agent: Path, *extra: str, checkout: Path | None = None
+    ) -> list[str]:
         return [
             sys.executable,
             str(MONITOR),
             "--checkout",
-            str(self.checkout),
+            str(checkout or self.checkout),
             "--tier",
             "light",
             "--model",
@@ -54,13 +59,14 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         agent: Path,
         *extra: str,
         env_updates: dict[str, str] | None = None,
+        checkout: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env["XDG_STATE_HOME"] = str(self.state_home)
         if env_updates:
             env.update(env_updates)
         return subprocess.run(
-            self.command(agent, *extra),
+            self.command(agent, *extra, checkout=checkout),
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
@@ -69,19 +75,16 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             timeout=10,
         )
 
-    def status(self) -> dict[str, object]:
-        statuses = list(
-            (self.state_home / "receipt-manager/delegate-cursor").glob("*.json")
-        )
-        self.assertEqual(len(statuses), 1)
-        return json.loads(statuses[0].read_text(encoding="utf-8"))
+    def status_path(self, checkout: Path | None = None) -> Path:
+        canonical = (checkout or self.checkout).resolve(strict=True)
+        key = hashlib.sha256(os.fsencode(canonical)).hexdigest()
+        return self.state_home / "receipt-manager/delegate-cursor" / f"{key}.json"
 
-    def status_text(self) -> str:
-        statuses = list(
-            (self.state_home / "receipt-manager/delegate-cursor").glob("*.json")
-        )
-        self.assertEqual(len(statuses), 1)
-        return statuses[0].read_text(encoding="utf-8")
+    def status(self, checkout: Path | None = None) -> dict[str, object]:
+        return json.loads(self.status_path(checkout).read_text(encoding="utf-8"))
+
+    def status_text(self, checkout: Path | None = None) -> str:
+        return self.status_path(checkout).read_text(encoding="utf-8")
 
     def report_block(self, stdout: str) -> str:
         begin = "[delegate-cursor] ----- worker completion report begin -----"
@@ -286,8 +289,17 @@ class DelegateCursorMonitorTests(unittest.TestCase):
                 process.wait(timeout=5)
         self.assertEqual(process.returncode, 130, stdout)
         self.assertEqual(self.status()["outcome"], "interrupted")
+        retry = self.run_agent(
+            self.fake_agent(
+                "import json\n"
+                "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+            )
+        )
+        self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
 
-    def test_duplicate_checkout_worker_is_rejected(self) -> None:
+    def test_duplicate_workspace_alias_is_rejected_without_touching_worker(
+        self,
+    ) -> None:
         agent = self.fake_agent(
             "import json,time\n"
             "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
@@ -295,6 +307,8 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         )
         env = os.environ.copy()
         env["XDG_STATE_HOME"] = str(self.state_home)
+        alias = self.root / "checkout-alias"
+        alias.symlink_to(self.checkout, target_is_directory=True)
         first = subprocess.Popen(
             self.command(agent),
             cwd=REPO_ROOT,
@@ -314,12 +328,192 @@ class DelegateCursorMonitorTests(unittest.TestCase):
                 ):
                     break
                 time.sleep(0.05)
-            second = self.run_agent(agent)
+            second = self.run_agent(agent, checkout=alias)
             self.assertEqual(second.returncode, 4, second.stderr)
             self.assertIn("refusing duplicate run", second.stderr)
+            self.assertIsNone(
+                first.poll(), "duplicate request must not interrupt worker"
+            )
+            relative_alias = Path(os.path.relpath(self.checkout, REPO_ROOT))
+            third = self.run_agent(agent, checkout=relative_alias)
+            self.assertEqual(third.returncode, 4, third.stderr)
         finally:
             first.communicate(timeout=5)
         self.assertEqual(self.status()["outcome"], "succeeded")
+
+    def test_different_workspaces_can_run_concurrently(self) -> None:
+        second_workspace = self.root / "second-worktree"
+        second_workspace.mkdir()
+        started = self.root / "started"
+        release = self.root / "release"
+        agent = self.fake_agent(
+            "import json,os,time\n"
+            "from pathlib import Path\n"
+            "Path(os.environ['STARTED']).open('a').write(os.getcwd()+'\\n')\n"
+            "while not Path(os.environ['RELEASE']).exists(): time.sleep(.02)\n"
+            "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        env = os.environ.copy()
+        env.update(
+            {
+                "XDG_STATE_HOME": str(self.state_home),
+                "STARTED": str(started),
+                "RELEASE": str(release),
+            }
+        )
+        first = subprocess.Popen(
+            self.command(agent),
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        second = subprocess.Popen(
+            self.command(agent, checkout=second_workspace),
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if started.exists() and len(started.read_text().splitlines()) == 2:
+                    break
+                if first.poll() is not None or second.poll() is not None:
+                    break
+                time.sleep(0.02)
+            self.assertTrue(started.exists(), "both workers should start")
+            self.assertEqual(len(started.read_text().splitlines()), 2)
+        finally:
+            release.touch()
+            first.communicate(timeout=5)
+            second.communicate(timeout=5)
+        self.assertEqual(first.returncode, 0)
+        self.assertEqual(second.returncode, 0)
+
+    def test_success_and_failure_release_workspace_lock(self) -> None:
+        success = self.fake_agent(
+            "import json\nprint(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        failure = self.fake_agent(
+            "import sys\nprint('controlled failure', file=sys.stderr, flush=True)\nsys.exit(7)\n"
+        )
+        for agent, expected in ((success, 0), (failure, 7), (success, 0)):
+            result = self.run_agent(agent)
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+
+    def test_main_checkout_aliases_share_lock(self) -> None:
+        alias = self.root / "repo-alias"
+        alias.symlink_to(REPO_ROOT, target_is_directory=True)
+        agent = self.fake_agent("import time\ntime.sleep(1)\n")
+        env = os.environ.copy()
+        env["XDG_STATE_HOME"] = str(self.state_home)
+        first = subprocess.Popen(
+            self.command(agent, checkout=REPO_ROOT),
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while (
+                time.monotonic() < deadline
+                and self.status_path(REPO_ROOT).exists() is False
+            ):
+                time.sleep(0.02)
+            second = self.run_agent(agent, checkout=alias)
+            self.assertEqual(second.returncode, 4, second.stderr)
+        finally:
+            first.communicate(timeout=5)
+
+    def test_lock_failure_does_not_start_subprocess(self) -> None:
+        key = hashlib.sha256(os.fsencode(self.checkout.resolve())).hexdigest()
+        state_dir = self.state_home / "receipt-manager" / "delegate-cursor"
+        state_dir.mkdir(parents=True)
+        marker = self.root / "lock-target"
+        lock_path = state_dir / f"{key}.lock"
+        lock_path.symlink_to(marker)
+        agent = self.fake_agent("from pathlib import Path\nPath('started').touch()\n")
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 5, result.stderr)
+        self.assertFalse((self.checkout / "started").exists())
+        self.assertFalse(marker.exists())
+
+    def test_relative_workspace_path_uses_canonical_status_key(self) -> None:
+        relative = Path(os.path.relpath(self.checkout, REPO_ROOT))
+        agent = self.fake_agent(
+            "import json\nprint(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        result = self.run_agent(agent, checkout=relative)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.status()["outcome"], "succeeded")
+
+    def test_interrupt_does_not_stop_other_workspace_worker(self) -> None:
+        other = self.root / "other-worktree"
+        other.mkdir()
+        started = self.root / "other-started"
+        release = self.root / "other-release"
+        agent = self.fake_agent(
+            "import json,os,time\nfrom pathlib import Path\n"
+            "Path(os.environ['STARTED']).touch()\n"
+            "while not Path(os.environ['RELEASE']).exists(): time.sleep(.02)\n"
+            "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        env = os.environ.copy()
+        env.update(
+            {
+                "XDG_STATE_HOME": str(self.state_home),
+                "STARTED": str(started),
+                "RELEASE": str(release),
+            }
+        )
+        other_process = subprocess.Popen(
+            self.command(agent, checkout=other),
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        own_process = subprocess.Popen(
+            self.command(self.fake_agent("import time\ntime.sleep(20)\n")),
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline and not started.exists():
+                time.sleep(0.02)
+            self.assertTrue(started.exists())
+            own_process.send_signal(signal.SIGINT)
+            own_process.communicate(timeout=5)
+            self.assertEqual(own_process.returncode, 130)
+            self.assertIsNone(other_process.poll())
+        finally:
+            release.touch()
+            other_process.communicate(timeout=5)
+        self.assertEqual(other_process.returncode, 0)
+
+    def test_lock_storage_permissions_are_private(self) -> None:
+        agent = self.fake_agent(
+            "import json\nprint(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        state_dir = self.state_home / "receipt-manager" / "delegate-cursor"
+        self.assertEqual(stat.S_IMODE(state_dir.stat().st_mode), 0o700)
+        for name in (
+            f"{hashlib.sha256(os.fsencode(self.checkout.resolve())).hexdigest()}.lock",
+            "diagnostics.lock",
+        ):
+            self.assertEqual(stat.S_IMODE((state_dir / name).stat().st_mode), 0o600)
 
     def test_delegate_script_uses_stream_json_and_preserves_trust(self) -> None:
         captured_args = self.root / "captured-args.json"
