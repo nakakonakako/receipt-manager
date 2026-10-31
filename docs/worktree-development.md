@@ -57,21 +57,29 @@ Before dependency setup, worktree setup validates existing environment paths
 against the selected `~/.config/receipt-manager/<environment>/` directory.
 Missing managed links are allowed at this stage so a new worktree can proceed
 to dependency setup and link creation. Invalid existing paths stop setup
-before npm or backend environment preparation. Manual worktree commands retain
+before npm or backend environment preparation. Validation runs through
+`scripts/worktree-env-validate.py` in `pre` mode. Manual worktree commands retain
 their selected `--environment`; Cursor delegation explicitly uses `development`.
 After setup, strict validation requires every present managed source to have an
-exact symlink in the worktree, and every absent source to have no target. Before
-starting Cursor, `delegate-cursor.sh` validates the workspace's environment
-paths against `~/.config/receipt-manager/development/`. Each of
+absolute symlink whose direct `readlink` target exactly matches the selected
+source path, and every absent source to have no target. Links accepted only
+because `Path.resolve()` reaches the same file are not valid managed links;
+relative and indirect links are rejected. Before starting Cursor,
+`delegate-cursor.sh` runs the same validator in `strict` mode against
+`~/.config/receipt-manager/development/`. `worktree.sh validate-env <path>`
+defaults to development and also accepts an explicit `--environment <name>`.
+Each of
 the four managed paths above must either be absent both in the development
 settings and workspace, or be a symlink to the exact development settings
 file. Broken links, links to another environment, regular files at managed
 paths, stale links whose source is missing, and other `.env*` paths in the
 workspace stop delegation. The check reads path metadata and symlink targets
 only; it does not read environment file contents, replace, delete, or repair
-anything. It also rejects unexpected `.env*` paths in the repository root,
-frontend, backend, and the backend dotenv lookup directories. Resolve any
-reported path manually, then retry delegation.
+anything. Symlinks and non-directories in the configured settings path or
+dotenv lookup directory chain are rejected. It also rejects unexpected
+`.env*` paths in the repository root, frontend, backend, `backend/app`, and
+`backend/app/services`, matching receipt-manager's Python dotenv lookup scope.
+Resolve any reported path manually, then retry delegation.
 
 ## Initial environment migration and daily startup
 

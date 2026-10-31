@@ -28,6 +28,7 @@ class DelegateCursorRoutingTests(unittest.TestCase):
             "delegate-cursor.sh",
             "delegate-cursor-monitor.py",
             "worktree.sh",
+            "worktree-env-validate.py",
         ):
             shutil.copy2(SCRIPTS / name, scripts / name)
         subprocess.run(["git", "init", "-q", "-b", "main", str(self.repo)], check=True)

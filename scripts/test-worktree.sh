@@ -14,6 +14,7 @@ command_log="$test_root/setup-commands.log"
 mkdir -p "$fixture_repo/scripts" "$fixture_config/frontend" "$fixture_config/backend" "$fixture_bin"
 mkdir -p "$fixture_config/secrets/ai-quota-ca"
 cp "$source_root/scripts/worktree.sh" "$fixture_repo/scripts/worktree.sh"
+cp "$source_root/scripts/worktree-env-validate.py" "$fixture_repo/scripts/worktree-env-validate.py"
 cp "$source_root/scripts/worktree-remove-inspect.py" "$fixture_repo/scripts/worktree-remove-inspect.py"
 cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
 cp "$source_root/scripts/delegate-cursor-monitor.py" "$fixture_repo/scripts/delegate-cursor-monitor.py"
@@ -311,6 +312,7 @@ staging_worktree="$fixture_home/worktrees/$repository_name/manual-staging"
 [[ "$(readlink "$staging_worktree/frontend/.env")" == "$staging_config" ]]
 "$fixture_repo/scripts/worktree.sh" reuse "$staging_worktree" --environment staging >/dev/null
 [[ "$(readlink "$staging_worktree/frontend/.env")" == "$staging_config" ]]
+"$fixture_repo/scripts/worktree.sh" validate-env "$staging_worktree" --environment staging >/dev/null
 
 production_source="$fixture_home/.config/$repository_name/production/frontend/.env"
 mkdir -p "$(dirname "$production_source")"
@@ -325,7 +327,21 @@ if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment
   exit 1
 fi
 [[ ! -s "$command_log" ]]
-grep -Fq 'does not point to selected environment settings' "$test_root/pre-setup-alternate-env.log"
+grep -Fq 'does not directly target selected settings' "$test_root/pre-setup-alternate-env.log"
+rm "$validation_target"
+ln -s "$fixture_config/frontend/.env" "$validation_target"
+
+indirect_source="$test_root/environment-link-alias"
+ln -s "$fixture_config/frontend/.env" "$indirect_source"
+rm "$validation_target"
+ln -s "$indirect_source" "$validation_target"
+: > "$command_log"
+if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment development >"$test_root/pre-setup-indirect-env.log" 2>&1; then
+  echo 'Expected an indirect environment link to be rejected before dependency setup.' >&2
+  exit 1
+fi
+[[ ! -s "$command_log" ]]
+grep -Fq 'does not directly target selected settings' "$test_root/pre-setup-indirect-env.log"
 rm "$validation_target"
 ln -s "$fixture_config/frontend/.env" "$validation_target"
 
@@ -337,7 +353,7 @@ if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment
   exit 1
 fi
 [[ ! -s "$command_log" ]]
-grep -Fq 'missing or is not a symlink' "$test_root/pre-setup-regular-env.log"
+grep -Fq 'Environment path is not a symlink' "$test_root/pre-setup-regular-env.log"
 if grep -Fq 'SECRET_VALUE_MUST_NOT_APPEAR' "$test_root/pre-setup-regular-env.log"; then
   echo 'Environment file contents must not be included in validation errors.' >&2
   exit 1
@@ -353,7 +369,7 @@ if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment
   exit 1
 fi
 [[ ! -s "$command_log" ]]
-grep -Fq 'Unexpected .env-related path in Cursor workspace' "$test_root/pre-setup-unexpected-env.log"
+grep -Fq 'Unexpected .env-related path in workspace' "$test_root/pre-setup-unexpected-env.log"
 rm "$unexpected_env"
 
 real_worktree_script="$fixture_repo/scripts/worktree-real.sh"
@@ -379,7 +395,7 @@ if WORKTREE_TEST_REAL_WORKTREE="$real_worktree_script" WORKER_STARTED_FILE="$wor
   exit 1
 fi
 [[ ! -e "$worker_started_after_setup" ]]
-grep -Fq 'Unexpected .env-related path in Cursor workspace' "$test_root/post-setup-validation.log"
+grep -Fq 'Unexpected .env-related path in workspace' "$test_root/post-setup-validation.log"
 rm "$delegate_workspace/.env.ai-quota"
 mv "$real_worktree_script" "$fixture_repo/scripts/worktree.sh"
 chmod +x "$fixture_repo/scripts/worktree.sh"
@@ -397,7 +413,7 @@ if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$tes
   echo 'Expected an environment link to a different environment to be rejected.' >&2
   exit 1
 fi
-grep -Fq 'does not point to selected environment settings' "$test_root/alternate-env.log"
+grep -Fq 'does not directly target selected settings' "$test_root/alternate-env.log"
 
 rm "$validation_target"
 ln -s "$fixture_config/frontend/missing.env" "$validation_target"
@@ -405,7 +421,7 @@ if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$tes
   echo 'Expected a broken environment link to be rejected.' >&2
   exit 1
 fi
-grep -Fq 'Broken development environment symlink' "$test_root/broken-env.log"
+grep -Fq 'Broken environment symlink' "$test_root/broken-env.log"
 
 rm "$validation_target"
 touch "$validation_target"
@@ -413,7 +429,7 @@ if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$tes
   echo 'Expected an existing regular environment file to be rejected.' >&2
   exit 1
 fi
-grep -Fq 'missing or is not a symlink' "$test_root/regular-env.log"
+grep -Fq 'Environment path is not a symlink' "$test_root/regular-env.log"
 
 rm "$validation_target"
 ln -s "$development_source" "$validation_target"
@@ -422,7 +438,7 @@ if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$tes
   echo 'Expected a stale link with a missing development source to be rejected.' >&2
   exit 1
 fi
-grep -Fq 'Unexpected environment file without a development source' "$test_root/missing-source-env.log"
+grep -Fq 'Broken environment symlink' "$test_root/missing-source-env.log"
 mv "$development_source.saved" "$development_source"
 
 unexpected_env="$delegate_workspace/.env.ai-quota"
@@ -434,7 +450,7 @@ if WORKER_STARTED_FILE="$worker_started" "$source_root/scripts/delegate-cursor.s
   exit 1
 fi
 [[ ! -e "$worker_started" ]]
-grep -Fq 'Unexpected .env-related path in Cursor workspace' "$test_root/unexpected-env-delegate.log"
+grep -Fq 'Unexpected .env-related path in workspace' "$test_root/unexpected-env-delegate.log"
 if grep -Fq 'SECRET_VALUE_MUST_NOT_APPEAR' "$test_root/unexpected-env-delegate.log"; then
   echo 'Environment file contents must not be included in validation errors.' >&2
   exit 1

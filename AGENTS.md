@@ -94,6 +94,9 @@ database password has been rotated and the old local Writer password removed.
 - Create new worktrees with an explicit branch and base, for example
   `scripts/worktree.sh create <task> --branch <branch> --base origin/main`.
   Reuse an existing path with `scripts/worktree.sh reuse <path>`.
+- Managed environment links must be direct absolute symlinks to the exact
+  configured source path. Setup validates them before dependencies, after link
+  creation, and again before Cursor starts; see `docs/worktree-development.md`.
 - Development environment files stay outside Git under
   `~/.config/receipt-manager/<environment>/` and are linked into worktrees by
   the setup command. For initial migration from `~/web/receipt-manager`, first
