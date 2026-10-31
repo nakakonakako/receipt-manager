@@ -150,3 +150,22 @@ browser profile is locked to one browser process at a time. The profile is
 workspace-keyed, so separate worktrees retain separate sessions. See
 [worktree-development.md](./worktree-development.md) for setup, browser cache,
 troubleshooting, and pin-update steps.
+
+## Completion report
+
+The worker must include one `VERIFICATION RESULTS` block near the start of its
+final report. Declare `COVERAGE: COMPLETE` or `COVERAGE: INCOMPLETE`, then give
+each acceptance criterion exactly one `PASS`, `FAIL`, or `UNCONFIRMED` line in
+the form `STATUS: criterion — observed evidence`. A tool call by itself does
+not establish a passing result. The monitor displays explicit findings before
+the legacy intent, changed files, verification, risks, and supervisor-decision
+sections; those section headings remain supported for older reports.
+The monitor shows detected counts for each status, reserves the first finding
+from every present status before the remaining FAIL, UNCONFIRMED, and PASS
+findings, and reports per-status omissions when the 4 KiB display cap is reached.
+
+The monitor keeps the report in memory only, sanitizes known and environment
+secrets, caps captured input at 64 KiB, and caps displayed output at 4 KiB.
+Missing, malformed, repeated, conflicting, or input-truncated verification is
+shown as `UNCONFIRMED`. These report findings do not change the Cursor CLI
+process/result exit classification.

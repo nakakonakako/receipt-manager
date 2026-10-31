@@ -75,10 +75,25 @@ _REPORT_BEGIN = "[delegate-cursor] ----- worker completion report begin -----"
 _REPORT_END = "[delegate-cursor] ----- worker completion report end -----"
 _REPORT_PREFIX = "[delegate-cursor] report: "
 _REPORT_TRUNCATED = "[delegate-cursor] report: [truncated]"
+_REPORT_FINDINGS_OMITTED = "verification_findings_omitted by 4 KiB output limit"
 _REPORT_OMITTED = "[delegate-cursor] report: omitted (result text absent)"
 _REPORT_UNTRUSTED = (
     "[delegate-cursor] report: untrusted free-form result text; review the diff"
 )
+_REPORT_MISSING_VERIFICATION = (
+    "[delegate-cursor] verification UNCONFIRMED: verification block, coverage, "
+    "or consistent results are missing"
+)
+_REPORT_INPUT_TRUNCATED = (
+    "[delegate-cursor] verification UNCONFIRMED: final report exceeded 64 KiB; "
+    "the omitted tail may contain additional results"
+)
+_REPORT_BLOCK_START = re.compile(r"^#{0,6}\s*VERIFICATION RESULTS\s*:?\s*$", re.I)
+_REPORT_BLOCK_END = re.compile(r"^#{0,6}\s*END VERIFICATION RESULTS\s*$", re.I)
+_REPORT_STATUS = re.compile(r"^(PASS|FAIL|UNCONFIRMED):\s*(.*)$", re.I)
+_REPORT_COVERAGE = re.compile(r"^COVERAGE:\s*(COMPLETE|INCOMPLETE)\s*$", re.I)
+_MAX_REPORT_FINDING_BYTES = 600
+_MAX_REPORT_CONTEXT_BYTES = 320
 _SECRET_ENV_NAME = re.compile(
     r"(?i)(?:api[_-]?key|access[_-]?key|service[_-]?role[_-]?key|"
     r"(?:^|_)[a-z0-9]*_key(?:_|$)|secret|token|password|passwd|credential|"
@@ -422,42 +437,274 @@ def _fit_report_lines(body_lines: list[str], *, force_truncated: bool) -> list[s
         if _report_nbytes(full) <= MAX_REPORT_BYTES:
             return full
     kept: list[str] = []
+    omitted = False
     for line in body_lines:
         trial = [_REPORT_BEGIN, *kept, line, _REPORT_TRUNCATED, _REPORT_END]
         if _report_nbytes(trial) <= MAX_REPORT_BYTES:
             kept.append(line)
             continue
-        shrunk = _shrink_report_line(line, kept)
+        omitted = True
+        shrunk = _shrink_report_line(line, kept) if not kept else None
         if shrunk is not None:
             kept.append(shrunk)
-        break
-    return [_REPORT_BEGIN, *kept, _REPORT_TRUNCATED, _REPORT_END]
+    if omitted or force_truncated:
+        return [_REPORT_BEGIN, *kept, _REPORT_TRUNCATED, _REPORT_END]
+    return [_REPORT_BEGIN, *kept, _REPORT_END]
 
 
-def _report_body(text: str) -> list[str]:
+def _bounded_report_line(line: str, limit: int) -> str:
+    encoded = line.encode("utf-8")
+    if len(encoded) <= limit:
+        return line
+    return encoded[: limit - 3].decode("utf-8", errors="ignore") + "..."
+
+
+def _verification_report(
+    text: str, input_truncated: bool
+) -> tuple[str, list[str], list[str]]:
+    findings: dict[str, list[str]] = {"FAIL": [], "UNCONFIRMED": [], "PASS": []}
+    context: list[str] = []
+    coverage_claims: list[str] = []
+    criteria: set[str] = set()
+    in_block = False
+    starts = 0
+    ends = 0
+    malformed = False
+
+    for line in text.splitlines():
+        candidate = re.sub(r"^[-*+]\s+", "", line.strip())
+        if _REPORT_BLOCK_START.fullmatch(candidate):
+            starts += 1
+            malformed |= in_block or starts > 1
+            in_block = True
+            continue
+        if _REPORT_BLOCK_END.fullmatch(candidate):
+            if not in_block:
+                malformed = True
+            else:
+                ends += 1
+                malformed |= ends > 1
+                in_block = False
+            continue
+        if not in_block:
+            status = _REPORT_STATUS.fullmatch(candidate)
+            if status or candidate.upper().startswith("COVERAGE:"):
+                malformed = True
+                context.append(
+                    _bounded_report_line(
+                        f"unscoped status-like text: {line.strip()}",
+                        _MAX_REPORT_CONTEXT_BYTES,
+                    )
+                )
+            continue
+        coverage = _REPORT_COVERAGE.fullmatch(candidate)
+        if coverage:
+            coverage_claims.append(coverage.group(1).upper())
+            continue
+        if candidate.upper().startswith("COVERAGE:"):
+            malformed = True
+            context.append(
+                _bounded_report_line(
+                    f"malformed coverage: {line.strip()}", _MAX_REPORT_CONTEXT_BYTES
+                )
+            )
+            continue
+        status = _REPORT_STATUS.fullmatch(candidate)
+        if status:
+            label, value = status.group(1).upper(), status.group(2).strip()
+            if "—" not in value:
+                malformed = True
+                context.append(
+                    _bounded_report_line(
+                        f"malformed status: {line.strip()}", _MAX_REPORT_CONTEXT_BYTES
+                    )
+                )
+                continue
+            criterion, evidence = (part.strip() for part in value.split("—", 1))
+            if (
+                not criterion
+                or not evidence
+                or criterion in {"...", "TBD"}
+                or evidence in {"...", "TBD"}
+            ):
+                malformed = True
+                context.append(
+                    _bounded_report_line(
+                        f"malformed status: {line.strip()}", _MAX_REPORT_CONTEXT_BYTES
+                    )
+                )
+                continue
+            key = re.sub(r"\s+", " ", criterion).casefold()
+            malformed |= key in criteria
+            criteria.add(key)
+            findings[label].append(
+                _bounded_report_line(
+                    f"[delegate-cursor] verification {label}: {criterion} — {evidence}",
+                    _MAX_REPORT_FINDING_BYTES,
+                )
+            )
+            continue
+        if candidate.upper().startswith(("PASS:", "FAIL:", "UNCONFIRMED:")):
+            malformed = True
+            context.append(
+                _bounded_report_line(
+                    f"malformed status: {line.strip()}", _MAX_REPORT_CONTEXT_BYTES
+                )
+            )
+
+    valid_block = starts == 1 and ends == 1 and not in_block
+    if not valid_block:
+        for label, lines in findings.items():
+            context.extend(
+                _bounded_report_line(
+                    f"unscoped {line.partition('] verification ')[2]}",
+                    _MAX_REPORT_CONTEXT_BYTES,
+                )
+                for line in lines
+            )
+            findings[label].clear()
+    if input_truncated:
+        coverage_status = "UNCONFIRMED"
+        findings["UNCONFIRMED"].insert(0, _REPORT_INPUT_TRUNCATED)
+    elif (
+        not valid_block
+        or len(coverage_claims) != 1
+        or malformed
+        or not any(findings.values())
+    ):
+        coverage_status = "UNCONFIRMED"
+        findings["UNCONFIRMED"].insert(0, _REPORT_MISSING_VERIFICATION)
+    elif coverage_claims[0] == "INCOMPLETE" or findings["UNCONFIRMED"]:
+        coverage_status = "INCOMPLETE"
+        if coverage_claims[0] == "INCOMPLETE" and not findings["UNCONFIRMED"]:
+            findings["UNCONFIRMED"].append(
+                "[delegate-cursor] verification UNCONFIRMED: coverage is incomplete but no unchecked criterion was identified"
+            )
+    else:
+        coverage_status = "COMPLETE"
+    prioritized = [
+        findings[label][0]
+        for label in ("FAIL", "UNCONFIRMED", "PASS")
+        if findings[label]
+    ]
+    prioritized.extend(
+        line
+        for label in ("FAIL", "UNCONFIRMED", "PASS")
+        for line in findings[label][1:]
+    )
+    context.sort(key=lambda line: not line.startswith("unscoped"))
+    return coverage_status, prioritized, context
+
+
+def _report_body(text: str, *, input_truncated: bool) -> list[str]:
+    coverage, findings, context = _verification_report(text, input_truncated)
+    counts = {
+        label: sum(f"verification {label}:" in line for line in findings)
+        for label in ("FAIL", "UNCONFIRMED", "PASS")
+    }
+    summary = [
+        f"{_REPORT_PREFIX}verification_coverage: {coverage}",
+        (
+            f"{_REPORT_PREFIX}verification_counts: FAIL={counts['FAIL']} "
+            f"UNCONFIRMED={counts['UNCONFIRMED']} PASS={counts['PASS']}"
+        ),
+    ]
     sections = _extract_report_sections(text)
     if sections is None:
-        body = [_REPORT_UNTRUSTED]
-        body.extend(f"{_REPORT_PREFIX}{line}" for line in text.split("\n"))
+        body = list(summary)
+        body.extend(
+            f"{_REPORT_PREFIX}{line.removeprefix('[delegate-cursor] ')}"
+            for line in findings
+        )
+        body.append(_REPORT_UNTRUSTED)
+        body.extend(
+            f"{_REPORT_PREFIX}{_bounded_report_line(line, _MAX_REPORT_CONTEXT_BYTES)}"
+            for line in context[:8]
+        )
+        body.extend(
+            f"{_REPORT_PREFIX}{_bounded_report_line(line, _MAX_REPORT_CONTEXT_BYTES)}"
+            for line in text.split("\n")[:8]
+        )
         return body
-    body = []
+    body = list(summary)
+    body.extend(
+        f"{_REPORT_PREFIX}{line.removeprefix('[delegate-cursor] ')}"
+        for line in findings
+    )
+    body.extend(f"{_REPORT_PREFIX}{line}" for line in context)
     for name, content in sections:
         body.append(f"{_REPORT_PREFIX}section: {name}")
-        body.extend(f"{_REPORT_PREFIX}{line}" for line in content)
+        body.extend(
+            f"{_REPORT_PREFIX}{_bounded_report_line(line, _MAX_REPORT_CONTEXT_BYTES)}"
+            for line in content
+        )
     return body
+
+
+def _visible_finding_counts(lines: list[str]) -> dict[str, int]:
+    counts = {label: 0 for label in ("FAIL", "UNCONFIRMED", "PASS")}
+    pattern = re.compile(
+        r"^\[delegate-cursor\] report: verification (FAIL|UNCONFIRMED|PASS):"
+    )
+    for line in lines:
+        match = pattern.match(line)
+        if match:
+            counts[match.group(1)] += 1
+    return counts
+
+
+def _fit_report_with_omission_notice(
+    body: list[str], *, force_truncated: bool
+) -> list[str]:
+    parts = _fit_report_lines(body, force_truncated=force_truncated)
+    expected = _visible_finding_counts(body)
+    visible = _visible_finding_counts(parts)
+    omitted = {label: expected[label] - visible[label] for label in expected}
+    if not any(omitted.values()):
+        return parts
+
+    notice = (
+        f"{_REPORT_PREFIX}{_REPORT_FINDINGS_OMITTED}: "
+        f"FAIL={omitted['FAIL']} UNCONFIRMED={omitted['UNCONFIRMED']} "
+        f"PASS={omitted['PASS']}"
+    )
+    insert_at = 2 if len(body) >= 2 else len(body)
+    body.insert(insert_at, notice)
+    for _ in range(3):
+        parts = _fit_report_lines(body, force_truncated=True)
+        visible = _visible_finding_counts(parts)
+        final_omitted = {label: expected[label] - visible[label] for label in expected}
+        if final_omitted == omitted:
+            break
+        omitted = final_omitted
+        body[insert_at] = (
+            f"{_REPORT_PREFIX}{_REPORT_FINDINGS_OMITTED}: "
+            f"FAIL={omitted['FAIL']} UNCONFIRMED={omitted['UNCONFIRMED']} "
+            f"PASS={omitted['PASS']}"
+        )
+    return parts
 
 
 def emit_worker_report(text: str | None, *, input_truncated: bool) -> None:
     """Print a bounded completion report. The text is not retained elsewhere."""
     sanitized = _sanitize_report_text(text) if text else ""
     if not sanitized.strip():
-        parts = [_REPORT_BEGIN, _REPORT_OMITTED]
+        parts = [
+            _REPORT_BEGIN,
+            f"{_REPORT_PREFIX}verification_coverage: UNCONFIRMED",
+            f"{_REPORT_PREFIX}verification_counts: FAIL=0 UNCONFIRMED=1 PASS=0",
+            f"{_REPORT_PREFIX}{_REPORT_MISSING_VERIFICATION.removeprefix('[delegate-cursor] ')}",
+            _REPORT_OMITTED,
+        ]
         if input_truncated:
             parts.append(_REPORT_TRUNCATED)
         parts.append(_REPORT_END)
     else:
-        parts = _fit_report_lines(
-            _report_body(sanitized), force_truncated=input_truncated
+        parts = _fit_report_with_omission_notice(
+            _report_body(sanitized, input_truncated=input_truncated),
+            force_truncated=(
+                input_truncated or len(sanitized.encode("utf-8")) > MAX_REPORT_BYTES
+            ),
         )
     for line in parts:
         print(line, flush=True)
