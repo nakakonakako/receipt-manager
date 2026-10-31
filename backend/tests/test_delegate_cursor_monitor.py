@@ -1254,6 +1254,115 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertNotIn("A" * 200, status_text)
         self.assertNotIn("worker_response_chars", result.stdout + status_text)
 
+    def test_long_report_prioritizes_verification_findings(self) -> None:
+        verification = "\n".join(
+            (
+                "VERIFICATION RESULTS",
+                "COVERAGE: INCOMPLETE",
+                "PASS: unit tests — 18 tests passed",
+                "FAIL: browser console — TypeError observed",
+                "UNCONFIRMED: mobile layout — viewport not checked",
+                "END VERIFICATION RESULTS",
+            )
+        )
+        report = "\n".join(
+            (
+                "1. root cause / implementation intent",
+                *(["Long context before the results." * 20] * 40),
+                "2. changed files",
+                "src/example.ts",
+                "3. verification performed and results",
+                verification,
+                "4. remaining risks",
+                "none",
+            )
+        )
+        agent = self.fake_agent(
+            "import json\n"
+            f"text = {report!r}\n"
+            "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        block = self.report_block(result.stdout)
+        self.assertLessEqual(len(block.encode("utf-8")), 4096)
+        self.assertIn("verification_coverage: INCOMPLETE", block)
+        self.assertIn("verification FAIL: browser console — TypeError observed", block)
+        self.assertIn(
+            "verification UNCONFIRMED: mobile layout — viewport not checked", block
+        )
+        self.assertIn("verification PASS: unit tests — 18 tests passed", block)
+        self.assertLess(
+            block.index("verification FAIL:"), block.index("section: intent")
+        )
+        self.assertIn("[truncated]", block)
+
+    def test_missing_or_malformed_verification_is_unconfirmed(self) -> None:
+        reports = (
+            "1. root cause / implementation intent\nimplemented\n2. verification\nPASS: tests passed",
+            "VERIFICATION RESULTS\nCOVERAGE: COMPLETE\nPASS: tests — passed\nEND VERIFICATION RESULTS\nFAIL: browser — error",
+            "VERIFICATION RESULTS\nCOVERAGE: COMPLETE\nPASS: browser — rendered\nFAIL: browser — console error\nEND VERIFICATION RESULTS",
+            "VERIFICATION RESULTS\nCOVERAGE: COMPLETE\nPASS: tests — passed\nPASS: tests — passed\nEND VERIFICATION RESULTS",
+            "VERIFICATION RESULTS\nCOVERAGE: COMPLETE\nPASS: tests — passed",
+        )
+        for report in reports:
+            with self.subTest(report=report):
+                agent = self.fake_agent(
+                    "import json\n"
+                    f"text = {report!r}\n"
+                    "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+                )
+                result = self.run_agent(agent)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual(self.status()["outcome"], "succeeded")
+                block = self.report_block(result.stdout)
+                self.assertIn("verification_coverage: UNCONFIRMED", block)
+                self.assertIn("verification UNCONFIRMED:", block)
+        outside = self.report_block(
+            self.run_agent(
+                self.fake_agent(
+                    "import json\ntext = 'VERIFICATION RESULTS\\nCOVERAGE: COMPLETE\\nPASS: tests — passed\\nEND VERIFICATION RESULTS\\nFAIL: browser — error'\n"
+                    "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+                )
+            ).stdout
+        )
+        self.assertIn("unscoped status-like text: FAIL: browser — error", outside)
+
+    def test_verification_findings_are_sanitized_before_prioritization(self) -> None:
+        secret = "verification-secret-value-123"
+        report = (
+            "VERIFICATION RESULTS\nCOVERAGE: COMPLETE\n"
+            f"PASS: api check — token={secret}\n"
+            "END VERIFICATION RESULTS"
+        )
+        agent = self.fake_agent(
+            "import json\n"
+            f"text = {report!r}\n"
+            "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+        )
+        result = self.run_agent(agent, env_updates={"DELEGATE_MONITOR_TOKEN": secret})
+        block = self.report_block(result.stdout)
+        self.assertIn("verification PASS: api check", block)
+        self.assertNotIn(secret, result.stdout + result.stderr + self.status_text())
+
+    def test_input_over_64_kib_is_unconfirmed_even_with_pass_in_prefix(self) -> None:
+        report = (
+            "VERIFICATION RESULTS\nCOVERAGE: COMPLETE\nPASS: tests — passed\n"
+            "END VERIFICATION RESULTS\n" + "x" * 70000
+        )
+        agent = self.fake_agent(
+            "import json\n"
+            f"text = {report!r}\n"
+            "print(json.dumps({'type':'result','subtype':'success','result': text}), flush=True)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        block = self.report_block(result.stdout)
+        self.assertLessEqual(len(block.encode("utf-8")), 4096)
+        self.assertIn("verification_coverage: UNCONFIRMED", block)
+        self.assertIn("exceeded 64 KiB", block)
+        self.assertIn("verification PASS: tests — passed", block)
+
     def test_report_is_absent_from_status_and_diagnostic_logs(self) -> None:
         agent = self.fake_agent(
             "import json, sys\n"

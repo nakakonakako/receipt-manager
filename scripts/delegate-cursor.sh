@@ -134,6 +134,17 @@ or an undocumented architecture decision, stop that part and report it for super
 After implementation, run the repository-standard verification (normally `npm run check`).
 For UI/browser behavior, use Playwright MCP when it materially verifies the acceptance criteria.
 
+Report verification in this exact block, with one line per acceptance criterion:
+VERIFICATION RESULTS
+COVERAGE: COMPLETE or COVERAGE: INCOMPLETE
+PASS: <criterion> — <observable result>
+FAIL: <criterion> — <expected and observed result>
+UNCONFIRMED: <criterion> — <why it could not be verified>
+END VERIFICATION RESULTS
+Use COMPLETE only when every criterion has exactly one observed status. Missing
+or conflicting evidence is UNCONFIRMED. A tool call alone is not evidence of
+successful behavior. Keep the block concise and near the start of the final report.
+
 End with:
 1. root cause / implementation intent
 2. changed files
