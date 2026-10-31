@@ -531,6 +531,8 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         fake_agent.chmod(0o755)
         env = os.environ.copy()
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
+        env["HOME"] = str(self.root / "home")
+        Path(env["HOME"]).mkdir()
         env["XDG_STATE_HOME"] = str(self.state_home)
         env["CAPTURED_ARGS"] = str(captured_args)
         result = subprocess.run(
@@ -575,6 +577,8 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         fake_agent.chmod(0o755)
         env = os.environ.copy()
         env["PATH"] = f"{bin_dir}:{env['PATH']}"
+        env["HOME"] = str(self.root / "home")
+        Path(env["HOME"]).mkdir()
         env["XDG_STATE_HOME"] = str(self.state_home)
         env["CAPTURED_ARGS"] = str(captured_args)
 

@@ -917,6 +917,11 @@ def on_signal(signum: int, _frame: object) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkout", required=True)
+    parser.add_argument(
+        "--route",
+        choices={"cursor", "other-models", "other-models-reserve"},
+        default="cursor",
+    )
     parser.add_argument("--tier", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--heartbeat-seconds", type=int, default=HEARTBEAT_SECONDS)
@@ -998,6 +1003,7 @@ def main() -> int:
     data: dict[str, object] = {
         "started_at": started_at,
         "pid": None,
+        "route": args.route,
         "tier": args.tier,
         "model": args.model,
         "session_id": None,
@@ -1054,6 +1060,7 @@ def main() -> int:
 
     update()
     print(f"[delegate-cursor] started_at: {started_at}", flush=True)
+    print(f"[delegate-cursor] route: {args.route}", flush=True)
     print(f"[delegate-cursor] tier/model: {args.tier}/{args.model}", flush=True)
     print(f"[delegate-cursor] status: {status_path}", flush=True)
 

@@ -267,11 +267,36 @@ and the worker instructions in `.cursor/rules/worker.mdc`.
 
 ### Cursor tiers, checkout, and retries
 
-Use the fixed tier mapping through the script, with `normal` by default:
+Use the fixed tier mapping through the script, with `light` by default:
 
 - `light` -> `composer-2.5`
 - `normal` -> `grok-4.7-medium`
 - `hard` -> `grok-4.7-high`
+
+For an explicitly supervisor-approved Other Models route, use only:
+
+- `--fallback-tier light` -> `gemini-3.8-flash-low`
+- `--fallback-tier normal` -> `claude-sonnet-5-5-medium`
+- `--model-override gpt-5.6-luna-medium` -> reserve candidate
+
+These options are mutually exclusive with `--tier` and with each other. The
+delegate never detects quota exhaustion, retries at another tier, or switches
+routes automatically. The monitor's stderr categories are triage signals only:
+`resource_exhausted` or capacity text alone does not prove a quota limit. The
+Supervisor may explicitly choose Other Models after reviewing credible usage /
+quota evidence, or after the same persistent service/model-side failure occurs
+in a second independent, bounded run on the normal Cursor Models route. Keep a
+quota limit distinct from capacity and service failures. Network, MCP,
+authentication, worktree, dev-server, browser, and other environment failures
+must be repaired without changing models. Do not retry indefinitely.
+
+Implementation-difficulty escalation remains `light` → `normal` → `hard` after
+clarifying the work order. If a `hard` attempt still needs a design change,
+escalate to Sol; this is separate from an explicit Other Models route decision.
+The monitor must report the selected `route`, `tier`, and `model`. Model IDs
+remain account/team/CLI dependent; do not claim current account availability
+without checking an authorized model catalog. Explicit third-party routes may
+have different billing treatment; do not change account billing settings.
 
 Do not use `fast`, `xhigh`, or other model families by default. Do not change
 the model family as a workaround for an environment or tooling failure. Repair

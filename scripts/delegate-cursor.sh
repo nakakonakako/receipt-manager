@@ -4,11 +4,15 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/delegate-cursor.sh --tier <light|normal|hard> --task-file <path> [--worktree <task-name> | --workspace <path>] [--trust|--no-trust]
-  scripts/delegate-cursor.sh --tier <light|normal|hard> --prompt <text> [--worktree <task-name> | --workspace <path>] [--trust|--no-trust]
+  scripts/delegate-cursor.sh [--tier <light|normal|hard>] --task-file <path> [--worktree <task-name> | --workspace <path>] [--trust|--no-trust]
+  scripts/delegate-cursor.sh [--tier <light|normal|hard>] --prompt <text> [--worktree <task-name> | --workspace <path>] [--trust|--no-trust]
+  scripts/delegate-cursor.sh --fallback-tier <light|normal> --task-file <path> [--worktree <task-name> | --workspace <path>]
+  scripts/delegate-cursor.sh --model-override gpt-5.6-luna-medium --task-file <path> [--worktree <task-name> | --workspace <path>]
 
 Options:
-  --tier        Cursor model tier. Default: normal
+  --tier        Cursor model tier. Default: light
+  --fallback-tier  Explicit Other Models route, Supervisor choice only.
+  --model-override Explicit reserve model, Supervisor choice only.
   --task-file   Read the work order from a file.
   --prompt      Pass the work order directly.
   --worktree    Create or reuse ~/worktrees/<repository>/<task> with Git, then pass it through --workspace.
@@ -22,20 +26,40 @@ Model mapping:
   light  -> composer-2.5
   normal -> grok-4.7-medium
   hard   -> grok-4.7-high
+  fallback light -> gemini-3.8-flash-low
+  fallback normal -> claude-sonnet-5-5-medium
+  reserve override -> gpt-5.6-luna-medium
 EOF
 }
 
-tier="normal"
+tier="light"
+fallback_tier=""
+model_override=""
 task_file=""
 prompt=""
 worktree=""
 workspace=""
 allow_dirty=0
 trust=1
+tier_was_set=0
+fallback_was_set=0
+override_was_set=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --tier) tier="${2:?missing value for --tier}"; shift 2 ;;
+    --tier) tier="${2:?missing value for --tier}"; tier_was_set=1; shift 2 ;;
+    --fallback-tier)
+      [[ "$fallback_was_set" -eq 0 ]] || { echo "--fallback-tier may be specified only once." >&2; exit 2; }
+      fallback_tier="${2:?missing value for --fallback-tier}"
+      fallback_was_set=1
+      shift 2
+      ;;
+    --model-override)
+      [[ "$override_was_set" -eq 0 ]] || { echo "--model-override may be specified only once." >&2; exit 2; }
+      model_override="${2:?missing value for --model-override}"
+      override_was_set=1
+      shift 2
+      ;;
     --task-file) task_file="${2:?missing value for --task-file}"; shift 2 ;;
     --prompt) prompt="${2:?missing value for --prompt}"; shift 2 ;;
     --worktree) worktree="${2:?missing value for --worktree}"; shift 2 ;;
@@ -48,17 +72,48 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$fallback_was_set" -eq 1 && ( "$tier_was_set" -eq 1 || "$override_was_set" -eq 1 ) ]]; then
+  echo "--fallback-tier cannot be combined with --tier or --model-override." >&2
+  exit 2
+fi
+if [[ "$override_was_set" -eq 1 && "$tier_was_set" -eq 1 ]]; then
+  echo "--model-override cannot be combined with --tier." >&2
+  exit 2
+fi
+if [[ "$fallback_was_set" -eq 1 && "$override_was_set" -eq 1 ]]; then
+  echo "--fallback-tier cannot be combined with --model-override." >&2
+  exit 2
+fi
+
+route="cursor"
+if [[ "$fallback_was_set" -eq 1 ]]; then
+  route="other-models"
+  case "$fallback_tier" in
+    light) model="gemini-3.8-flash-low" ;;
+    normal) model="claude-sonnet-5-5-medium" ;;
+    *) echo "Invalid fallback tier: $fallback_tier (expected light or normal)" >&2; exit 2 ;;
+  esac
+  tier="fallback-$fallback_tier"
+elif [[ "$override_was_set" -eq 1 ]]; then
+  route="other-models-reserve"
+  case "$model_override" in
+    gpt-5.6-luna-medium) model="$model_override" ;;
+    *) echo "Unsupported model override: $model_override (allowed: gpt-5.6-luna-medium)" >&2; exit 2 ;;
+  esac
+  tier="model-override"
+else
+  case "$tier" in
+    light)  model="composer-2.5" ;;
+    normal) model="grok-4.7-medium" ;;
+    hard)   model="grok-4.7-high" ;;
+    *) echo "Invalid tier: $tier (expected light, normal, or hard)" >&2; exit 2 ;;
+  esac
+fi
+
 if [[ -n "$worktree" && -n "$workspace" ]]; then
   echo "Use either --worktree or --workspace, not both." >&2
   exit 2
 fi
-
-case "$tier" in
-  light)  model="composer-2.5" ;;
-  normal) model="grok-4.7-medium" ;;
-  hard)   model="grok-4.7-high" ;;
-  *) echo "Invalid tier: $tier (expected light, normal, or hard)" >&2; exit 2 ;;
-esac
 
 if [[ -n "$task_file" && -n "$prompt" ]]; then
   echo "Use either --task-file or --prompt, not both." >&2
@@ -172,6 +227,7 @@ cmd+=(-p "$full_prompt")
 cmd+=(--output-format stream-json)
 
 echo "[delegate-cursor] repo: $repo_root" >&2
+echo "[delegate-cursor] route: $route" >&2
 echo "[delegate-cursor] tier: $tier" >&2
 echo "[delegate-cursor] model: $model" >&2
 if [[ -n "$worktree" ]]; then
@@ -190,4 +246,4 @@ fi
 "$repo_root/scripts/worktree.sh" validate-env "$monitor_workspace"
 
 python3 "$repo_root/scripts/delegate-cursor-monitor.py" \
-  --checkout "$monitor_workspace" --tier "$tier" --model "$model" -- "${cmd[@]}"
+  --checkout "$monitor_workspace" --route "$route" --tier "$tier" --model "$model" -- "${cmd[@]}"

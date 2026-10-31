@@ -86,14 +86,14 @@ arises, Luna may make a fresh escalation decision.
 
 ## Cursor tiers
 
-Use the fixed tier mapping through the delegation script, with `normal` by
+Use the fixed tier mapping through the delegation script, with `light` by
 default:
 
 | Tier | Model | Typical work |
 |---|---|---|
 | `light` | `composer-2.5` | CSS tweaks, lint fixes, docs, simple tests, small local edits |
-| `normal` | `grok-4.7-medium` | Default. Normal feature work, multi-file fixes, ordinary bug investigation |
-| `hard` | `grok-4.7-high` | Complex bugs, larger refactors, broad implementation work |
+| `normal` | `grok-4.7-medium` | Retry after Composer implementation difficulty and a clarified work order |
+| `hard` | `grok-4.7-high` | Retry after medium implementation difficulty; redesign after a hard failure goes to Sol |
 
 Do not use `fast`, `xhigh`, or other model families by default. Do not change
 the model family as a workaround for an environment or tooling failure. Repair
@@ -134,6 +134,48 @@ changes is intentional and explicitly approved by the supervisor or user.
 - If a `hard` attempt still fails and redesign is needed, use the Sol
   escalation above before another implementation attempt.
 - Review high-risk work in Codex even after a successful worker run.
+
+## Cursor Models quota and explicit Other Models routes
+
+The monitor automatically categorizes bounded stderr signals such as
+`resource_exhausted`, network, authentication, permissions, and MCP
+initialization. These categories help diagnosis; they do not decide the final
+cause or change the model route. The current CLI result/status output does not
+provide a verified quota-specific signal or remaining-pool balance. In
+particular, one `resource_exhausted` or capacity error does not establish
+usage/quota exhaustion.
+
+Only the Supervisor chooses an Other Models route, after reviewing separate,
+credible usage/quota evidence or a recurring service/model-side failure. For
+the latter, make one independent, bounded confirmation run on the normal Cursor
+Models route and require the same failure to recur before considering a route
+change. Do not retry indefinitely. Repair network, MCP, authentication,
+worktree, dev-server, browser, or other environment failures without changing
+models. Keep implementation-difficulty retries and Sol redesign escalation
+separate from this route decision.
+
+Supported explicit routes are:
+
+| Option | Route / tier | Model |
+|---|---|---|
+| `--fallback-tier light` | `other-models` / `fallback-light` | `gemini-3.8-flash-low` |
+| `--fallback-tier normal` | `other-models` / `fallback-normal` | `claude-sonnet-5-5-medium` |
+| `--model-override gpt-5.6-luna-medium` | `other-models-reserve` / `model-override` | `gpt-5.6-luna-medium` |
+
+They cannot be combined with `--tier` or each other. The script never
+auto-selects a fallback, automatically retries another route, or changes
+billing settings. Other Models availability and billing depend on the current
+Cursor plan, account, and team settings; selecting a route can have different
+cost treatment from Cursor Models. The user must review their own plan and
+billing settings before a Supervisor selects one. Current public model docs
+confirm the corresponding model families and `agent models` is the CLI catalog
+command, but this implementation did not read local credentials or query the
+account-specific catalog. Exact variant availability therefore remains
+account-dependent and unverified here.
+
+The monitor prints and records the selected `route`, `tier`, and `model` in its
+per-workspace status. These fields identify the requested CLI selection; they
+do not independently attest which backend model ultimately served the turn.
 
 ## Playwright MCP permissions
 
