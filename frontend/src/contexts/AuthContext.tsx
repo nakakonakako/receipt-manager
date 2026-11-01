@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { receiptUploaderStateCache } from '../features/receipt/hooks/receiptUploaderStateCache'
+import { logoutLocalSession } from './logoutLocalSession'
 
 type AuthContextType = {
   session: Session | null
@@ -58,8 +59,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [])
 
   const logout = async () => {
-    receiptUploaderStateCache.setOwner(null)
-    await supabase.auth.signOut()
+    await logoutLocalSession({
+      setOwner: (userId) => {
+        receiptUploaderStateCache.setOwner(userId)
+      },
+      signOut: (options) => supabase.auth.signOut(options),
+    })
   }
 
   return (
