@@ -255,10 +255,25 @@ itself.
 Do not take ordinary implementation over just because delegation takes setup or
 the checkout is dirty. If Cursor CLI is unavailable, the delegate script is
 broken, or another tooling failure prevents delegation, report the concrete
-failure. Do one bounded repair or retry only when that is efficient; otherwise
-Luna may take over only if the independent direct-implementation conditions
-above are met. Tooling failure alone does not justify takeover, skipping Sol
-review or quality checks, or changing the model family.
+failure. Follow the execution-environment policy below before any repair or
+retry. Do one bounded repair only when it addresses the observed cause;
+otherwise stop and report an approved alternative environment. Luna may take
+over only if the independent direct-implementation conditions above are met.
+Tooling failure alone does not justify takeover, skipping Sol review or quality
+checks, or changing the model family.
+
+### Execution environment and approval policy
+
+Before every delegation, inspect the execution tools and argument schemas
+available in the current session, plus its actual sandbox, network, and approval
+state. Use network access normally when already allowed; request only a
+currently supported limited approval when network access is blocked. If that
+approval is unavailable or denied, stop and report an approved alternative
+environment. Never enable `danger-full-access` automatically or assume tool
+names or arguments from another session. Classify network, authentication, MCP,
+execution-tool, and approval-policy failures separately. Environment failures
+do not justify model changes or repeated retries. Follow the decision table in
+[docs/cursor-delegation.md](docs/cursor-delegation.md#execution-tools-network-access-and-approval-policy).
 
 Quality checks, security review, tests, final diff review, and Git/worktree
 safety apply regardless of who implements.
@@ -289,9 +304,9 @@ routes automatically. The monitor's stderr categories are triage signals only:
 Supervisor may explicitly choose Other Models after reviewing credible usage /
 quota evidence, or after the same persistent service/model-side failure occurs
 in a second independent, bounded run on the normal Cursor Models route. Keep a
-quota limit distinct from capacity and service failures. Network, MCP,
-authentication, worktree, dev-server, browser, and other environment failures
-must be repaired without changing models. Do not retry indefinitely.
+quota limit distinct from capacity and service failures. Environment and
+approval-policy failures follow the execution-environment policy above; they do
+not justify model or route changes.
 
 Implementation-difficulty escalation remains `light` → `normal` → `hard` after
 clarifying the work order. If a `hard` attempt still needs a design change,
@@ -302,10 +317,11 @@ without checking an authorized model catalog. Explicit third-party routes may
 have different billing treatment; do not change account billing settings.
 
 Do not use `fast`, `xhigh`, or other model families by default. Do not change
-the model family as a workaround for an environment or tooling failure. Repair
-or retry and resume delegation at the appropriate tier when delegation remains
-appropriate under the ownership conditions. If Luna's independent
-direct-implementation conditions are met, follow that route instead.
+the model family as a workaround for an environment or tooling failure. For
+environment failures, follow the execution-environment policy above. For
+implementation difficulty, clarify the work order and follow the tier sequence
+below. If Luna's independent direct-implementation conditions are met, follow
+that route instead.
 
 Use direct checkout only when one worker is running, the checkout is clean, and
 there is no concurrent work. Use `scripts/delegate-cursor.sh --worktree <task>`
