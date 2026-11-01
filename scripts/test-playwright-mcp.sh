@@ -22,6 +22,9 @@ allow = cli["permissions"]["allow"]
 deny = cli["permissions"]["deny"]
 assert "Mcp(playwright:*)" in allow
 assert "Mcp(*:*)" not in allow
+assert "Shell(pwd)" in allow
+assert "Shell(*)" not in allow
+assert "Shell(bash)" not in allow and "Shell(sh)" not in allow
 assert "Shell(sudo)" in deny and "Shell(rm)" in deny
 assert playwright["browser"]["browserName"] == "chromium"
 assert playwright["snapshot"]["mode"] == "none"
