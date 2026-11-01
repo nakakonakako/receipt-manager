@@ -4,6 +4,7 @@
       "Shell(npm)",
       "Shell(uv)",
       "Shell(git)",
+      "Shell(pwd)",
       "Shell(ls)",
       "Shell(cat)",
       "Mcp(playwright:*)"
