@@ -177,7 +177,28 @@ class WorktreeRemoveGuardTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(path.exists())
+        self.assertTrue(alias.is_symlink())
         self.assertFalse(alias.exists())
+        self.assertEqual(alias.resolve(strict=False), path.resolve(strict=False))
+        registered_worktrees = subprocess.run(
+            ["git", "-C", str(self.repo), "worktree", "list", "--porcelain"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotIn(f"worktree {path}\n", registered_worktrees.stdout)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.repo),
+                "show-ref",
+                "--verify",
+                "refs/heads/feature/symlink-target",
+            ],
+            check=True,
+            capture_output=True,
+        )
 
     def test_dirty_worktree_is_refused(self) -> None:
         path = self._create_worktree("dirty", "feature/dirty")
