@@ -225,6 +225,10 @@ monitoring and signal cleanup continue.
 
 ## Monitor stream, progress, and status bounds
 
+The shared, versioned behavioral acceptance criteria and their test mapping are
+documented in [cursor-monitor-contract.md](./cursor-monitor-contract.md).
+That initial contract does not imply adoption by another repository.
+
 Each stdout stream-json record is limited to 256 KiB by byte count. An
 oversized record is discarded through its next newline and counted once; parsing
 resumes with the next record. An unterminated final record within the limit is
