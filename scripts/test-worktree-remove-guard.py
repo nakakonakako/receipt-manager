@@ -311,6 +311,20 @@ class WorktreeRemoveGuardTests(unittest.TestCase):
         self.assertTrue(outcome.ok, outcome.errors)
         cwd.assert_not_called()
 
+    def test_live_state_transition_does_not_look_like_pid_reuse(self) -> None:
+        path = self._create_worktree("state-transition", "feature/state-transition")
+        pid = 987655
+        before = INSPECT.ProcStat(state="S", starttime=10)
+        after = INSPECT.ProcStat(state="R", starttime=10)
+        with (
+            patch.object(INSPECT, "_proc_pids", return_value=[pid]),
+            patch.object(INSPECT, "_proc_stat", side_effect=[before, after]),
+            patch.object(INSPECT, "_proc_cwd", return_value=path),
+        ):
+            outcome = INSPECT.inspect_worktree(path)
+        self.assertFalse(outcome.ok)
+        self.assertEqual(outcome.blocked_pids, (pid,))
+
     def test_pid_reuse_during_scan_is_ignored(self) -> None:
         path = self._create_worktree("pid-race", "feature/pid-race")
         with (

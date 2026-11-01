@@ -164,7 +164,8 @@ callback URL and is separate from this application redirect target.
 `~/worktrees/receipt-manager/`, prompts for the literal word `remove`, and uses
 non-forced `git worktree remove`. It does not delete the branch. Check for active
 workers and development servers first. It never runs automatically after a PR
-is merged.
+is merged. The shared v1 acceptance conditions and test mapping are documented
+in [worktree-remove-contract.md](./worktree-remove-contract.md).
 
 Before showing the confirmation prompt and again immediately before removing,
 the command scans Linux `/proc` for live processes whose canonical current
