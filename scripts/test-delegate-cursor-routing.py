@@ -155,6 +155,38 @@ class DelegateCursorRoutingTests(unittest.TestCase):
         self.assertIn(f"[delegate-cursor] baseline: origin/main {head}", result.stderr)
         self.assertIn(f"[delegate-cursor] monitor: {self.repo}/scripts/delegate-cursor-monitor.py", result.stderr)
 
+    def test_main_ahead_of_origin_main_is_allowed(self) -> None:
+        baseline = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        (self.repo / "README.md").write_text("local main advance\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "advance local main"], check=True)
+        result = self.run_delegate()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"[delegate-cursor] baseline: origin/main {baseline}", result.stderr)
+        self.assertIn("[delegate-cursor] source branch: main", result.stderr)
+        self.assertEqual(len(self.calls_read()), 1)
+
+    def test_diverged_main_stops_before_worker_start(self) -> None:
+        initial = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        subprocess.run(["git", "-C", str(self.repo), "checkout", "-qb", "baseline-ref", initial], check=True)
+        (self.repo / "README.md").write_text("remote baseline\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "remote advance"], check=True)
+        baseline = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+        subprocess.run(["git", "-C", str(self.repo), "update-ref", "refs/remotes/origin/main", baseline], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "checkout", "-q", "main"], check=True)
+        (self.repo / "README.md").write_text("local diverged main\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(self.repo), "add", "README.md"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-qm", "local advance"], check=True)
+        source = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
+
+        result = self.run_delegate("--worktree", "must-not-create")
+        self.assertEqual(result.returncode, 3, result.stderr)
+        self.assertIn(source, result.stderr)
+        self.assertIn(baseline, result.stderr)
+        self.assertEqual(self.calls_read(), [])
+        self.assertFalse(self.worktree_calls.exists())
+
     def test_stale_main_stops_before_worktree_or_worker_start(self) -> None:
         old_head = subprocess.check_output(["git", "-C", str(self.repo), "rev-parse", "HEAD"], text=True).strip()
         (self.repo / "README.md").write_text("advanced main\n", encoding="utf-8")

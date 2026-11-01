@@ -6,6 +6,7 @@ import importlib.util
 import os
 from pathlib import Path
 import re
+import shutil
 import signal
 import stat
 import subprocess
@@ -42,6 +43,56 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         path = self.root / f"fake-agent-{self.agent_count}.py"
         path.write_text(source, encoding="utf-8")
         return path
+
+    def launcher_fixture(self) -> Path:
+        """Create an isolated checkout with an explicit origin/main baseline."""
+        checkout = (
+            self.root
+            / f"launcher-fixture-{len(list(self.root.glob('launcher-fixture-*')))}"
+        )
+        scripts = checkout / "scripts"
+        scripts.mkdir(parents=True)
+        for name in (
+            "delegate-cursor.sh",
+            "delegate-cursor-monitor.py",
+            "worktree.sh",
+            "worktree-env-validate.py",
+            "lib-backend-runtime.sh",
+        ):
+            shutil.copy2(REPO_ROOT / "scripts" / name, scripts / name)
+        subprocess.run(["git", "init", "-q", "-b", "main", str(checkout)], check=True)
+        subprocess.run(
+            ["git", "-C", str(checkout), "config", "user.name", "Monitor test"],
+            check=True,
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(checkout),
+                "config",
+                "user.email",
+                "monitor-test@example.invalid",
+            ],
+            check=True,
+        )
+        (checkout / "README.md").write_text("fixture\n", encoding="utf-8")
+        subprocess.run(["git", "-C", str(checkout), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(checkout), "commit", "-qm", "fixture"], check=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(checkout),
+                "update-ref",
+                "refs/remotes/origin/main",
+                "HEAD",
+            ],
+            check=True,
+        )
+        return checkout
 
     def command(
         self, agent: Path, *extra: str, checkout: Path | None = None
@@ -730,6 +781,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             self.assertEqual(stat.S_IMODE((state_dir / name).stat().st_mode), 0o600)
 
     def test_delegate_script_uses_stream_json_and_preserves_trust(self) -> None:
+        checkout = self.launcher_fixture()
         captured_args = self.root / "captured-args.json"
         bin_dir = self.root / "bin"
         bin_dir.mkdir()
@@ -751,7 +803,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         env["CAPTURED_ARGS"] = str(captured_args)
         result = subprocess.run(
             [
-                str(REPO_ROOT / "scripts/delegate-cursor.sh"),
+                str(checkout / "scripts/delegate-cursor.sh"),
                 "--tier",
                 "light",
                 "--allow-dirty",
@@ -759,7 +811,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
                 "--prompt",
                 "PROMPT_SENTINEL",
             ],
-            cwd=REPO_ROOT,
+            cwd=checkout,
             env=env,
             capture_output=True,
             text=True,
@@ -776,6 +828,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertNotIn("PROMPT_SENTINEL", result.stdout + result.stderr)
 
     def test_delegate_script_defaults_to_trust_and_no_trust_disables_it(self) -> None:
+        checkout = self.launcher_fixture()
         captured_args = self.root / "captured-args.json"
         bin_dir = self.root / "bin"
         bin_dir.mkdir()
@@ -799,7 +852,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         for trust_option, should_trust in ((None, True), ("--no-trust", False)):
             with self.subTest(trust_option=trust_option):
                 args = [
-                    str(REPO_ROOT / "scripts/delegate-cursor.sh"),
+                    str(checkout / "scripts/delegate-cursor.sh"),
                     "--tier",
                     "light",
                     "--allow-dirty",
@@ -809,7 +862,7 @@ class DelegateCursorMonitorTests(unittest.TestCase):
                 args.extend(("--prompt", "PONG"))
                 result = subprocess.run(
                     args,
-                    cwd=REPO_ROOT,
+                    cwd=checkout,
                     env=env,
                     capture_output=True,
                     text=True,
