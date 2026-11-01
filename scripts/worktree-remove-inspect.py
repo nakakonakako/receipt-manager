@@ -143,10 +143,14 @@ def inspect_worktree(worktree_path: Path) -> InspectOutcome:
             except InspectionError as stat_exc:
                 errors.append(str(stat_exc))
                 continue
+            if not _same_process(before, after):
+                # The PID exited, became a zombie, or was reused while cwd
+                # was unreadable. Do not attribute the old identity to it.
+                continue
             # An inaccessible cwd cannot be linked to this worktree. Skip it
-            # as an explicit detection limit; never signal the PID. The stat
-            # reread above ensures a failure to inspect the PID itself still
-            # fails closed.
+            # as an explicit detection limit even when PID/starttime match;
+            # identity alone does not establish worktree membership. Never
+            # signal the PID. A failed stat reread remains fail-closed.
             continue
 
         try:

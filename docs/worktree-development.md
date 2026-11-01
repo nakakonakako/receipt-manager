@@ -172,20 +172,26 @@ working directory is the target worktree or one of its subdirectories. A match
 prints the PID and asks you to stop that process yourself before retrying. The
 guard never kills processes. A `/proc` enumeration error or unreadable process
 identity for a current-user PID refuses removal with a reason and a retry hint.
-Zombie processes are ignored, and process start times are compared around the
-working-directory read so an exited or reused PID is not attributed to the old
-process. The final scan narrows the race where a process starts while the
-confirmation prompt is open; a process could still start in the small interval
-between that scan and Git removing the worktree.
+Zombie processes are ignored. For a readable cwd, the guard compares process
+start time before and after reading cwd; for an unreadable cwd, it also
+rechecks PID/start-time identity before skipping it. A changed identity or an
+exited process is not attributed to the old PID. A matching identity with an
+unreadable cwd still cannot establish whether that process uses the target
+worktree, so the current policy skips it rather than assuming it belongs to
+the target. A failed stat recheck refuses removal. The final scan narrows the
+race where a process starts while the confirmation prompt is open; a process
+could still start in the small interval between that scan and Git removing the
+worktree.
 
 The scan depends on Linux `/proc`. Processes that move their working directory
-out of the worktree, or whose cwd cannot be read, may not be detected. A PID
-whose cwd cannot be read is skipped because its relation to the target cannot
-be established; a same-user PID whose stat identity or `/proc` enumeration
-cannot be read blocks removal. If removal is refused, inspect the listed PID
-locally (for example with `ps`), stop the relevant development server or worker,
-then run `scripts/worktree.sh remove <path>` again. The guard does not print
-process command lines or environment values.
+out of the worktree, or whose cwd cannot be read, may not be detected. Start
+time identifies the sampled process but cannot reveal its worktree relationship
+when cwd access fails. A same-user PID whose stat identity or `/proc`
+enumeration cannot be read blocks removal. A race also remains after the final
+scan and before Git removes the worktree. If removal is refused, inspect the
+listed PID locally (for example with `ps`), stop the relevant development
+server or worker, then run `scripts/worktree.sh remove <path>` again. The guard
+does not print process command lines or environment values.
 
 ## Cursor delegation
 
