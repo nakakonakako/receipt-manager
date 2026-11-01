@@ -168,6 +168,17 @@ class WorktreeRemoveGuardTests(unittest.TestCase):
             capture_output=True,
         )
 
+    def test_symlink_alias_resolves_to_registered_worktree(self) -> None:
+        path = self._create_worktree("symlink-target", "feature/symlink-target")
+        alias = self.worktree_base / "symlink-alias"
+        alias.symlink_to(path, target_is_directory=True)
+
+        result = self._remove(alias)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(path.exists())
+        self.assertFalse(alias.exists())
+
     def test_dirty_worktree_is_refused(self) -> None:
         path = self._create_worktree("dirty", "feature/dirty")
         (path / "dirty.txt").write_text("dirty\n", encoding="utf-8")
@@ -321,20 +332,64 @@ class WorktreeRemoveGuardTests(unittest.TestCase):
                 self._cleanup_children()
         self.assertIsNotNone(child.poll())
 
-    def test_unreadable_cwd_is_skipped_after_identity_recheck(self) -> None:
+    def test_unreadable_cwd_rechecks_pid_identity_but_does_not_infer_membership(
+        self,
+    ) -> None:
         path = self._create_worktree("unknown-owner", "feature/unknown-owner")
-        live = INSPECT.ProcStat(state="S", starttime=10)
+        before = INSPECT.ProcStat(state="S", starttime=10)
+        cases = (
+            ("same PID identity", INSPECT.ProcStat(state="S", starttime=10)),
+            ("PID reused", INSPECT.ProcStat(state="S", starttime=11)),
+            ("process exited", None),
+            ("process became zombie", INSPECT.ProcStat(state="Z", starttime=10)),
+        )
+        for label, after in cases:
+            with self.subTest(label=label):
+                with (
+                    patch.object(INSPECT, "_proc_pids", return_value=[987654]),
+                    patch.object(
+                        INSPECT, "_proc_stat", side_effect=[before, after]
+                    ) as stat,
+                    patch.object(
+                        INSPECT, "_same_process", wraps=INSPECT._same_process
+                    ) as identity_check,
+                    patch.object(
+                        INSPECT,
+                        "_proc_cwd",
+                        side_effect=INSPECT.InspectionError("denied"),
+                    ),
+                    patch.object(INSPECT, "_proc_uid", return_value=os.getuid()),
+                ):
+                    outcome = INSPECT.inspect_worktree(path)
+                self.assertEqual(stat.call_count, 2)
+                identity_check.assert_called_once_with(before, after)
+                self.assertTrue(outcome.ok, outcome.errors)
+                self.assertFalse(outcome.blocked_pids)
+
+    def test_unreadable_cwd_and_failed_identity_recheck_refuse(self) -> None:
+        path = self._create_worktree(
+            "unknown-stat-after-cwd", "feature/unknown-stat-after-cwd"
+        )
         with (
             patch.object(INSPECT, "_proc_pids", return_value=[987654]),
-            patch.object(INSPECT, "_proc_stat", return_value=live),
             patch.object(
-                INSPECT, "_proc_cwd", side_effect=INSPECT.InspectionError("denied")
+                INSPECT,
+                "_proc_stat",
+                side_effect=[
+                    INSPECT.ProcStat(state="S", starttime=10),
+                    INSPECT.InspectionError("stat denied"),
+                ],
+            ),
+            patch.object(
+                INSPECT,
+                "_proc_cwd",
+                side_effect=INSPECT.InspectionError("cwd denied"),
             ),
             patch.object(INSPECT, "_proc_uid", return_value=os.getuid()),
         ):
             outcome = INSPECT.inspect_worktree(path)
-        self.assertTrue(outcome.ok, outcome.errors)
-        self.assertFalse(outcome.blocked_pids)
+        self.assertFalse(outcome.ok)
+        self.assertTrue(outcome.errors)
 
     def test_unreadable_same_user_stat_fails_closed(self) -> None:
         path = self._create_worktree("unknown-stat", "feature/unknown-stat")
