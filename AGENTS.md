@@ -331,6 +331,19 @@ large or risky change needs isolation. Do not use `--allow-dirty` as a shortcut;
 it is only appropriate when mixing changes is intentional and explicitly
 approved by the supervisor or user.
 
+Before delegation, fetch `origin/main` and verify the launcher checkout. A
+launcher started from branch `main` stops if its HEAD is older than, diverged
+from, or cannot be compared with the local `origin/main` commit. It never
+fetches or updates a checkout itself. If the ordinary checkout is behind, run
+the launcher from a dedicated worktree based on the fetched `origin/main`;
+never update the ordinary checkout as part of delegation. Feature branches and
+detached historical checkouts are not rejected just because their HEAD differs
+from `origin/main`. The launcher reports the source checkout, branch, HEAD,
+baseline ref and SHA, Worker workspace, and monitor path/checkout. This check
+cannot protect against invoking an older launcher that predates the check; the
+Supervisor must perform the fetch and choose the launcher checkout before
+starting it. See [the detailed freshness procedure](docs/cursor-delegation.md#launcher-checkout-freshness-and-provenance).
+
 If an implementation attempt is unproductive, clarify the work order and retry
 at the next tier. Do not repeat unproductive retries at the same tier. If a
 `hard` attempt still fails and redesign is needed, use the Sol escalation above
