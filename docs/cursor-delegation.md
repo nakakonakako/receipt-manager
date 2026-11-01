@@ -47,14 +47,56 @@ Do not take ordinary implementation over because delegation takes setup or the
 checkout is dirty.
 
 If Cursor CLI is unavailable, the delegate script is broken, or another tooling
-failure prevents delegation, report the concrete failure. Do one bounded repair
-or retry only when that is efficient. Luna may take over only when the
-independent direct-implementation conditions above are met. Tooling failure
-alone does not justify takeover, skipping Sol review or quality checks, or
-changing the model family.
+failure prevents delegation, report the concrete failure. For network, sandbox,
+execution-tool, or approval-policy failures, follow the execution-environment
+policy below; do not retry the same blocked invocation. Make one bounded repair
+only when it directly addresses the observed cause. Luna may take over only
+when the independent direct-implementation conditions above are met. Tooling
+failure alone does not justify takeover, skipping Sol review or quality checks,
+or changing the model family.
 
 Quality checks, security review, tests, final diff review, and Git/worktree
 safety apply regardless of who implements.
+
+## Execution tools, network access, and approval policy
+
+Cursor CLI must connect to its external API. Before invoking
+`scripts/delegate-cursor.sh`, the Supervisor checks the execution tools exposed
+in the current session, their documented argument schemas, and the active
+sandbox, network, and approval policy. Select the execution method from that
+current evidence. Do not infer tool names or arguments from another session.
+
+| Observed condition | Supervisor action |
+|---|---|
+| Network access is already allowed | Invoke the delegation script through the currently available execution tool. Do not request unnecessary privilege escalation. |
+| Network is restricted and an official limited approval path is available | Request approval through that path for the delegation command only. Keep the approval scoped; do not change project-wide sandbox or approval settings. |
+| Limited approval is unavailable or denied | Stop before invoking or retrying the command. Report the specific restriction and request an approved network-enabled Codex environment or operator-run delegation in such an environment. |
+| No exposed execution tool can launch the script | Stop and report the missing execution capability; continue only in an environment with a supported command execution tool. |
+| An argument such as `require_escalated` is absent or unsupported | Do not pass, emulate, or assume that argument. Use another currently supported limited approval path if available; otherwise stop and report the constraint. |
+| The execution tool API name differs from a previous session | Use the currently exposed equivalent only when its documented capability and current policy permit the command; otherwise stop and report the limitation. |
+
+Never automatically enable `danger-full-access` to run Cursor. If a broad
+permission mode is already active, it is not evidence that the operation has
+least privilege. Do not widen or alter that mode; keep the work order and
+invocation bounded, and note the broader environment as an operational caveat.
+
+Classify failures from observed evidence, without conflating them:
+
+- DNS, connection, or egress-denial errors are network failures.
+- Missing or expired credentials are authentication failures.
+- An explicit missing Playwright MCP approval is an MCP approval issue. Follow
+  the manual, Playwright-only procedure in [Playwright MCP permissions](#playwright-mcp-permissions).
+- No available shell/command execution capability is an execution-tool failure.
+- A missing, denied, or unsupported limited-approval mechanism is an
+  approval-policy failure.
+- Model/service errors remain separate; do not infer implementation difficulty
+  from a generic or environment error.
+
+Repair only when a bounded action addresses the observed cause. If the policy
+blocks execution or approval is refused, stop and report the available
+alternative environment. Do not change model tiers or routes for environment
+failures, and do not retry indefinitely. Keep the existing implementation-tier,
+Other Models, trust, worktree, monitor, and MCP approval rules below intact.
 
 ## Sol escalation
 
@@ -95,11 +137,13 @@ default:
 | `normal` | `grok-4.7-medium` | Retry after Composer implementation difficulty and a clarified work order |
 | `hard` | `grok-4.7-high` | Retry after medium implementation difficulty; redesign after a hard failure goes to Sol |
 
-Do not use `fast`, `xhigh`, or other model families by default. Do not change
-the model family as a workaround for an environment or tooling failure. Repair
-or retry and resume delegation at the appropriate tier when delegation remains
-appropriate under the ownership conditions. If Luna's independent
-direct-implementation conditions are met, follow that route instead.
+Do not use `fast`, `xhigh`, or other model families by default. For an
+environment or tooling failure, follow [Execution tools, network access, and
+approval policy](#execution-tools-network-access-and-approval-policy); do not
+change the model family or retry the same blocked command. If a cause-matched
+repair makes delegation possible, resume at the already selected tier. If
+Luna's independent direct-implementation conditions are met, follow that route
+instead.
 
 ## Checkout and worktrees
 
@@ -168,6 +212,9 @@ changes is intentional and explicitly approved by the supervisor or user.
 - If an implementation attempt is unproductive, clarify the work order and
   retry at the next tier. Do not repeat unproductive retries at the same tier.
   `light` retries as `normal`; `normal` retries as `hard`.
+- For network, sandbox, execution-tool, authentication, MCP, or approval-policy
+  failures, use the execution-environment policy above. Do not escalate tiers or
+  retry a blocked command because of these failures.
 - If a `hard` attempt still fails and redesign is needed, use the Sol
   escalation above before another implementation attempt.
 - Review high-risk work in Codex even after a successful worker run.
