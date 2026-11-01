@@ -159,6 +159,53 @@ run in parallel, the checkout is dirty, edits are concurrent, or a large or
 risky change needs isolation. Existing worktrees in other locations are not
 moved or removed automatically.
 
+## Launcher checkout freshness and provenance
+
+Before invoking the launcher, the Supervisor explicitly fetches the baseline:
+
+```sh
+git fetch origin main
+```
+
+Then check the checkout from which `scripts/delegate-cursor.sh` will actually
+run. The launcher resolves its own physical path and Git root, rather than
+assuming the caller's current directory identifies the source checkout. It
+reads the local `refs/remotes/origin/main` commit without fetching or changing
+any ref. The reported baseline SHA is therefore the locally available
+remote-tracking value; only the Supervisor's preceding successful fetch
+establishes that it was refreshed for this run.
+
+For a launcher source checkout on branch `main`, the launcher permits an exact
+match with `origin/main`, and also a local main that is ahead while containing
+the fetched baseline. It stops before worktree creation/reuse, setup, or Cursor
+startup when main is behind, diverged, unrelated, or the ancestry relation
+cannot be verified. The error includes the source and baseline SHAs and directs
+the Supervisor to fetch and start from an appropriate checkout. It never runs
+fetch, pull, reset, or checkout itself. A missing or invalid `origin/main`, an
+unreadable HEAD, or an unresolvable launcher Git root also stops delegation;
+unknown state is never treated as fresh.
+
+Feature branches and detached HEAD checkouts are allowed when their HEAD is
+valid, even when it differs from `origin/main` or points to a historical
+commit. The launcher reports `(detached HEAD)` instead of inferring a branch.
+The baseline ref must still exist so the invocation has a comparable, explicit
+reference in its provenance record.
+
+The launcher prints its absolute source path, source checkout, branch and HEAD,
+the baseline ref and SHA, the absolute Worker workspace and its branch and
+HEAD, and the monitor script path and `--checkout` workspace. The monitor and
+worktree manager are always loaded from the launcher's source checkout; a
+modified copy inside the Worker workspace is not executed. These records
+contain paths and Git identifiers only, not environment values or credentials.
+
+If the ordinary `~/web/receipt-manager` checkout is behind, fetch first and
+create a dedicated harness worktree from `origin/main`, then run that
+worktree's launcher. Do not update the ordinary checkout to make delegation
+work. This guard is implemented by the launcher version being run: checking a
+new launcher does not protect an invocation that directly starts an older
+launcher which predates the guard. The Supervisor must select and inspect the
+actual launcher checkout before starting delegation.
+
 The delegation monitor locks the canonical path of the workspace passed to
 Cursor. Duplicate delegation to the same workspace is rejected, including
 requests that use a relative path or symlink; distinct worktrees can run

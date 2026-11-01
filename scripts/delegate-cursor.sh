@@ -125,12 +125,65 @@ if [[ -z "$task_file" && -z "$prompt" ]]; then
   exit 2
 fi
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "Not inside a Git repository." >&2
+launcher_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null)" || {
+  echo "Cannot resolve the launcher path; run it from a readable Git checkout." >&2
+  exit 2
+}
+launcher_dir="$(dirname "$launcher_path")"
+repo_root="$(git -C "$launcher_dir" rev-parse --show-toplevel 2>/dev/null)" || {
+  echo "Cannot determine the Git checkout containing the launcher: $launcher_path" >&2
   exit 2
 }
 repo_root="$(cd "$repo_root" && pwd -P)"
+launcher_path="$repo_root/scripts/$(basename "$launcher_path")"
 cd "$repo_root"
+
+# This uses only the already available local remote-tracking ref. The
+# supervisor is responsible for fetching before launch; the launcher never
+# updates refs or the checkout itself.
+source_head="$(git -C "$repo_root" rev-parse --verify HEAD^{commit} 2>/dev/null)" || {
+  echo "Cannot determine launcher checkout HEAD; refusing to delegate." >&2
+  exit 2
+}
+source_branch="$(git -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+if [[ -z "$source_branch" ]]; then
+  source_branch="(detached HEAD)"
+fi
+baseline_ref="origin/main"
+baseline_sha="$(git -C "$repo_root" rev-parse --verify 'refs/remotes/origin/main^{commit}' 2>/dev/null)" || {
+  cat >&2 <<EOF
+Cannot verify the local origin/main baseline from launcher checkout $repo_root.
+Launcher HEAD: $source_head
+No valid origin/main commit ref is available. Fetch origin/main explicitly, then retry; the launcher does not fetch automatically.
+EOF
+  exit 2
+}
+if [[ "$source_branch" == "main" && "$source_head" != "$baseline_sha" ]]; then
+  if git -C "$repo_root" merge-base --is-ancestor "$source_head" "$baseline_sha"; then
+    relation="stale"
+  elif git -C "$repo_root" merge-base --is-ancestor "$baseline_sha" "$source_head"; then
+    relation="ahead"
+  else
+    relation="diverged-or-unrelated"
+  fi
+  if [[ "$relation" == "stale" || "$relation" == "diverged-or-unrelated" ]]; then
+    cat >&2 <<EOF
+Refusing to delegate from an outdated or unverifiable main checkout.
+Launcher checkout: $repo_root
+Launcher branch: $source_branch
+Launcher HEAD: $source_head
+Baseline ref: $baseline_ref
+Baseline SHA: $baseline_sha
+Action: fetch origin/main explicitly and launch this script from a checkout whose main includes that baseline. The launcher will not fetch, pull, reset, or switch branches.
+EOF
+    exit 3
+  fi
+fi
+echo "[delegate-cursor] launcher: $launcher_path" >&2
+echo "[delegate-cursor] source checkout: $repo_root" >&2
+echo "[delegate-cursor] source branch: $source_branch" >&2
+echo "[delegate-cursor] source HEAD: $source_head" >&2
+echo "[delegate-cursor] baseline: $baseline_ref $baseline_sha (local remote-tracking ref; not fetched by launcher)" >&2
 
 if [[ -n "$task_file" ]]; then
   if [[ ! -f "$task_file" ]]; then
@@ -242,6 +295,20 @@ monitor_workspace="$repo_root"
 if [[ -n "$workspace" ]]; then
   monitor_workspace="$workspace"
 fi
+
+worker_head="$(git -C "$monitor_workspace" rev-parse --verify HEAD^{commit} 2>/dev/null)" || {
+  echo "Cannot determine Worker workspace HEAD: $monitor_workspace" >&2
+  exit 2
+}
+worker_branch="$(git -C "$monitor_workspace" symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
+if [[ -z "$worker_branch" ]]; then
+  worker_branch="(detached HEAD)"
+fi
+echo "[delegate-cursor] worker workspace: $monitor_workspace" >&2
+echo "[delegate-cursor] worker branch: $worker_branch" >&2
+echo "[delegate-cursor] worker HEAD: $worker_head" >&2
+echo "[delegate-cursor] monitor: $repo_root/scripts/delegate-cursor-monitor.py (loaded from launcher checkout)" >&2
+echo "[delegate-cursor] monitor checkout: $monitor_workspace" >&2
 
 "$repo_root/scripts/worktree.sh" validate-env "$monitor_workspace" --environment development
 
