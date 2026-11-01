@@ -512,6 +512,19 @@ class DelegateCursorMonitorTests(unittest.TestCase):
                 if expected_status is None:
                     self.assertNotEqual(result.returncode, 0)
 
+    def test_success_result_with_nonzero_worker_exit_is_failure(self) -> None:
+        agent = self.fake_agent(
+            "import json\n"
+            "print(json.dumps({'type':'result','subtype':'success'}), flush=True)\n"
+            "raise SystemExit(7)\n"
+        )
+        result = self.run_agent(agent)
+        status = self.status()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(status["process_exit_code"], 7)
+        self.assertEqual(status["result_status"], "success")
+        self.assertEqual(status["outcome"], "failed")
+
     def test_no_output_reports_heartbeat_without_termination(self) -> None:
         agent = self.fake_agent(
             "import json,time\n"
@@ -561,6 +574,35 @@ class DelegateCursorMonitorTests(unittest.TestCase):
             )
         )
         self.assertEqual(retry.returncode, 0, retry.stdout + retry.stderr)
+
+    def test_sigterm_is_forwarded_and_not_reported_as_success(self) -> None:
+        agent = self.fake_agent("import time\ntime.sleep(20)\n")
+        env = os.environ.copy()
+        env["XDG_STATE_HOME"] = str(self.state_home)
+        process = subprocess.Popen(
+            self.command(agent),
+            cwd=REPO_ROOT,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
+                if list(
+                    (self.state_home / "receipt-manager/delegate-cursor").glob("*.json")
+                ):
+                    break
+                time.sleep(0.05)
+            process.send_signal(signal.SIGTERM)
+            stdout, _ = process.communicate(timeout=5)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+        self.assertEqual(process.returncode, 143, stdout)
+        self.assertEqual(self.status()["outcome"], "interrupted")
 
     def test_duplicate_workspace_alias_is_rejected_without_touching_worker(
         self,
