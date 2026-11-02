@@ -2,8 +2,20 @@
 
 この文書は、receipt-managerとprice-memoのCodex → Cursor委譲monitorで
 共通して保証する外部動作の初版です。共通ライブラリや同一の内部実装は
-要求しません。現時点でreceipt-manager側に適用する契約であり、
-price-memoが全項目に準拠済みであることを宣言するものではありません。
+要求しません。Monitor共通契約v1は両リポジトリで採用済みです。
+両リポジトリは独立したMonitor実装とテストを持ち、採用状態はそれぞれのPRで
+確認しています。
+
+## 採用記録
+
+- receipt-manager: PR #54、merge commit
+  `f7972c98c49d7854ec9371043421dcdd57e0f76f`。GitHub Actions
+  [pr-quality](https://github.com/nakakonakako/receipt-manager/actions/runs/41291950769)
+  はsuccess。
+- price-memo: PR #54、merge commit
+  `c0453d2032b016b0fac1d462a9813abe7ffba8f7`。GitHub Actions
+  [pr-quality](https://github.com/nakakonakako/price-memo/actions/runs/41293821036)
+  はsuccess。
 
 ## 契約
 
@@ -36,14 +48,14 @@ price-memoが全項目に準拠済みであることを宣言するものでは�
 これらはCursor APIを使わないfake Workerと隔離されたstate directoryで実行します。
 契約はテスト名と外部出力・保存状態の観測を対応付けています。
 
-## price-memoの既存テストとの対応状況
+## price-memoでのテスト対応
 
-price-memoの最新mainを読み取り専用で確認し、`scripts/test-delegate-cursor-monitor.py`
-に同種のテストが存在することを確認しました。MON-01〜08の候補には、終了状態、
-verification解析、stream上限、進捗抑制、secret抑制、workspace lock、signal、
-失敗診断の制限に関するテストがあります。ただし、この文書への正式な適用、
-契約ID単位の不足分析、CIでの受け入れ確認は未実施です。price-memoの適用PRで
-各IDと実テストの対応を確認するまで、準拠済みとして扱わないでください。
+price-memoの契約IDごとの実テスト対応は、同リポジトリの
+[cursor-monitor-contract.md](https://github.com/nakakonakako/price-memo/blob/main/docs/cursor-monitor-contract.md)
+を参照してください。price-memo PR #54でv1を適用し、独立した契約テストと
+`npm run check`への組み込みを記録しています。上記の採用記録に示すPR merge commitと
+`pr-quality`の結果は、price-memo側の採用確認です。receipt-managerのテスト対応表を
+price-memoのテスト実行結果や保証として読み替えません。
 
 ## 許容するアプリ固有差分
 
