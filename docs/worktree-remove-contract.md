@@ -18,13 +18,17 @@ claim that every edge case is exercised.
 
 ## Version and adoption status
 
-This is contract version **v1**. This PR introduces v1 for receipt-manager;
-adoption takes effect when this PR is merged. price-memo is a read-only
-comparison in this change. Its formal v1 adoption and complete test mapping are
-**pending a separate price-memo PR**. Do not treat both repositories as fully
-adopted until that PR is reviewed, merged, and its CI result is recorded.
+This is contract version **v1**. Both receipt-manager and price-memo have
+adopted v1.
 
-The comparison used these `origin/main` commits:
+receipt-manager [PR #58](https://github.com/nakakonakako/receipt-manager/pull/58)
+introduced this contract. In that change, price-memo was a read-only
+comparison, and its formal v1 adoption was left to a separate price-memo PR.
+receipt-manager's document and tests did not adopt price-memo. Both adoption
+PRs are now merged, and each recorded `pr-quality` result is success. The
+receipt-manager workflow run ID is not recorded here.
+
+The receipt-manager PR #58 comparison used these `origin/main` commits:
 
 | Repository | Compared `origin/main` |
 | --- | --- |
@@ -39,9 +43,16 @@ Related merged implementation PRs were checked as follows:
 | receipt-manager #56 | `cd1d425917685c86039d8a4efb6cc8081bfc8c1a` | success |
 | price-memo #57 | `3b71cd06f34f37b8de39b0bd592082e9f6aebdd6` | success |
 
-The adoption record for each repository must include the contract version, the
-merged PR/commit, and its CI result. Keep the price-memo status pending until
-its independent PR supplies that record.
+v1 adoption. Both comparison baselines below are from the receipt-manager
+PR #58 comparison.
+
+| Repository | Status | Comparison baseline | Adoption PR | Merge commit | `pr-quality` |
+| --- | --- | --- | --- | --- | --- |
+| receipt-manager | adopted | `a049f1e41e0a3f73f7e3885deddb106a07243a6b` | [#58](https://github.com/nakakonakako/receipt-manager/pull/58) | `ab515fb7570c113bd5035204e08ce027a394a996` | success |
+| price-memo | adopted | `3b71cd06f34f37b8de39b0bd592082e9f6aebdd6` | [#58](https://github.com/nakakonakako/price-memo/pull/58) | `79dc066877a03030e1f490300ae56bc39713171e` | success; workflow run [41426327954](https://github.com/nakakonakako/price-memo/actions/runs/41426327954) |
+
+The adoption record for each repository includes the contract version, the
+merged PR and commit, and its CI result.
 
 ## Contract v1: WT-01–WT-08
 
@@ -147,14 +158,14 @@ Receipt-manager evidence: `test_proc_enumeration_failure_refuses`,
 `/proc` access in the isolated Git fixture. Foreign-user and unknown-owner stat
 failure branches are not individually covered.
 
-The current price-memo behavior is different and is not yet a formal v1
-adoption: an unassociated PID's initial stat failure is skipped; after cwd has
-been observed inside the target, a failed stat recheck refuses; a failed
-recheck with external or unreadable cwd and no recorded Cursor association is
-skipped. price-memo's recorded Cursor PID/group candidates have their own
-fail-closed checks. These differences must remain visible in its adoption PR;
-do not summarize WT-06 as identical handling or as universal fail-closed
-inspection.
+At the receipt-manager PR #58 comparison, price-memo's behavior differed and
+was not yet a formal v1 adoption: an unassociated PID's initial stat failure
+is skipped; after cwd has been observed inside the target, a failed stat
+recheck refuses; a failed recheck with external or unreadable cwd and no
+recorded Cursor association is skipped. price-memo's recorded Cursor
+PID/group candidates have their own fail-closed checks. price-memo later
+adopted v1 in its own PR #58. These differences stay visible here; do not
+summarize WT-06 as identical handling or as universal fail-closed inspection.
 
 ### WT-07 — Do not interfere with processes or expose their data
 
@@ -204,8 +215,10 @@ price-memo baseline commit above, related tests include
 `test_orphaned_cursor_group_child_with_moved_cwd`,
 `test_recorded_cursor_group_stat_recheck_failure_refuses`, and
 `test_associated_process_inspection_failure_refuses`. These names are evidence
-from the comparison snapshot only; their binding to v1 must be made in the
-separate price-memo adoption PR.
+from that comparison snapshot. price-memo adopted v1 separately in
+[PR #58](https://github.com/nakakonakako/price-memo/pull/58). This document
+does not restate price-memo's post-adoption test mapping, and receipt-manager
+does not provide this extension.
 
 ## Allowed implementation differences
 
@@ -230,8 +243,9 @@ claim receipt-manager provides it.
    PR URL, merged commit, CI result, and any untested conditions. Update the
    adoption table only after the corresponding PR is merged and CI is green.
 5. Do not add an external-repository CI dependency or shared library solely to
-   enforce this documentation contract. No price-memo adoption is implied by
-   receipt-manager's v1 document or tests.
+   enforce this documentation contract. receipt-manager's v1 document and tests
+   did not themselves adopt price-memo; price-memo's adoption is its own merged
+   PR #58, recorded above.
 
 This document is the worktree-removal contract. The Cursor delegation monitor
 contracts MON-01–08 are separate and do not change these requirements.
