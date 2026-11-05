@@ -57,7 +57,7 @@ Browser (React / Vite SPA)
   │  一部は Supabase JS 直アクセス（RLS）
   │  /api → Vite proxy（開発） / nginx（本番）
   ▼
-FastAPI (uvicorn :8000)
+FastAPI（人間用開発 :8000 / Cursor UI 検証 :8100）
   │  x-supabase-token → ユーザー単位の Supabase クライアント
   │  GEMINI_API_KEY → Google Gemini
   ▼
@@ -291,7 +291,7 @@ npm run dev
 # BACK:  uv run uvicorn app.main:app --reload（backend）
 ```
 
-- 開発時、Vite は `5174`（`strictPort`）で起動し、`/api` を `http://localhost:8000` へプロキシ。`npm run dev` は起動前に両ポートを検査し、競合時は所有プロセス情報を表示できる範囲で表示して停止。別ポートへの自動切替や既存プロセスの終了は行わず、Ctrl+C・SIGTERM・片側起動失敗時はこの起動が作成したプロセス群だけを終了する。SIGTERM後に終了確認し、必要なSIGKILL後も期限付きで再確認する。所有権・終了状態・`/proc` のいずれかを確認できない場合はcleanup失敗をstderrと終了コードに反映する
+- 人間用開発環境は Vite `5174` → FastAPI `8000`、Cursor検証用は Vite `5274` → FastAPI `8100` の固定構成。後者は `npm run devserver:ensure|status|stop` で同一worktree所有の検証済みプロセスだけを再利用・停止し、未知の占有者や設定不一致では失敗する。詳細は [worktree-development.md](./worktree-development.md)
 - `scripts/worktree.sh remove` は確認プロンプト前と削除直前に `/proc` のcwdを検査し、対象worktree内の稼働プロセスや検査不能な同一ユーザーPIDがあれば削除を拒否する。cwdを読めず関連を確認できないPIDは検出限界として扱う。詳細は [worktree-development.md](./worktree-development.md)
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
@@ -390,6 +390,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-11-05 | Cursor用Playwright MCPを認証済み共有profileと未認証isolatedに分け、専用devserverを追加 |
 | 2026-10-31 | Cursor委譲monitorのstate directory、workspace lock、status、診断ログ操作をdir_fd基準で安全化 |
 | 2026-10-31 | worktree環境リンク検証をPython化し、直接絶対symlinkの検証を3段階で実行 |
 | 2026-10-31 | 共有Dev/Prod Writerの現行状態に合わせ、旧本番apply/bootstrap説明と旧Production Writer Secretの保持条件を更新 |

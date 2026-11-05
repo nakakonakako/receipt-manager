@@ -103,62 +103,71 @@ directory: Cursor workers with trusted access to a linked workspace can read
 the linked files. `.env.ai-quota`, its CA files, and service account files are
 excluded from migration and worktree links.
 
-Root `npm run dev` runs a lightweight environment preflight before starting.
-It prepares missing symlinks, validates the frontend Supabase settings,
-checks that the backend runtime can run `uvicorn` without reinstalling when
-healthy, refuses conflicting local files, and does not install or sync
-dependencies when checks pass.
-The ordinary Vite server is fixed to `5174` with `strictPort` so it can run
-alongside price-memo on `5173`. The Playwright MCP configured in `.cursor/mcp.json` provides browser
-automation; it does not start a separate receipt-manager Vite server. The
-checked-in `.cursor/playwright-mcp.sh` pins `@playwright/mcp@0.0.83` and its
-exact `playwright@1.64.0-alpha-1790635538000` dependency, and installs Chromium
-revision `1247` from the matching Playwright package into
-`~/.cache/ms-playwright` on first launch. It runs Chromium headless so the MCP
-does not depend on a WSL display server. Node.js 20 or newer is recommended by
-the current Playwright MCP setup guide; the pinned package declares Node.js 18
-or newer.
+Root `npm run dev` runs the ordinary human development pair after environment
+preflight: Vite `5174` proxies `/api` to FastAPI `8000`. It keeps the existing
+fixed-port, strict conflict handling and starts only process groups owned by
+that invocation.
 
-The browser uses Playwright MCP's default persistent profile. On Linux this is
-stored under `~/.cache/ms-playwright-mcp/` and keyed by browser channel and the
-MCP client's workspace path, so each worktree is expected to retain a separate
-login session. The profile persists cookies and local storage. Never delete,
-reset, copy, or commit profile data as routine troubleshooting. A profile can
-only be open in one browser at a time; run MCP checks sequentially within a
-worktree. Separate worktrees can use their separate profiles concurrently, but
-a login in one worktree is not shared with another. Complete any required
-development login manually; do not automate Google/OAuth authentication.
+## Official Cursor browser verification path
 
-For first use, open the repository/worktree in Cursor and check MCP discovery
-with `agent mcp list` and tool availability with `agent mcp list-tools
-playwright`. On first use, inspect `.cursor/mcp.json` and explicitly enable only
-this server with `agent mcp enable playwright`; this records the server in the
-local Cursor CLI approved list. Project CLI permissions allow only
-`Mcp(playwright:*)`; do not use `--approve-mcps`, which auto-approves every
-configured MCP server. Then start the application
-with `npm run dev` and use the MCP to open `http://localhost:5174/`. Use the
-browser tools to inspect the DOM and set desktop and mobile viewport sizes.
-Vite proxies `/api` requests to the supervised FastAPI server on `8000`. This
-repository does not define a separate Playwright port or additional npm
-command. If Tailscale
-Serve forwards to the receipt-manager development server, verify its local
-target and update it from `5173` to `5174` when needed; this repository change
-does not alter the machine's Tailscale configuration.
-Before `npm run dev` starts, an owned-process supervisor checks frontend `5174`
-and backend `8000`. Occupied ports stop startup with listener PID, command, and
-working directory where available; ports are never reassigned and existing
-owners are never stopped. The supervisor runs each server in its own session and
-stops only the isolated process groups started by that command on Ctrl+C,
-SIGTERM, or startup failure. It confirms group exit after SIGTERM and, when
-needed, after SIGKILL. If ownership or exit cannot be confirmed, or `/proc`
-inspection fails, cleanup reports an error and returns a failure status.
-Shutdown releases the ports for a later run when cleanup succeeds.
+The Codex supervisor plans UI verification and delegates implementation and
+browser checks to a Cursor worker. The worker prepares the selected worktree,
+starts/reuses its isolated browser pair, chooses an MCP for the page's auth
+state, verifies the UI at `http://localhost:5274/`, reports evidence to the
+supervisor, and stops the servers it owns:
 
-`frontend/src/components/Auth.tsx` sends the browser's current origin as the
-Supabase Auth redirect target. For local receipt-manager development, verify
-that `http://localhost:5174/` is allowed in the Supabase Auth redirect URL
-configuration. The Google OAuth provider callback URL remains the Supabase
-callback URL and is separate from this application redirect target.
+```bash
+npm run devserver:ensure
+npm run devserver:status
+npm run devserver:stop
+```
+
+The Cursor pair uses Vite `5274` with an explicit proxy to FastAPI `8100`; the
+human pair remains `5174` → `8000`. Both are fixed with strict ports. A port
+collision, unknown owner, mismatched configuration, or server belonging to a
+different worktree is an error; ports are never changed automatically. Ensure
+reuses only a verified session for the same canonical worktree and current
+approved Dev Supabase configuration. Stop signals only process groups whose
+PID, start time, session/group IDs, private launch marker, cwd, and listener
+ownership still match its private state record. State is stored under
+`~/.local/state/receipt-manager/cursor-devserver/` with restrictive directory
+and file permissions. Do not edit or delete state records to bypass ownership
+checks. The startup preflight reuses the existing Dev Supabase guard and does
+not connect to hosted databases.
+
+The official MCP servers in `.cursor/mcp.json` are deliberately separate:
+
+- `playwright` is headed Chromium for authenticated UI checks. Its shared
+  persistent profile is `~/.local/state/receipt-manager/playwright-profile`;
+  every worktree uses this exact profile. Chromium permits only one browser to
+  open it at a time. Never clear, copy, inspect, export, or log its contents.
+  Do not automate Google OAuth. A person must sign in through the visible browser
+  the first time.
+- `playwright-unauth` is headless and starts with `--isolated`; it does not use
+  the persistent profile or load storage state. Use it for pre-login screens.
+
+Both launchers pin `@playwright/mcp@0.0.83`, Playwright
+`1.64.0-alpha-1790635538000`, and Chromium revision `1247`. They install the
+matching browser into `~/.cache/ms-playwright` if absent. The authenticated
+launcher is headed so the initial human sign-in can be completed in its GUI.
+
+For first use, inspect `.cursor/mcp.json`, then explicitly approve only the MCP
+needed for that task from the target worktree, for example
+`agent mcp enable playwright` or `agent mcp enable playwright-unauth`. Use
+`agent mcp list` and `agent mcp list-tools <server-name>` to diagnose discovery.
+Never pass `--approve-mcps`; it approves every configured MCP. After approval,
+run `npm run devserver:ensure`, navigate to `http://localhost:5274/`, and set
+desktop and mobile viewport sizes in the MCP. Then report observations and run
+`npm run devserver:stop` for the owned pair. Do not start a second MCP browser
+against the authenticated profile while one is open, including from another
+worktree.
+
+`frontend/src/components/Auth.tsx` uses the current browser origin for the
+Supabase Auth redirect target. A human administrator must allow
+`http://localhost:5274/` in the Dev Supabase Auth redirect URL configuration
+before completing OAuth from the verification origin. This repository does not
+change hosted Auth settings. The OAuth provider callback remains the Supabase
+callback URL.
 
 `remove` only accepts a clean, registered worktree below
 `~/worktrees/receipt-manager/`, prompts for the literal word `remove`, and uses
@@ -204,34 +213,29 @@ does not fetch. Existing worktrees are reused without fetch or branch changes.
 Use `--workspace <path>` to continue work in a listed worktree. Cursor's own
 `--worktree` option is not used because it controls a separate storage root.
 
-`npm run dev` starts the same services with the receipt-manager frontend on
+`npm run dev` starts the human services with the receipt-manager frontend on
 `5174`, supervised backend on `8000`, and explicit port-conflict handling.
-Worktree setup does not start or stop services or apply database migrations.
+`npm run devserver:ensure|status|stop` manages the separate Cursor pair on
+`5274` and `8100`. Worktree setup does not start or stop services or apply
+database migrations.
 
 ### Playwright MCP setup, troubleshooting, and updates
 
-The first MCP launch downloads the pinned MCP package and, if needed, its
-matching Chromium build. This requires npm registry access. Browser binaries are
-shared in the standard Playwright cache; browser profiles remain in the MCP
-cache and are scoped by workspace. If MCP does not start, run `agent mcp list`
-and `agent mcp list-tools playwright` from the target worktree, confirm that
-`.cursor/mcp.json` is loaded, and inspect the Cursor CLI error for npm network or
-permission failures. Do not add broad Shell or MCP permissions to work around a
-single-server issue.
+The first launch downloads the pinned MCP package and, when necessary, its
+matching Chromium build; npm registry access is required. Browser binaries are
+shared in `~/.cache/ms-playwright`, while only the authenticated profile is
+persistent. Never inspect or remove profile contents as troubleshooting. If a
+launcher fails, use `agent mcp list` and `agent mcp list-tools <server-name>`,
+check the safe error output for package/network issues, and retry only after
+repairing the cause. Do not broaden Shell/MCP permissions or use
+`--approve-mcps`.
 
-If Chromium is missing or mismatched, start `.cursor/playwright-mcp.sh` again;
-it installs only the pinned browser revision when that revision is absent. The
-launcher refuses to start MCP if the matching headless-shell executable is still
-missing. Do not delete the Playwright browser cache or MCP profile as a generic
-repair.
-
-When updating Playwright MCP, select a concrete `@playwright/mcp` release,
-inspect that release's exact `playwright` / `playwright-core` dependencies and
-its `browsers.json`, and update the three pins in
-`.cursor/playwright-mcp.sh` together. Then run
-`bash scripts/test-playwright-mcp.sh` and `npm run check`. From Cursor, verify
-that the MCP tools are listed, Chromium launches,
-`http://localhost:5174/` loads, and desktop/mobile viewport checks work. Do not infer successful Cursor or browser operation from static tests.
+When changing pins, inspect the selected `@playwright/mcp` release's exact
+Playwright dependency and `browsers.json`, then update both launchers together.
+Run `bash scripts/test-playwright-mcp.sh` and `npm run check`. For actual UI
+verification, use the official two-MCP route above and confirm the rendered
+screen and desktop/mobile viewports. The persistent profile can be held by only
+one browser process at a time.
 
 ## Development database migration plan
 

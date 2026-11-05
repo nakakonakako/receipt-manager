@@ -184,11 +184,19 @@ When changing frontend UI:
   before considering the task complete.
 - When changing shared layout, form, or responsive styles,
   check other screens that reuse the affected component or CSS.
-- For Cursor UI checks, use the project Playwright MCP configured in
-  `.cursor/mcp.json`; its Chromium version, per-worktree profile, setup, and
-  troubleshooting are documented in `docs/worktree-development.md`.
-  Approve only the Playwright MCP and do not use `--approve-mcps` to approve
-  all servers.
+- The official Cursor browser path is: Codex supervisor plans and delegates;
+  Cursor worker runs `npm run devserver:ensure`, chooses `playwright` for
+  authenticated screens or `playwright-unauth` for pre-login screens, verifies
+  `http://localhost:5274/` on desktop and mobile viewports, reports evidence,
+  and runs `npm run devserver:stop` for its owned servers. Details are in
+  `docs/worktree-development.md`.
+- The authenticated MCP uses the shared
+  `~/.local/state/receipt-manager/playwright-profile`; only one browser may
+  open it at once. Do not inspect, copy, reset, or log profile/auth state and do
+  not automate Google OAuth. The unauthenticated MCP uses `--isolated` and
+  must not read saved auth state.
+- Approve only the MCP needed for the task in `.cursor/mcp.json`. Never use
+  `--approve-mcps` to approve all servers.
 
 ## Cursor worker delegation (Codex supervisor only)
 

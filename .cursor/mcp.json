@@ -4,6 +4,11 @@
       "type": "stdio",
       "command": "bash",
       "args": [".cursor/playwright-mcp.sh"]
+    },
+    "playwright-unauth": {
+      "type": "stdio",
+      "command": "bash",
+      "args": [".cursor/playwright-unauth-mcp.sh"]
     }
   }
 }
