@@ -314,19 +314,25 @@ do not independently attest which backend model ultimately served the turn.
 
 ## Playwright MCP permissions
 
-The project config exposes only the pinned Playwright MCP server through
-`.cursor/mcp.json`. `.cursor/cli.json` grants `Mcp(playwright:*)` while keeping
-existing Shell permissions and denials intact. Do not add `--approve-mcps` to
-the delegation command: that flag approves all configured MCP servers. Cursor
-CLI discovers project MCP configuration automatically; when a server approval
-is required, approve only `playwright`. Use `agent mcp list` and
-`agent mcp list-tools playwright` to diagnose discovery and tool registration.
+The project exposes two pinned MCP servers in `.cursor/mcp.json`:
+`playwright` for headed authenticated checks using the one shared profile, and
+`playwright-unauth` for isolated pre-login checks. `.cursor/cli.json` grants
+only the named Playwright MCP capabilities while preserving existing Shell
+permissions and denials. Never add `--approve-mcps`; when approval is required,
+approve only the MCP selected for that task. Use `agent mcp list` and
+`agent mcp list-tools <server-name>` to diagnose discovery.
 
-Use Playwright MCP sequentially within one worktree because its persistent
-browser profile is locked to one browser process at a time. The profile is
-workspace-keyed, so separate worktrees retain separate sessions. See
-[worktree-development.md](./worktree-development.md) for setup, browser cache,
-troubleshooting, and pin-update steps.
+The official verification sequence is `npm run devserver:ensure` → selected
+Playwright MCP → `http://localhost:5274/` on desktop and mobile viewports →
+worker evidence report → `npm run devserver:stop`. The verification pair is
+Vite `5274` → FastAPI `8100`; ordinary human development remains `5174` →
+`8000`. Server reuse and stop are limited to proven sessions owned by that
+canonical worktree. The authenticated profile at
+`~/.local/state/receipt-manager/playwright-profile` is shared across worktrees
+and can be open in only one browser at a time. Never inspect, copy, clear, or
+log it, and never automate OAuth. See
+[worktree-development.md](./worktree-development.md) for browser setup, manual
+first login, Supabase redirect allowlisting, server safety, and pin updates.
 
 ## Completion report
 

@@ -4,6 +4,7 @@ set -euo pipefail
 workspace_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$workspace_root"
 config_file="$workspace_root/.cursor/playwright-mcp.json"
+profile_dir="${HOME:?HOME must be set}/.local/state/receipt-manager/playwright-profile"
 browser_cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:?HOME must be set}/.cache/ms-playwright}"
 
 # Keep these aligned with the exact Playwright dependency and browsers.json
@@ -14,14 +15,23 @@ chromium_revision="1247"
 
 export PLAYWRIGHT_BROWSERS_PATH="$browser_cache"
 headless_shell="$browser_cache/chromium_headless_shell-$chromium_revision/chrome-headless-shell-linux64/chrome-headless-shell"
-if [[ ! -x "$headless_shell" ]]; then
+chromium="$browser_cache/chromium-$chromium_revision/chrome-linux64/chrome"
+if [[ ! -x "$headless_shell" || ! -x "$chromium" ]]; then
   npx --yes --package="playwright@$playwright_version" playwright install chromium >&2
 fi
-if [[ ! -x "$headless_shell" ]]; then
-  echo "Playwright Chromium headless shell revision $chromium_revision is unavailable at the configured browser cache." >&2
+if [[ ! -x "$headless_shell" || ! -x "$chromium" ]]; then
+  echo "Playwright Chromium revision $chromium_revision is unavailable at the configured browser cache." >&2
   exit 1
 fi
 
+mkdir -p "$(dirname "$profile_dir")"
+if [[ -L "$profile_dir" ]]; then
+  echo "Receipt Manager Playwright profile must not be a symlink." >&2
+  exit 1
+fi
+mkdir -p "$profile_dir"
+chmod 700 "$profile_dir"
+
 exec npx --yes "@playwright/mcp@$mcp_version" \
   --config "$config_file" \
-  --headless
+  --user-data-dir "$profile_dir"

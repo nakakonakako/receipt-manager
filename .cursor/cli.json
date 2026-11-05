@@ -7,7 +7,8 @@
       "Shell(pwd)",
       "Shell(ls)",
       "Shell(cat)",
-      "Mcp(playwright:*)"
+      "Mcp(playwright:*)",
+      "Mcp(playwright-unauth:*)"
     ],
     "deny": [
       "Shell(sudo)",
