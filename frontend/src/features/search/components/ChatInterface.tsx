@@ -132,8 +132,8 @@ export const ChatInterface: React.FC = () => {
   )
 
   return (
-    <div className="flex flex-col h-[600px] sm:h-auto sm:flex-1 sm:min-h-0 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden relative">
-      <div className="bg-blue-600 p-4 text-white font-extrabold flex justify-between items-center shrink-0 shadow-sm z-10">
+    <div className="rm-card flex flex-col h-[600px] sm:h-auto sm:flex-1 sm:min-h-0 overflow-hidden relative">
+      <div className="bg-stone-100 border-b border-stone-200 p-4 text-stone-900 font-semibold flex justify-between items-center shrink-0 z-10">
         <span>家計簿AIチャット 🤖</span>
       </div>
 
@@ -145,7 +145,7 @@ export const ChatInterface: React.FC = () => {
           <select
             value={dataType}
             onChange={(e) => setDataType(e.target.value)}
-            className="flex-1 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-700 outline-none focus:border-blue-500 font-medium shadow-sm"
+            className="rm-field flex-1 px-2 py-1.5 text-stone-700 outline-none focus:border-blue-600 font-medium"
           >
             <option value="all">すべて</option>
             <option value="receipt">レシート詳細のみ</option>
@@ -159,7 +159,7 @@ export const ChatInterface: React.FC = () => {
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="flex-1 bg-white border border-gray-300 rounded-lg px-2 py-1.5 text-gray-700 outline-none focus:border-blue-500 font-medium shadow-sm"
+            className="rm-field flex-1 px-2 py-1.5 text-stone-700 outline-none focus:border-blue-600 font-medium"
           >
             <option value="3months">過去3ヶ月</option>
             <option value="1month">今月のみ</option>
@@ -168,14 +168,14 @@ export const ChatInterface: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 p-4 overflow-y-auto space-y-5 bg-gray-50/50 custom-scrollbar relative">
+      <div className="flex-1 p-4 overflow-y-auto space-y-5 bg-[var(--rm-surface-subtle)] custom-scrollbar relative">
         {isFetchingHistory ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
+          <div className="flex flex-col items-center justify-center h-full text-[var(--rm-text-muted)] gap-3">
             <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
             <span className="font-bold text-sm">履歴を読み込み中...</span>
           </div>
         ) : messages.length === 0 && !isLoading ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
+          <div className="flex flex-col items-center justify-center h-full text-[var(--rm-text-muted)] gap-2">
             <span className="text-4xl mb-2">👋</span>
             <span className="font-bold text-sm text-center">
               こんにちは！
@@ -236,7 +236,7 @@ export const ChatInterface: React.FC = () => {
       <div className="p-3 sm:p-4 bg-white border-t border-gray-200 flex flex-col relative shrink-0">
         {showSuggestions && query.trim() && filteredSuggestions.length > 0 && (
           <div className="absolute bottom-full left-0 mb-2 w-full bg-white border border-gray-200 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto custom-scrollbar">
-            <div className="text-xs text-gray-500 bg-gray-50 px-4 py-2 border-b font-bold sticky top-0">
+            <div className="text-xs text-[var(--rm-text-muted)] bg-gray-50 px-4 py-2 border-b font-bold sticky top-0">
               過去の質問から検索
             </div>
             {filteredSuggestions.map((suggestion, index) => (
@@ -270,7 +270,7 @@ export const ChatInterface: React.FC = () => {
               }
               className="w-full bg-gray-50 border-gray-200 focus:bg-white pr-10"
             />
-            <span className="mt-1 block text-right text-xs text-gray-500">
+            <span className="mt-1 block text-right text-xs text-[var(--rm-text-muted)]">
               {Array.from(query).length}/500
             </span>
           </div>

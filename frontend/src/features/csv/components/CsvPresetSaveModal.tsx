@@ -37,7 +37,7 @@ export const CsvPresetSaveModal: React.FC<CsvPresetSaveModalProps> = ({
         <div className="mb-6">
           <label className="block text-sm font-bold text-gray-700 mb-2">
             プリセットの名前{' '}
-            <span className="text-red-500 text-xs ml-1">必須</span>
+            <span className="text-red-700 text-xs ml-1">必須</span>
           </label>
           <Input
             value={presetName}

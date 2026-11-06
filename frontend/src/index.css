@@ -1,6 +1,113 @@
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
 
+:root {
+  color-scheme: light;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  font-synthesis: none;
+
+  --rm-canvas: #f6f4f0;
+  --rm-surface: #ffffff;
+  --rm-surface-subtle: #faf9f7;
+  --rm-surface-muted: #f5f5f4;
+  --rm-text-primary: #1c1917;
+  --rm-text-secondary: #57534e;
+  --rm-text-muted: #716a64;
+  --rm-border: #d6d3d1;
+  --rm-border-subtle: #e7e5e4;
+  --rm-focus: #2563eb;
+  --rm-receipt: #2563eb;
+  --rm-receipt-subtle: #eff6ff;
+  --rm-csv: #15803d;
+  --rm-csv-subtle: #f0fdf4;
+  --rm-danger: #b91c1c;
+  --rm-danger-subtle: #fef2f2;
+  --rm-warning: #a16207;
+  --rm-warning-subtle: #fffbeb;
+  --rm-success: #15803d;
+  --rm-info: #0369a1;
+
+  --rm-radius-control: 6px;
+  --rm-radius-card: 10px;
+  --rm-radius-panel: 12px;
+  --rm-shadow-raised: 0 1px 3px rgb(28 25 23 / 0.08);
+  --rm-shadow-popover: 0 8px 24px rgb(28 25 23 / 0.12);
+}
+
+body {
+  margin: 0;
+  background: var(--rm-canvas);
+  color: var(--rm-text-primary);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .rm-card {
+    border: 1px solid var(--rm-border-subtle);
+    border-radius: var(--rm-radius-panel);
+    background: var(--rm-surface);
+    box-shadow: var(--rm-shadow-raised);
+  }
+
+  .rm-field {
+    min-height: 40px;
+    border: 1px solid var(--rm-border);
+    border-radius: var(--rm-radius-control);
+    background: var(--rm-surface);
+    color: var(--rm-text-primary);
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease,
+      background-color 150ms ease;
+  }
+
+  .rm-field::placeholder {
+    color: var(--rm-text-muted);
+    opacity: 1;
+  }
+
+  .rm-field:focus-visible {
+    outline: 2px solid var(--rm-focus);
+    outline-offset: 1px;
+  }
+
+  .rm-field:disabled {
+    border-color: var(--rm-border-subtle);
+    background: var(--rm-surface-muted);
+    color: var(--rm-text-secondary);
+    cursor: not-allowed;
+  }
+
+  @media (max-width: 639px) {
+    .rm-field {
+      min-height: 44px;
+      font-size: 16px;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 html {
   scrollbar-gutter: stable;
 }

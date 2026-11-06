@@ -78,7 +78,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
       <div className="flex flex-wrap justify-between items-end gap-2 mb-4 border-b border-gray-200 pb-2">
         <div>
           <h3 className="font-extrabold text-gray-700">購入品目</h3>
-          <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+          <p className="text-[10px] text-[var(--rm-text-muted)] font-medium mt-0.5">
             大/小分類・検索タグを修正できます。
           </p>
         </div>
@@ -97,7 +97,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
             maxLength={7}
             className="w-[6.75rem] text-right font-extrabold text-lg tabular-nums !py-1.5 !px-2 h-9 bg-gray-50 focus:bg-white border-gray-300 shadow-sm"
           />
-          <span className="text-xs font-bold text-gray-400">円</span>
+          <span className="text-xs font-bold text-[var(--rm-text-muted)]">円</span>
         </div>
       </div>
 
@@ -106,7 +106,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
           <thead className="bg-gray-50">
             <tr>
               <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[220px]">
-                商品名 <span className="text-red-500">*</span>
+                商品名 <span className="text-red-700">*</span>
               </th>
               <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[120px]">
                 大分類
@@ -204,13 +204,13 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
               <tr className="bg-gray-50">
                 <td
                   colSpan={4}
-                  className="p-2 text-sm font-bold text-gray-500 pl-4"
+                  className="p-2 text-sm font-bold text-[var(--rm-text-muted)] pl-4"
                 >
                   🔒 消費税・自動調整額
                 </td>
                 <td
                   className={`p-2 text-right font-bold pr-4 tabular-nums ${
-                    adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-700'
+                    adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-700'
                   }`}
                 >
                   {adjustmentAmount > 0 ? '+' : ''}
@@ -223,7 +223,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         </table>
 
         {receiptTarget.receipt_items.length === 0 && (
-          <div className="text-center py-6 text-gray-400 text-sm font-bold">
+          <div className="text-center py-6 text-[var(--rm-text-muted)] text-sm font-bold">
             購入品目がありません。下のボタンから追加してください。
           </div>
         )}
@@ -239,12 +239,12 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
             >
               <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
                 <label className="block text-sm font-bold text-gray-700">
-                  商品名 <span className="text-red-500">*</span>
+                  商品名 <span className="text-red-700">*</span>
                 </label>
                 <Button
                   variant="danger"
                   onClick={() => handleDeleteItem(index)}
-                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-500 border border-red-200 hover:!bg-red-50"
+                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-700 border border-red-200 hover:!bg-red-50"
                 >
                   ✕ 削除
                 </Button>
@@ -298,7 +298,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
               {isDetailOpen && (
                 <div className="mt-2 space-y-2.5 border-t border-gray-100 pt-2.5">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-[var(--rm-text-muted)] mb-1">
                       大分類
                     </label>
                     <select
@@ -316,7 +316,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-[var(--rm-text-muted)] mb-1">
                       小分類
                     </label>
                     <Input
@@ -329,7 +329,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">
+                    <label className="block text-xs font-bold text-[var(--rm-text-muted)] mb-1">
                       検索タグ
                     </label>
                     <Input
@@ -354,7 +354,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
             </span>
             <span
               className={`text-base font-bold pr-1 tabular-nums ${
-                adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'
+                adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-800'
               }`}
             >
               {adjustmentAmount > 0 ? '+' : ''}
@@ -364,7 +364,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         )}
 
         {receiptTarget.receipt_items.length === 0 && (
-          <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold">
+          <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-[var(--rm-text-muted)] text-sm font-bold">
             購入品目がありません。
           </div>
         )}

@@ -51,7 +51,7 @@ export const HistoryPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="text-center py-20 text-gray-500 font-bold animate-pulse flex flex-col items-center gap-3">
+      <div className="text-center py-20 text-[var(--rm-text-secondary)] font-bold animate-pulse flex flex-col items-center gap-3">
         <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
         データを読み込み中...
       </div>
@@ -59,7 +59,7 @@ export const HistoryPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
+    <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
       <div className="flex gap-2 mb-3">
         <button
           onClick={() => setSearchScope('current')}
@@ -91,7 +91,7 @@ export const HistoryPage: React.FC = () => {
             placeholder="店名や商品名で検索..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="rm-field w-full pl-9 pr-3 py-2.5 focus:outline-none"
           />
         </div>
         <button
@@ -109,23 +109,23 @@ export const HistoryPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex bg-gray-100 p-1.5 rounded-xl mb-6 shadow-inner">
+      <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl mb-6">
         <button
           onClick={() => setActiveTab('receipts')}
-          className={`flex-1 py-2.5 text-sm font-extrabold rounded-lg transition-all duration-300 flex justify-center items-center gap-2 ${
+          className={`min-h-11 sm:min-h-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             activeTab === 'receipts'
-              ? 'bg-white text-blue-700 shadow-sm scale-100'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50 scale-95'
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
           }`}
         >
           <span>🧾</span> レシート
         </button>
         <button
           onClick={() => setActiveTab('csv')}
-          className={`flex-1 py-2.5 text-sm font-extrabold rounded-lg transition-all duration-300 flex justify-center items-center gap-2 ${
+          className={`min-h-11 sm:min-h-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             activeTab === 'csv'
-              ? 'bg-white text-green-700 shadow-sm scale-100'
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50 scale-95'
+              ? 'bg-white text-green-700 shadow-sm'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
           }`}
         >
           <span>💳</span> キャッシュレス
@@ -157,7 +157,7 @@ export const HistoryPage: React.FC = () => {
                   {formattedCurrentMonth}
                 </span>
                 <span
-                  className={`text-gray-400 text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
+                  className={`text-[var(--rm-text-muted)] text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
                 >
                   ▼
                 </span>
@@ -252,12 +252,12 @@ export const HistoryPage: React.FC = () => {
         {activeTab === 'receipts' && (
           <div className="space-y-3 h-full overflow-y-auto pr-1">
             {isFetchingMonth ? (
-              <div className="text-center py-16 flex flex-col items-center gap-3 text-gray-500 font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+              <div className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-muted)] font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
                 <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
                 データを取得中...
               </div>
             ) : filteredReceipts.length === 0 ? (
-              <p className="text-center text-gray-400 font-bold py-16 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+              <p className="text-center text-[var(--rm-text-muted)] font-bold py-16 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
                 該当するレシートがありません。
               </p>
             ) : (
@@ -278,7 +278,7 @@ export const HistoryPage: React.FC = () => {
                     className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 cursor-pointer gap-2 sm:gap-4"
                   >
                     <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md">
+                      <span className="text-xs font-bold text-[var(--rm-text-muted)] bg-gray-100 px-2.5 py-1 rounded-md">
                         {receipt.date}
                       </span>
                       <span className="sm:hidden font-extrabold text-blue-700 text-lg">
@@ -309,7 +309,7 @@ export const HistoryPage: React.FC = () => {
                         </button>
                       </div>
                       <span
-                        className={`text-gray-400 text-xs w-4 text-center transition-transform duration-300 ${expandedReceiptId === receipt.id ? 'rotate-180' : ''}`}
+                        className={`text-[var(--rm-text-muted)] text-xs w-4 text-center transition-transform duration-300 ${expandedReceiptId === receipt.id ? 'rotate-180' : ''}`}
                       >
                         ▼
                       </span>
@@ -350,12 +350,12 @@ export const HistoryPage: React.FC = () => {
         {activeTab === 'csv' && (
           <div className="space-y-3 h-full overflow-y-auto pr-1">
             {isFetchingMonth ? (
-              <div className="text-center py-16 flex flex-col items-center gap-3 text-gray-500 font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+              <div className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-muted)] font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
                 <span className="w-8 h-8 border-4 border-green-500 border-t-transparent rounded-full animate-spin"></span>
                 データを取得中...
               </div>
             ) : filteredCsv.length === 0 ? (
-              <p className="text-center text-gray-400 font-bold py-16 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+              <p className="text-center text-[var(--rm-text-muted)] font-bold py-16 border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
                 該当する履歴がありません。
               </p>
             ) : (
@@ -366,7 +366,7 @@ export const HistoryPage: React.FC = () => {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 gap-2 sm:gap-4">
                     <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-1 rounded-md">
+                      <span className="text-xs font-bold text-[var(--rm-text-muted)] bg-gray-100 px-2.5 py-1 rounded-md">
                         {csv.date}
                       </span>
                       <span className="sm:hidden font-extrabold text-green-700 text-lg">
@@ -438,7 +438,7 @@ export const HistoryPage: React.FC = () => {
             <h3 className="text-xl font-extrabold text-gray-800 mb-2">
               本当に削除しますか？
             </h3>
-            <p className="text-sm text-gray-500 mb-6">
+            <p className="text-sm text-[var(--rm-text-muted)] mb-6">
               この操作は取り消せません。
             </p>
             <div className="flex gap-3">
