@@ -59,10 +59,10 @@ export const ManualRegister: React.FC = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto py-2">
+    <div className="mx-auto max-w-2xl py-1">
       <div className="mb-4 text-center">
-        <p className="text-sm font-bold text-[var(--rm-text-muted)]">
-          📝 レシート情報を手動で入力して登録します
+        <p className="text-sm font-medium text-[var(--rm-text-secondary)]">
+          レシート情報を手動で入力して登録します
         </p>
       </div>
 

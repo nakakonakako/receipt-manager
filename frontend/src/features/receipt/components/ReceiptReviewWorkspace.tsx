@@ -26,10 +26,10 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-center items-center p-0 sm:p-6">
-      <div className="bg-gray-50 w-full h-full sm:h-[95vh] sm:max-w-[1400px] sm:rounded-xl shadow-2xl flex flex-col overflow-hidden">
-        <div className="flex justify-between items-center bg-white px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 shrink-0">
+      <div className="flex h-full w-full flex-col overflow-hidden bg-[var(--rm-surface-subtle)] shadow-2xl sm:h-[95vh] sm:max-w-[1400px] sm:rounded-xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--rm-border-subtle)] bg-[var(--rm-surface)] px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex flex-col">
-            <span className="font-bold text-gray-800 text-base sm:text-lg">
+            <span className="text-base font-bold text-[var(--rm-text-primary)] sm:text-lg">
               レシート確認・修正
             </span>
             <span className="text-xs sm:text-sm text-[var(--rm-text-muted)] mt-0.5">
@@ -49,7 +49,8 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
             </span>
             <button
               onClick={handleCancel}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[var(--rm-text-muted)] hover:bg-gray-200 hover:text-red-500 transition"
+              aria-label="確認画面を閉じる"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--rm-surface-muted)] text-[var(--rm-text-secondary)] transition-colors hover:bg-[var(--rm-danger-subtle)] hover:text-[var(--rm-danger)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)]"
             >
               <svg
                 className="w-6 h-6"
@@ -68,16 +69,18 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
           </div>
         </div>
 
-        <div className="flex lg:hidden bg-white border-b border-gray-200 shrink-0">
+        <div className="flex shrink-0 border-b border-[var(--rm-border-subtle)] bg-[var(--rm-surface)] lg:hidden">
           <button
             onClick={() => setActiveTab('edit')}
-            className={`flex-1 py-3.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors ${activeTab === 'edit' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-[var(--rm-text-muted)] hover:bg-gray-50'}`}
+            aria-pressed={activeTab === 'edit'}
+            className={`min-h-11 flex-1 border-b-2 py-3.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--rm-focus)] ${activeTab === 'edit' ? 'border-[var(--rm-receipt)] bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)]' : 'border-transparent text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)]'}`}
           >
             ✏️ 内容の確認・修正
           </button>
           <button
             onClick={() => setActiveTab('image')}
-            className={`flex-1 py-3.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors ${activeTab === 'image' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-[var(--rm-text-muted)] hover:bg-gray-50'}`}
+            aria-pressed={activeTab === 'image'}
+            className={`min-h-11 flex-1 border-b-2 py-3.5 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[var(--rm-focus)] ${activeTab === 'image' ? 'border-[var(--rm-receipt)] bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)]' : 'border-transparent text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)]'}`}
           >
             📸 レシート画像
           </button>
