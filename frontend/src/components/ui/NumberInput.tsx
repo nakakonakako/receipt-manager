@@ -47,7 +47,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
       inputMode="numeric"
       value={value}
       onChange={handleChange}
-      className={`p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none ${className}`}
+      className={`rm-field px-3 py-2 focus:border-blue-600 ${className}`}
       {...props}
     />
   )

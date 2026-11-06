@@ -30,7 +30,7 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
       </pre>
 
       <div className="border border-gray-200 rounded overflow-hidden bg-white max-h-[60vh] overflow-y-auto">
-        <table className="w-full table-fixed text-sm text-left text-gray-500">
+        <table className="w-full table-fixed text-sm text-left text-[var(--rm-text-muted)]">
           <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10">
             <tr>
               <th className="pl-2 pr-3 md:px-2 py-3 w-[36%] md:w-[27%] whitespace-nowrap">

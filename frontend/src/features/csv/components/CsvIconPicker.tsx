@@ -16,7 +16,7 @@ export const CsvIconPicker: React.FC<CsvIconPickerProps> = ({
         <div className="w-12 h-12 shrink-0 flex items-center justify-center text-2xl bg-gray-50 border border-gray-200 rounded-lg">
           {resolvePresetIcon(value)}
         </div>
-        <span className="text-sm text-gray-500 font-medium">
+        <span className="text-sm text-[var(--rm-text-muted)] font-medium">
           下から選んでください
         </span>
       </div>

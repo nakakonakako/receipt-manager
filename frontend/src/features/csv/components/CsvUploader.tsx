@@ -65,7 +65,7 @@ export const CsvUploader: React.FC = () => {
             onChange={handleFileChange}
             className="w-full"
           />
-          <p className="mt-3 text-xs text-gray-500">
+          <p className="mt-3 text-xs text-[var(--rm-text-muted)]">
             1ファイルあたり20,000行（ヘッダー含む）・20MiBまで。複数年の履歴を含められます。
           </p>
         </div>
@@ -102,7 +102,7 @@ export const CsvUploader: React.FC = () => {
                       <span className="font-bold text-sm text-gray-700 truncate block">
                         {p.name}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-[var(--rm-text-muted)]">
                         {formatPresetLastUsedLabel(p.last_used_at)}
                       </span>
                     </div>
@@ -125,7 +125,7 @@ export const CsvUploader: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="text-center py-6 text-sm text-gray-400 border border-dashed border-gray-200 rounded bg-gray-50">
+            <div className="text-center py-6 text-sm text-[var(--rm-text-muted)] border border-dashed border-gray-200 rounded bg-gray-50">
               保存されたプリセットはありません。
               <br />
               CSVを解析した後に、プリセットに名前を付けて保存できます。

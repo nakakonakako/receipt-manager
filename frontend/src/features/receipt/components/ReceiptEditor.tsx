@@ -152,7 +152,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
             htmlFor="store"
             className="block text-sm font-bold text-gray-700 mb-1"
           >
-            店舗名 <span className="text-red-500 text-xs ml-1">必須</span>
+            店舗名 <span className="text-red-700 text-xs ml-1">必須</span>
           </label>
           <Input
             id="store"
@@ -184,7 +184,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
             <thead className="bg-gray-50">
               <tr>
                 <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[200px]">
-                  商品名 <span className="text-red-500">*</span>
+                  商品名 <span className="text-red-700">*</span>
                 </th>
                 <th className="p-3 text-xs font-bold text-gray-600 border-b w-32 text-right">
                   金額
@@ -231,11 +231,11 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
 
               {adjustmentAmount !== 0 && (
                 <tr className="bg-gray-50">
-                  <td className="p-2 text-sm font-bold text-gray-500 pl-4">
+                  <td className="p-2 text-sm font-bold text-[var(--rm-text-muted)] pl-4">
                     🔒 消費税・自動調整額
                   </td>
                   <td
-                    className={`p-2 text-right font-bold pr-4 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-600'}`}
+                    className={`p-2 text-right font-bold pr-4 ${adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-600'}`}
                   >
                     {adjustmentAmount > 0 ? '+' : ''}
                     {adjustmentAmount.toLocaleString()}
@@ -247,7 +247,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           </table>
 
           {items.length === 0 && (
-            <div className="text-center py-6 text-gray-400 text-sm">
+            <div className="text-center py-6 text-[var(--rm-text-muted)] text-sm">
               購入品目がありません。下のボタンから追加してください。
             </div>
           )}
@@ -261,13 +261,13 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
             >
               <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
                 <label className="block text-sm font-bold text-gray-700">
-                  商品名 <span className="text-red-500">*</span>
+                  商品名 <span className="text-red-700">*</span>
                 </label>
 
                 <Button
                   variant="danger"
                   onClick={() => handleDeleteItem(index)}
-                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-500 border border-red-200 hover:!bg-red-50"
+                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-700 border border-red-200 hover:!bg-red-50"
                 >
                   ✕ 削除
                 </Button>
@@ -304,7 +304,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                 🔒 消費税・調整額
               </span>
               <span
-                className={`text-base font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-500' : 'text-gray-800'}`}
+                className={`text-base font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-800'}`}
               >
                 {adjustmentAmount > 0 ? '+' : ''}
                 {adjustmentAmount.toLocaleString()}
@@ -313,7 +313,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
 
           {items.length === 0 && (
-            <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-gray-400 text-sm font-bold">
+            <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-[var(--rm-text-muted)] text-sm font-bold">
               購入品目がありません。
             </div>
           )}

@@ -31,7 +31,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
           </h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-800 transition"
+            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-[var(--rm-text-muted)] hover:bg-gray-200 hover:text-gray-800 transition"
           >
             ✕
           </button>

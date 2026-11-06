@@ -114,7 +114,7 @@ export const DashboardPage: React.FC = () => {
 
   if (isLoading && allMonths.length === 0) {
     return (
-      <div className="text-center py-20 text-gray-500 font-bold flex flex-col items-center gap-3">
+      <div className="text-center py-20 text-[var(--rm-text-secondary)] font-bold flex flex-col items-center gap-3">
         <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
         データを読み込み中...
       </div>
@@ -122,7 +122,7 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
+    <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
       <div className="flex justify-between items-center border-b pb-3 mb-6">
         <h2 className="text-xl font-bold text-gray-800">統計ダッシュボード</h2>
 
@@ -149,13 +149,13 @@ export const DashboardPage: React.FC = () => {
           <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin inline-block"></span>
         </div>
       ) : chartData.length === 0 ? (
-        <div className="text-center py-20 text-gray-400 font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+        <div className="text-center py-20 text-[var(--rm-text-muted)] font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
           この月のデータはありません。
         </div>
       ) : (
         <div className="space-y-8">
           <div className="text-center bg-gray-50 rounded-xl p-6 border border-gray-100">
-            <p className="text-sm font-bold text-gray-500 mb-1">月間合計支出</p>
+            <p className="text-sm font-bold text-[var(--rm-text-muted)] mb-1">月間合計支出</p>
             <p className="text-4xl font-extrabold text-gray-800">
               ¥{totalAmount.toLocaleString()}
             </p>
@@ -224,7 +224,7 @@ export const DashboardPage: React.FC = () => {
                     <span className="font-bold text-gray-700">{item.name}</span>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-gray-500 text-sm font-bold w-12 text-right">
+                    <span className="text-[var(--rm-text-muted)] text-sm font-bold w-12 text-right">
                       {percentage}%
                     </span>
                     <span className="font-extrabold text-gray-800 w-24 text-right">

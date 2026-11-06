@@ -81,7 +81,7 @@ export const ReceiptUploader: React.FC = () => {
         >
           <span className="text-4xl">📸</span>
           <span className="font-bold text-gray-700">カメラで撮影</span>
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-[var(--rm-text-muted)]">
             {isCombineMode ? '続けて撮ると1枚に結合' : '1枚ずつ別々に解析'}
           </span>
         </button>
@@ -91,7 +91,7 @@ export const ReceiptUploader: React.FC = () => {
         >
           <span className="text-4xl">📂</span>
           <span className="font-bold text-gray-700">ファイルを選択</span>
-          <span className="text-xs text-gray-500 text-center px-2">
+          <span className="text-xs text-[var(--rm-text-muted)] text-center px-2">
             JPEG / PNG / WebP・10枚まで・合計12MiB
           </span>
           <input
@@ -160,7 +160,7 @@ export const ReceiptUploader: React.FC = () => {
                     </span>
                   )}
                   {task.status === 'error' && (
-                    <span className="inline-block text-red-600 bg-red-50 px-2 py-0.5 rounded-md text-xs font-bold whitespace-nowrap">
+                    <span className="inline-block text-red-700 bg-red-50 px-2 py-0.5 rounded-md text-xs font-bold whitespace-nowrap">
                       失敗 ❌
                     </span>
                   )}
@@ -172,7 +172,7 @@ export const ReceiptUploader: React.FC = () => {
               {(task.status === 'idle' || task.status === 'error') && (
                 <button
                   onClick={() => handleDeleteTask(task.id)}
-                  className="text-gray-500 hover:text-red-600 text-sm font-bold px-4 py-2 sm:py-1.5 transition-colors bg-gray-50 hover:bg-red-50 rounded-lg w-full sm:w-auto text-center"
+                  className="text-[var(--rm-text-muted)] hover:text-red-600 text-sm font-bold px-4 py-2 sm:py-1.5 transition-colors bg-gray-50 hover:bg-red-50 rounded-lg w-full sm:w-auto text-center"
                 >
                   削除
                 </button>

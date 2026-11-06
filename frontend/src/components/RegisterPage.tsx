@@ -10,23 +10,23 @@ export const RegisterPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gray-200 p-1 rounded-lg flex">
+      <div className="bg-stone-100 border border-stone-200 p-1 rounded-xl flex">
         <button
           onClick={() => setInputType('camera')}
-          className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+          className={`min-h-11 sm:min-h-10 flex-1 py-2 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             inputType === 'camera'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
           }`}
         >
           レシート撮影
         </button>
         <button
           onClick={() => setInputType('manual')}
-          className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+          className={`min-h-11 sm:min-h-10 flex-1 py-2 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             inputType === 'manual'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-blue-700 shadow-sm'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
           }`}
         >
           手動入力
@@ -34,17 +34,17 @@ export const RegisterPage = () => {
 
         <button
           onClick={() => setInputType('csv')}
-          className={`flex-1 py-2 text-sm font-bold rounded-md transition-all ${
+          className={`min-h-11 sm:min-h-10 flex-1 py-2 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
             inputType === 'csv'
-              ? 'bg-white text-blue-600 shadow-sm'
-              : 'text-gray-500 hover:text-gray-700'
+              ? 'bg-white text-green-700 shadow-sm'
+              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
           }`}
         >
           CSV読込
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+      <div className="rm-card p-4">
         {inputType === 'camera' ? (
           <ReceiptUploader />
         ) : inputType === 'csv' ? (
@@ -54,7 +54,7 @@ export const RegisterPage = () => {
         )}
       </div>
 
-      <p className="text-center text-sm text-gray-400">
+      <p className="text-center text-sm text-[var(--rm-text-muted)]">
         {inputType === 'camera' && (
           <>
             カメラで撮影したレシート画像から

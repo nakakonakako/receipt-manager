@@ -32,7 +32,7 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
             <span className="font-bold text-gray-800 text-base sm:text-lg">
               レシート確認・修正
             </span>
-            <span className="text-xs sm:text-sm text-gray-500 mt-0.5">
+            <span className="text-xs sm:text-sm text-[var(--rm-text-muted)] mt-0.5">
               ファイル:{' '}
               {task.files.length > 1
                 ? `${task.files[0].name} ほか ${task.files.length - 1}件`
@@ -42,14 +42,14 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
           <div className="flex items-center gap-4 sm:gap-6">
             <span className="text-xl sm:text-2xl font-bold text-blue-600">
               {resultIndex + 1}
-              <span className="text-sm sm:text-lg text-gray-400">
+              <span className="text-sm sm:text-lg text-[var(--rm-text-muted)]">
                 {' '}
                 / {totalInTask}
               </span>
             </span>
             <button
               onClick={handleCancel}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-500 transition"
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-[var(--rm-text-muted)] hover:bg-gray-200 hover:text-red-500 transition"
             >
               <svg
                 className="w-6 h-6"
@@ -71,13 +71,13 @@ export const ReceiptReviewWorkspace: React.FC<ReceiptReviewWorkspaceProps> = ({
         <div className="flex lg:hidden bg-white border-b border-gray-200 shrink-0">
           <button
             onClick={() => setActiveTab('edit')}
-            className={`flex-1 py-3.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors ${activeTab === 'edit' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-3.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors ${activeTab === 'edit' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-[var(--rm-text-muted)] hover:bg-gray-50'}`}
           >
             ✏️ 内容の確認・修正
           </button>
           <button
             onClick={() => setActiveTab('image')}
-            className={`flex-1 py-3.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors ${activeTab === 'image' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-gray-500 hover:bg-gray-50'}`}
+            className={`flex-1 py-3.5 text-sm font-bold flex justify-center items-center gap-2 transition-colors ${activeTab === 'image' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/30' : 'text-[var(--rm-text-muted)] hover:bg-gray-50'}`}
           >
             📸 レシート画像
           </button>

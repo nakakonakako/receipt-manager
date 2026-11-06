@@ -51,7 +51,7 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
             aria-hidden="true"
           >
             <span className="truncate">{selectedDisplayText}</span>
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--rm-text-muted)] text-xs">
               ▼
             </span>
           </div>
@@ -59,7 +59,7 @@ export const CsvAnalysisForm: React.FC<CsvAnalysisFormProps> = ({
       </div>
 
       {selectedPreset && (
-        <p className="text-xs text-gray-500 mb-4 -mt-2 px-1">
+        <p className="text-xs text-[var(--rm-text-muted)] mb-4 -mt-2 px-1">
           {formatPresetLastUsedLabel(selectedPreset.last_used_at)}
         </p>
       )}
