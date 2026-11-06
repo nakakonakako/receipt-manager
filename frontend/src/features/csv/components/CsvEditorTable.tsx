@@ -18,20 +18,20 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className="bg-green-50 p-4 rounded border border-green-200">
-        <h3 className="font-bold text-green-800 mb-1">
-          ✅ 解析完了 ({parsedData.length} 件)
+      <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+        <h3 className="mb-1 font-semibold text-green-900">
+          解析完了 ({parsedData.length} 件)
         </h3>
         <p className="text-sm text-green-700">必要に応じて修正してください。</p>
       </div>
 
-      <pre className="bg-gray-800 text-white p-3 text-xs overflow-x-auto rounded max-h-40 overflow-y-auto">
+      <pre className="max-h-40 overflow-auto rounded-md bg-stone-800 p-3 text-xs text-stone-50">
         {csvText}
       </pre>
 
-      <div className="border border-gray-200 rounded overflow-hidden bg-white max-h-[60vh] overflow-y-auto">
+      <div className="max-h-[60vh] overflow-auto rounded-lg border border-[var(--rm-border-subtle)] bg-[var(--rm-surface)]">
         <table className="w-full table-fixed text-sm text-left text-[var(--rm-text-muted)]">
-          <thead className="text-xs text-gray-700 uppercase bg-gray-50 sticky top-0 shadow-sm z-10">
+          <thead className="sticky top-0 z-10 bg-[var(--rm-surface-muted)] text-xs uppercase text-[var(--rm-text-secondary)] shadow-sm">
             <tr>
               <th className="pl-2 pr-3 md:px-2 py-3 w-[36%] md:w-[27%] whitespace-nowrap">
                 日付
@@ -49,13 +49,13 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
           </thead>
           <tbody>
             {parsedData.map((row, i) => (
-              <tr key={i} className="bg-white border-b hover:bg-gray-50">
+              <tr key={i} className="border-b border-[var(--rm-border-subtle)] bg-[var(--rm-surface)] hover:bg-[var(--rm-surface-subtle)]">
                 <td className="pl-2 pr-3 md:px-2 py-2 overflow-hidden">
                   <Input
                     type="date"
                     value={row.date}
                     onChange={(e) => onDataChange(i, 'date', e.target.value)}
-                    className={`w-full min-w-0 max-w-full px-1 text-xs md:text-sm md:px-1.5 ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
+                    className={`w-full min-w-0 max-w-full px-1 text-xs md:px-1.5 md:text-sm ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
                   />
                 </td>
                 <td className="pl-3 pr-2 md:px-2 py-2">
@@ -91,13 +91,13 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
         <div
           className={`p-4 rounded border text-center font-bold ${
             isWaiting
-              ? 'bg-red-50 border-red-200 text-red-600'
-              : 'bg-blue-50 border-blue-200 text-blue-800'
+              ? 'border-amber-300 bg-amber-50 text-amber-900'
+              : 'border-blue-200 bg-blue-50 text-blue-900'
           }`}
         >
           {isWaiting ? (
             <p className="animate-pulse">
-              ⚠️ API制限に到達しました。安全に書き込むため {waitTime}{' '}
+              API制限に到達しました。安全に書き込むため {waitTime}{' '}
               秒待機しています...
             </p>
           ) : (
@@ -112,7 +112,12 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
         <Button variant="secondary" onClick={onReset}>
           やり直す
         </Button>
-        <Button variant="primary" onClick={onSaveClick} disabled={isSaving}>
+          <Button
+            variant="primary"
+            onClick={onSaveClick}
+            disabled={isSaving}
+            className="bg-[var(--rm-csv)] hover:bg-green-800 active:bg-green-900"
+          >
           {isSaving ? '保存中...' : `全 ${parsedData.length} 件を保存する`}
         </Button>
       </div>

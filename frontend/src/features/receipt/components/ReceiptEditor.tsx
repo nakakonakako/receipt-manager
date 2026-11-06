@@ -112,16 +112,16 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   }
 
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 w-full">
-      <div className="border-b pb-3 mb-6">
-        <h2 className="text-xl font-bold text-gray-800">
+    <div className="rm-card w-full p-4 sm:p-6">
+      <div className="mb-6 border-b border-[var(--rm-border-subtle)] pb-3">
+        <h2 className="text-xl font-bold text-[var(--rm-text-primary)]">
           レシート内容の確認・修正
         </h2>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-8">
         <div className="flex flex-col">
-          <label className="block text-sm font-bold text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-semibold text-[var(--rm-text-secondary)]">
             購入日
           </label>
           <Input
@@ -133,13 +133,13 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
         </div>
 
         <div className="flex flex-col">
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="mb-1 block text-sm font-semibold text-[var(--rm-text-secondary)]">
             支払い方法
           </label>
           <select
             value={paymentMethod}
             onChange={(e) => setPaymentMethod(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 outline-none h-[42px] bg-white"
+            className="rm-field w-full px-3 py-2 focus:border-blue-600"
           >
             <option value="unknown">不明</option>
             <option value="cash">現金</option>
@@ -150,7 +150,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
         <div className="md:col-span-2 flex flex-col">
           <label
             htmlFor="store"
-            className="block text-sm font-bold text-gray-700 mb-1"
+            className="mb-1 block text-sm font-semibold text-[var(--rm-text-secondary)]"
           >
             店舗名 <span className="text-red-700 text-xs ml-1">必須</span>
           </label>
@@ -165,38 +165,38 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       </div>
 
       <div>
-        <div className="flex justify-between items-end mb-3 border-b pb-2">
-          <h3 className="font-bold text-gray-700">購入品目</h3>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3 border-b border-[var(--rm-border-subtle)] pb-2">
+          <h3 className="font-bold text-[var(--rm-text-primary)]">購入品目</h3>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-gray-700">合計金額:</span>
-            <NumberInput
+            <span className="text-sm font-semibold text-[var(--rm-text-secondary)]">合計金額:</span>
+          <NumberInput
               value={totalAmount}
               onChange={(val) =>
                 setTotalAmount(val === '' || val === '-' ? 0 : Number(val))
               }
-              className="w-32 text-right font-bold text-lg !py-1 !px-2 h-9 bg-gray-50 focus:bg-white border-gray-300 transition-colors shadow-sm"
+              className="h-9 w-32 bg-[var(--rm-surface-subtle)] px-2 py-1 text-right text-lg font-bold shadow-sm focus:bg-white"
             />
           </div>
         </div>
 
-        <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-3">
+        <div className="mb-3 hidden overflow-x-auto rounded-lg border border-[var(--rm-border-subtle)] md:block">
           <table className="w-full text-left border-collapse">
-            <thead className="bg-gray-50">
+            <thead className="bg-[var(--rm-surface-muted)]">
               <tr>
-                <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[200px]">
+                <th className="min-w-[200px] border-b border-[var(--rm-border-subtle)] p-3 text-xs font-semibold text-[var(--rm-text-secondary)]">
                   商品名 <span className="text-red-700">*</span>
                 </th>
-                <th className="p-3 text-xs font-bold text-gray-600 border-b w-32 text-right">
+                <th className="w-32 border-b border-[var(--rm-border-subtle)] p-3 text-right text-xs font-semibold text-[var(--rm-text-secondary)]">
                   金額
                 </th>
-                <th className="p-3 text-xs font-bold text-gray-600 border-b w-16 text-center">
+                <th className="w-16 border-b border-[var(--rm-border-subtle)] p-3 text-center text-xs font-semibold text-[var(--rm-text-secondary)]">
                   削除
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-[var(--rm-border-subtle)] bg-[var(--rm-surface)]">
               {items.map((item, index) => (
-                <tr key={index} className="hover:bg-gray-50 transition-colors">
+                <tr key={index} className="transition-colors hover:bg-[var(--rm-surface-subtle)]">
                   <td className="p-2">
                     <Input
                       value={item.item_name}
@@ -204,7 +204,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                         handleItemChange(index, 'item_name', e.target.value)
                       }
                       placeholder="商品名を入力"
-                      className="w-full border-gray-200"
+                      className="w-full"
                     />
                   </td>
                   <td className="p-2">
@@ -213,7 +213,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                       onChange={(value) =>
                         handleItemChange(index, 'price', value)
                       }
-                      className="w-full text-right border-gray-200"
+                      className="w-full text-right"
                       placeholder="0"
                     />
                   </td>
@@ -230,12 +230,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
               ))}
 
               {adjustmentAmount !== 0 && (
-                <tr className="bg-gray-50">
+                <tr className="bg-[var(--rm-surface-muted)]">
                   <td className="p-2 text-sm font-bold text-[var(--rm-text-muted)] pl-4">
                     🔒 消費税・自動調整額
                   </td>
                   <td
-                    className={`p-2 text-right font-bold pr-4 ${adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-600'}`}
+                    className={`p-2 pr-4 text-right font-bold ${adjustmentAmount < 0 ? 'text-[var(--rm-danger)]' : 'text-[var(--rm-text-secondary)]'}`}
                   >
                     {adjustmentAmount > 0 ? '+' : ''}
                     {adjustmentAmount.toLocaleString()}
@@ -247,7 +247,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           </table>
 
           {items.length === 0 && (
-            <div className="text-center py-6 text-[var(--rm-text-muted)] text-sm">
+            <div className="py-6 text-center text-sm text-[var(--rm-text-muted)]">
               購入品目がありません。下のボタンから追加してください。
             </div>
           )}
@@ -257,17 +257,17 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           {items.map((item, index) => (
             <div
               key={index}
-              className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm relative transition-all"
+              className="relative rounded-lg border border-[var(--rm-border-subtle)] bg-[var(--rm-surface)] p-3 shadow-sm transition-shadow"
             >
-              <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
-                <label className="block text-sm font-bold text-gray-700">
+              <div className="mb-2 flex items-center justify-between border-b border-[var(--rm-border-subtle)] pb-2">
+                <label className="block text-sm font-semibold text-[var(--rm-text-secondary)]">
                   商品名 <span className="text-red-700">*</span>
                 </label>
 
                 <Button
                   variant="danger"
                   onClick={() => handleDeleteItem(index)}
-                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-700 border border-red-200 hover:!bg-red-50"
+                  className="flex items-center gap-1 border border-red-200 bg-white px-2.5 py-1 text-xs font-bold text-red-700 shadow-sm hover:bg-red-50"
                 >
                   ✕ 削除
                 </Button>
@@ -280,18 +280,18 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
                     handleItemChange(index, 'item_name', e.target.value)
                   }
                   placeholder="商品名"
-                  className="w-full text-base py-1.5 border-gray-300"
+                  className="w-full py-1.5 text-base"
                 />
               </div>
 
-              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
-                <label className="text-sm font-bold text-gray-700 pl-1">
+              <div className="flex items-center justify-between rounded-lg border border-[var(--rm-border-subtle)] bg-[var(--rm-surface-subtle)] p-2">
+                <label className="pl-1 text-sm font-semibold text-[var(--rm-text-secondary)]">
                   金額
                 </label>
                 <NumberInput
                   value={item.price}
                   onChange={(value) => handleItemChange(index, 'price', value)}
-                  className="w-32 text-right text-base py-1.5 font-bold border-gray-300 bg-white shadow-sm"
+                  className="w-32 bg-white py-1.5 text-right text-base font-bold shadow-sm"
                   placeholder="0"
                 />
               </div>
@@ -299,12 +299,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           ))}
 
           {adjustmentAmount !== 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex justify-between items-center shadow-inner">
-              <span className="text-sm font-bold text-blue-700">
+            <div className="flex items-center justify-between rounded-lg border border-blue-200 bg-[var(--rm-receipt-subtle)] p-3">
+              <span className="text-sm font-semibold text-blue-800">
                 🔒 消費税・調整額
               </span>
               <span
-                className={`text-base font-bold pr-1 ${adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-800'}`}
+                className={`pr-1 text-base font-bold ${adjustmentAmount < 0 ? 'text-[var(--rm-danger)]' : 'text-[var(--rm-text-primary)]'}`}
               >
                 {adjustmentAmount > 0 ? '+' : ''}
                 {adjustmentAmount.toLocaleString()}
@@ -313,7 +313,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           )}
 
           {items.length === 0 && (
-            <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-[var(--rm-text-muted)] text-sm font-bold">
+            <div className="rounded-lg border border-dashed border-[var(--rm-border)] bg-[var(--rm-surface-subtle)] py-6 text-center text-sm font-semibold text-[var(--rm-text-muted)]">
               購入品目がありません。
             </div>
           )}
@@ -330,7 +330,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 mt-8 pt-4 border-t">
+      <div className="mt-8 flex justify-end gap-3 border-t border-[var(--rm-border-subtle)] pt-4">
         <Button variant="secondary" onClick={onCancel} disabled={isSubmitting}>
           キャンセル
         </Button>

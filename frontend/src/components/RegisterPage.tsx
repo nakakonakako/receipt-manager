@@ -10,23 +10,25 @@ export const RegisterPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-stone-100 border border-stone-200 p-1 rounded-xl flex">
+      <div className="flex rounded-xl border border-[var(--rm-border)] bg-[var(--rm-surface-muted)] p-1 shadow-sm">
         <button
           onClick={() => setInputType('camera')}
-          className={`min-h-11 sm:min-h-10 flex-1 py-2 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          aria-pressed={inputType === 'camera'}
+          className={`min-h-11 flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] ${
             inputType === 'camera'
-              ? 'bg-white text-blue-700 shadow-sm'
-              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
+              ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
+              : 'text-[var(--rm-text-secondary)] hover:bg-white/70 hover:text-[var(--rm-text-primary)]'
           }`}
         >
           レシート撮影
         </button>
         <button
           onClick={() => setInputType('manual')}
-          className={`min-h-11 sm:min-h-10 flex-1 py-2 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          aria-pressed={inputType === 'manual'}
+          className={`min-h-11 flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] ${
             inputType === 'manual'
-              ? 'bg-white text-blue-700 shadow-sm'
-              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
+              ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
+              : 'text-[var(--rm-text-secondary)] hover:bg-white/70 hover:text-[var(--rm-text-primary)]'
           }`}
         >
           手動入力
@@ -34,17 +36,18 @@ export const RegisterPage = () => {
 
         <button
           onClick={() => setInputType('csv')}
-          className={`min-h-11 sm:min-h-10 flex-1 py-2 text-sm font-semibold rounded-lg transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+          aria-pressed={inputType === 'csv'}
+          className={`min-h-11 flex-1 rounded-lg px-2 py-2 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] ${
             inputType === 'csv'
-              ? 'bg-white text-green-700 shadow-sm'
-              : 'text-stone-600 hover:text-stone-900 hover:bg-stone-200/70'
+              ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
+              : 'text-[var(--rm-text-secondary)] hover:bg-white/70 hover:text-[var(--rm-text-primary)]'
           }`}
         >
           CSV読込
         </button>
       </div>
 
-      <div className="rm-card p-4">
+      <div className="rm-card min-w-0 p-3 sm:p-5">
         {inputType === 'camera' ? (
           <ReceiptUploader />
         ) : inputType === 'csv' ? (

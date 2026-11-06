@@ -57,13 +57,13 @@ export const CsvUploader: React.FC = () => {
   return (
     <div className="p-4 space-y-6 max-w-4xl mx-auto">
       {!csvText && (
-        <div className="border-2 border-dashed border-gray-300 rounded p-6 text-center bg-white">
+        <div className="rounded-lg border border-dashed border-[var(--rm-border)] bg-[var(--rm-surface-subtle)] p-6 text-center">
           <input
             type="file"
             accept=".csv"
             ref={fileInputRef}
             onChange={handleFileChange}
-            className="w-full"
+            className="rm-field w-full cursor-pointer text-sm text-[var(--rm-text-secondary)] file:mr-3 file:cursor-pointer file:border-0 file:border-r file:border-[var(--rm-border)] file:bg-[var(--rm-surface-muted)] file:px-3 file:py-2 file:font-medium file:text-[var(--rm-text-secondary)] hover:file:bg-stone-200"
           />
           <p className="mt-3 text-xs text-[var(--rm-text-muted)]">
             1ファイルあたり20,000行（ヘッダー含む）・20MiBまで。複数年の履歴を含められます。
@@ -72,34 +72,34 @@ export const CsvUploader: React.FC = () => {
       )}
 
       {!csvText && (
-        <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm mt-6 min-h-[120px]">
-          <h3 className="font-bold text-gray-700 mb-3">
-            ⚙️ 保存済みの抽出ルール管理
+        <div className="rm-card mt-6 min-h-[120px] p-4">
+          <h3 className="mb-3 font-bold text-[var(--rm-text-primary)]">
+            保存済みの抽出ルール管理
           </h3>
 
           {isLoadingPresets ? (
             <div className="animate-pulse space-y-2">
-              <div className="h-12 bg-gray-100 rounded border border-gray-200 w-full"></div>
-              <div className="h-12 bg-gray-100 rounded border border-gray-200 w-full"></div>
+              <div className="h-12 w-full animate-pulse rounded border border-[var(--rm-border-subtle)] bg-[var(--rm-surface-muted)]"></div>
+              <div className="h-12 w-full animate-pulse rounded border border-[var(--rm-border-subtle)] bg-[var(--rm-surface-muted)]"></div>
             </div>
           ) : presets.length > 0 ? (
             <div className="space-y-2">
               {presets.map((p) => (
                 <div
                   key={p.id}
-                  className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center p-3 bg-gray-50 rounded border border-gray-200"
+                  className="flex flex-col gap-2 rounded-lg border border-[var(--rm-border-subtle)] bg-[var(--rm-surface-subtle)] p-3 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <button
                       type="button"
                       onClick={() => openIconModal(p.id!, p.name, p.icon)}
                       title="アイコンを変更"
-                      className="shrink-0 w-9 h-9 flex items-center justify-center text-lg bg-white border border-gray-300 rounded hover:bg-blue-50 transition-colors"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--rm-border)] bg-[var(--rm-surface)] text-lg transition-colors hover:bg-[var(--rm-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)]"
                     >
                       {resolvePresetIcon(p.icon)}
                     </button>
                     <div className="min-w-0">
-                      <span className="font-bold text-sm text-gray-700 truncate block">
+                      <span className="block truncate text-sm font-semibold text-[var(--rm-text-primary)]">
                         {p.name}
                       </span>
                       <span className="text-xs text-[var(--rm-text-muted)]">
@@ -110,22 +110,22 @@ export const CsvUploader: React.FC = () => {
                   <div className="flex gap-2 shrink-0">
                     <button
                       onClick={() => openRenameModal(p.id!, p.name)}
-                      className="flex-1 sm:flex-none text-sm px-3 py-1.5 bg-white border border-gray-300 rounded text-blue-600 hover:bg-blue-50 transition-colors whitespace-nowrap"
+                      className="min-h-11 flex-1 whitespace-nowrap rounded-md border border-[var(--rm-border)] bg-[var(--rm-surface)] px-3 py-1.5 text-sm font-medium text-[var(--rm-text-secondary)] transition-colors hover:bg-[var(--rm-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] sm:flex-none"
                     >
-                      ✏️ 名前変更
+                      名前変更
                     </button>
                     <button
                       onClick={() => openDeleteModal(p.id!, p.name)}
-                      className="flex-1 sm:flex-none text-sm px-3 py-1.5 bg-white border border-gray-300 rounded text-red-600 hover:bg-red-50 transition-colors whitespace-nowrap"
+                      className="min-h-11 flex-1 whitespace-nowrap rounded-md border border-[var(--rm-border)] bg-[var(--rm-surface)] px-3 py-1.5 text-sm font-medium text-[var(--rm-danger)] transition-colors hover:bg-[var(--rm-danger-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] sm:flex-none"
                     >
-                      🗑️ 削除
+                      削除
                     </button>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-center py-6 text-sm text-[var(--rm-text-muted)] border border-dashed border-gray-200 rounded bg-gray-50">
+            <div className="rounded-lg border border-dashed border-[var(--rm-border-subtle)] bg-[var(--rm-surface-subtle)] py-6 text-center text-sm text-[var(--rm-text-muted)]">
               保存されたプリセットはありません。
               <br />
               CSVを解析した後に、プリセットに名前を付けて保存できます。
