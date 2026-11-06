@@ -23,15 +23,16 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
     editType === 'csv' ? (editTarget as HistoryCsvTransaction) : null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm p-4 sm:p-6">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[96vw] lg:max-w-6xl max-h-full flex flex-col overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 bg-white flex justify-between items-center shrink-0">
-          <h3 className="text-xl font-extrabold text-gray-800">
-            {editType === 'receipt' ? '🧾 内容の確認・修正' : '💳 履歴を編集'}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/50 backdrop-blur-sm p-4 sm:p-6">
+      <div className="bg-[var(--rm-surface)] rounded-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] w-full max-w-[96vw] lg:max-w-6xl max-h-full flex flex-col overflow-hidden border border-[var(--rm-border-subtle)]">
+        <div className="px-5 py-4 border-b border-[var(--rm-border-subtle)] bg-[var(--rm-surface)] flex justify-between items-center shrink-0">
+          <h3 className="text-xl font-bold text-[var(--rm-text-primary)]">
+            {editType === 'receipt' ? '内容の確認・修正' : '履歴を編集'}
           </h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-[var(--rm-text-muted)] hover:bg-gray-200 hover:text-gray-800 transition"
+            aria-label="編集を閉じる"
+            className="min-h-11 min-w-11 flex items-center justify-center rounded-md bg-[var(--rm-surface-muted)] text-[var(--rm-text-secondary)] hover:bg-stone-200 hover:text-[var(--rm-text-primary)] transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
           >
             ✕
           </button>
@@ -40,7 +41,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 custom-scrollbar">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 mb-8">
             <div className="flex flex-col">
-              <label className="block text-sm font-bold text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-[var(--rm-text-secondary)] mb-1">
                 購入日
               </label>
               <Input
@@ -48,8 +49,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
                 value={editTarget.date}
                 onChange={(e) =>
                   setEditTarget({ ...editTarget, date: e.target.value } as
-                    | HistoryReceipt
-                    | HistoryCsvTransaction)
+                    HistoryReceipt | HistoryCsvTransaction)
                 }
                 className="w-full"
               />
@@ -57,7 +57,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
 
             {receiptTarget && (
               <div className="flex flex-col">
-                <label className="block text-sm font-bold text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-[var(--rm-text-secondary)] mb-1">
                   支払い方法
                 </label>
                 <select
@@ -68,7 +68,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
                       payment_method: e.target.value,
                     })
                   }
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none h-[42px] bg-white font-medium"
+                  className="rm-field w-full px-3 py-2 focus:border-blue-600 h-[42px] font-medium"
                 >
                   <option value="unknown">不明</option>
                   <option value="cash">現金</option>
@@ -79,7 +79,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
 
             {csvTarget && (
               <div className="flex flex-col">
-                <label className="block text-sm font-bold text-gray-700 mb-1">
+                <label className="block text-sm font-semibold text-[var(--rm-text-secondary)] mb-1">
                   金額
                 </label>
                 <NumberInput
@@ -97,7 +97,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
             )}
 
             <div className="md:col-span-2 flex flex-col">
-              <label className="block text-sm font-bold text-gray-700 mb-1">
+              <label className="block text-sm font-semibold text-[var(--rm-text-secondary)] mb-1">
                 店舗名
               </label>
               <Input
@@ -129,7 +129,7 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
           )}
         </div>
 
-        <div className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 shrink-0">
+        <div className="p-4 sm:p-5 border-t border-[var(--rm-border-subtle)] bg-[var(--rm-surface-subtle)] flex justify-end gap-3 shrink-0">
           <Button
             variant="secondary"
             onClick={onClose}

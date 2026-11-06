@@ -75,15 +75,17 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
 
   return (
     <div>
-      <div className="flex flex-wrap justify-between items-end gap-2 mb-4 border-b border-gray-200 pb-2">
+      <div className="flex flex-wrap justify-between items-end gap-2 mb-4 border-b border-[var(--rm-border-subtle)] pb-2">
         <div>
-          <h3 className="font-extrabold text-gray-700">購入品目</h3>
+          <h3 className="font-semibold text-[var(--rm-text-primary)]">
+            購入品目
+          </h3>
           <p className="text-[10px] text-[var(--rm-text-muted)] font-medium mt-0.5">
             大/小分類・検索タグを修正できます。
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-sm font-bold text-gray-700 whitespace-nowrap">
+          <span className="text-sm font-semibold text-[var(--rm-text-secondary)] whitespace-nowrap">
             合計金額
           </span>
           <NumberInput
@@ -95,39 +97,44 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
               })
             }
             maxLength={7}
-            className="w-[6.75rem] text-right font-extrabold text-lg tabular-nums !py-1.5 !px-2 h-9 bg-gray-50 focus:bg-white border-gray-300 shadow-sm"
+            className="w-[6.75rem] text-right font-bold text-lg tabular-nums !py-1.5 !px-2 h-9 bg-[var(--rm-surface-subtle)] focus:bg-[var(--rm-surface)]"
           />
-          <span className="text-xs font-bold text-[var(--rm-text-muted)]">円</span>
+          <span className="text-xs font-bold text-[var(--rm-text-muted)]">
+            円
+          </span>
         </div>
       </div>
 
-      <div className="hidden md:block overflow-x-auto border border-gray-200 rounded-lg shadow-sm mb-4">
+      <div className="hidden md:block overflow-x-auto border border-[var(--rm-border)] rounded-[var(--rm-radius-card)] shadow-sm mb-4">
         <table className="w-full text-left border-collapse">
-          <thead className="bg-gray-50">
+          <thead className="bg-[var(--rm-surface-subtle)]">
             <tr>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[220px]">
-                商品名 <span className="text-red-700">*</span>
+              <th className="p-3 text-xs font-bold text-[var(--rm-text-secondary)] border-b min-w-[220px]">
+                商品名 <span className="text-[var(--rm-danger)]">*</span>
               </th>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[120px]">
+              <th className="p-3 text-xs font-bold text-[var(--rm-text-secondary)] border-b min-w-[120px]">
                 大分類
               </th>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[110px]">
+              <th className="p-3 text-xs font-bold text-[var(--rm-text-secondary)] border-b min-w-[110px]">
                 小分類
               </th>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b min-w-[220px]">
+              <th className="p-3 text-xs font-bold text-[var(--rm-text-secondary)] border-b min-w-[220px]">
                 検索タグ
               </th>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b w-[120px] text-right">
+              <th className="p-3 text-xs font-bold text-[var(--rm-text-secondary)] border-b w-[120px] text-right">
                 金額
               </th>
-              <th className="p-3 text-xs font-bold text-gray-600 border-b w-[72px] text-center">
+              <th className="p-3 text-xs font-bold text-[var(--rm-text-secondary)] border-b w-[72px] text-center">
                 削除
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
+          <tbody className="divide-y divide-[var(--rm-border-subtle)] bg-[var(--rm-surface)]">
             {receiptTarget.receipt_items.map((item, index) => (
-              <tr key={item.id || `line-${index}`} className="hover:bg-gray-50">
+              <tr
+                key={item.id || `line-${index}`}
+                className="hover:bg-[var(--rm-surface-subtle)]"
+              >
                 <td className="p-2">
                   <Input
                     value={item.item_name}
@@ -135,7 +142,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                       handleItemChange(index, 'item_name', e.target.value)
                     }
                     placeholder="商品名"
-                    className="w-full border-gray-200"
+                    className="w-full border-[var(--rm-border)]"
                   />
                 </td>
                 <td className="p-2">
@@ -144,7 +151,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                     onChange={(e) =>
                       handleItemChange(index, 'main_category', e.target.value)
                     }
-                    className="h-10 w-full px-2 border border-gray-200 rounded-lg text-sm bg-white"
+                    className="rm-field h-10 w-full px-2 text-sm"
                   >
                     {MAIN_CATEGORIES.map((category) => (
                       <option key={category} value={category}>
@@ -160,7 +167,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                       handleItemChange(index, 'sub_category', e.target.value)
                     }
                     placeholder="小分類"
-                    className="w-full border-gray-200"
+                    className="w-full border-[var(--rm-border)]"
                   />
                 </td>
                 <td className="p-2">
@@ -170,7 +177,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                       handleSearchTagsChange(index, e.target.value)
                     }
                     placeholder="ねぎ, 青ねぎ"
-                    className="w-full border-gray-200"
+                    className="w-full border-[var(--rm-border)]"
                   />
                 </td>
                 <td className="p-2">
@@ -184,7 +191,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                       )
                     }
                     maxLength={7}
-                    className="w-full text-right font-bold tabular-nums border-gray-200"
+                    className="w-full text-right font-bold tabular-nums border-[var(--rm-border)]"
                     placeholder="0"
                   />
                 </td>
@@ -192,7 +199,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                   <Button
                     variant="danger"
                     onClick={() => handleDeleteItem(index)}
-                    className="px-2.5 py-1 text-xs font-bold !bg-white !text-red-600 border border-red-200 hover:!bg-red-50"
+                    className="px-2.5 py-1 text-xs font-bold !bg-[var(--rm-surface)] !text-[var(--rm-danger)] border border-red-200 hover:!bg-[var(--rm-danger-subtle)]"
                   >
                     ✕
                   </Button>
@@ -201,16 +208,18 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
             ))}
 
             {adjustmentAmount !== 0 && (
-              <tr className="bg-gray-50">
+              <tr className="bg-[var(--rm-surface-subtle)]">
                 <td
                   colSpan={4}
                   className="p-2 text-sm font-bold text-[var(--rm-text-muted)] pl-4"
                 >
-                  🔒 消費税・自動調整額
+                  自動調整額
                 </td>
                 <td
                   className={`p-2 text-right font-bold pr-4 tabular-nums ${
-                    adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-700'
+                    adjustmentAmount < 0
+                      ? 'text-[var(--rm-danger)]'
+                      : 'text-[var(--rm-text-secondary)]'
                   }`}
                 >
                   {adjustmentAmount > 0 ? '+' : ''}
@@ -235,16 +244,16 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
           return (
             <div
               key={item.id || `m-line-${index}`}
-              className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm"
+              className="bg-[var(--rm-surface)] border border-[var(--rm-border-subtle)] rounded-[var(--rm-radius-card)] p-3 shadow-sm"
             >
-              <div className="flex justify-between items-center mb-2 border-b border-gray-100 pb-2">
-                <label className="block text-sm font-bold text-gray-700">
-                  商品名 <span className="text-red-700">*</span>
+              <div className="flex justify-between items-center mb-2 border-b border-[var(--rm-border-subtle)] pb-2">
+                <label className="block text-sm font-bold text-[var(--rm-text-secondary)]">
+                  商品名 <span className="text-[var(--rm-danger)]">*</span>
                 </label>
                 <Button
                   variant="danger"
                   onClick={() => handleDeleteItem(index)}
-                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-white !text-red-700 border border-red-200 hover:!bg-red-50"
+                  className="px-2.5 py-1 text-xs font-bold shadow-sm flex items-center gap-1 !bg-[var(--rm-surface)] !text-[var(--rm-danger)] border border-red-200 hover:!bg-[var(--rm-danger-subtle)]"
                 >
                   ✕ 削除
                 </Button>
@@ -257,12 +266,12 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                     handleItemChange(index, 'item_name', e.target.value)
                   }
                   placeholder="商品名"
-                  className="w-full text-base py-1.5 border-gray-300"
+                  className="w-full text-base py-1.5 border-[var(--rm-border)]"
                 />
               </div>
 
-              <div className="flex justify-between items-center bg-gray-50 p-2 rounded-lg border border-gray-200">
-                <label className="text-sm font-bold text-gray-700 pl-1">
+              <div className="flex justify-between items-center bg-[var(--rm-surface-subtle)] p-2 rounded-[var(--rm-radius-card)] border border-[var(--rm-border)]">
+                <label className="text-sm font-bold text-[var(--rm-text-secondary)] pl-1">
                   金額
                 </label>
                 <NumberInput
@@ -275,7 +284,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                     )
                   }
                   maxLength={7}
-                  className="w-28 text-right text-base py-1.5 font-bold tabular-nums border-gray-300 bg-white shadow-sm"
+                  className="w-28 text-right text-base py-1.5 font-bold tabular-nums border-[var(--rm-border)] bg-[var(--rm-surface)] shadow-sm"
                   placeholder="0"
                 />
               </div>
@@ -283,7 +292,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
               <button
                 type="button"
                 onClick={() => toggleDetails(index)}
-                className="mt-2 w-full flex items-center justify-center gap-1 text-xs font-bold text-gray-600 bg-gray-50 border border-gray-200 rounded-lg py-1.5 hover:bg-gray-100"
+                className="mt-2 w-full min-h-11 flex items-center justify-center gap-1 text-xs font-semibold text-[var(--rm-text-secondary)] bg-[var(--rm-surface-subtle)] border border-[var(--rm-border)] rounded-md py-1.5 hover:bg-[var(--rm-surface-muted)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
               >
                 分類・検索タグを{isDetailOpen ? '閉じる' : '編集'}
                 <span
@@ -296,7 +305,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
               </button>
 
               {isDetailOpen && (
-                <div className="mt-2 space-y-2.5 border-t border-gray-100 pt-2.5">
+                <div className="mt-2 space-y-2.5 border-t border-[var(--rm-border-subtle)] pt-2.5">
                   <div>
                     <label className="block text-xs font-bold text-[var(--rm-text-muted)] mb-1">
                       大分類
@@ -306,7 +315,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                       onChange={(e) =>
                         handleItemChange(index, 'main_category', e.target.value)
                       }
-                      className="h-10 w-full px-2 border border-gray-200 rounded-lg text-sm bg-white"
+                      className="rm-field h-10 w-full px-2 text-sm"
                     >
                       {MAIN_CATEGORIES.map((category) => (
                         <option key={category} value={category}>
@@ -325,7 +334,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                         handleItemChange(index, 'sub_category', e.target.value)
                       }
                       placeholder="小分類"
-                      className="w-full border-gray-200"
+                      className="w-full border-[var(--rm-border)]"
                     />
                   </div>
                   <div>
@@ -338,7 +347,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
                         handleSearchTagsChange(index, e.target.value)
                       }
                       placeholder="ねぎ, 青ねぎ"
-                      className="w-full border-gray-200"
+                      className="w-full border-[var(--rm-border)]"
                     />
                   </div>
                 </div>
@@ -348,13 +357,15 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         })}
 
         {adjustmentAmount !== 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex justify-between items-center shadow-inner">
-            <span className="text-sm font-bold text-blue-700">
-              🔒 消費税・調整額
+          <div className="bg-[var(--rm-receipt-subtle)] border border-blue-200 rounded-[var(--rm-radius-card)] p-3 flex justify-between items-center">
+            <span className="text-sm font-semibold text-[var(--rm-receipt)]">
+              消費税・調整額
             </span>
             <span
               className={`text-base font-bold pr-1 tabular-nums ${
-                adjustmentAmount < 0 ? 'text-red-700' : 'text-gray-800'
+                adjustmentAmount < 0
+                  ? 'text-[var(--rm-danger)]'
+                  : 'text-[var(--rm-text-primary)]'
               }`}
             >
               {adjustmentAmount > 0 ? '+' : ''}
@@ -364,7 +375,7 @@ export const HistoryReceiptItems: React.FC<HistoryReceiptItemsProps> = ({
         )}
 
         {receiptTarget.receipt_items.length === 0 && (
-          <div className="text-center py-6 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 text-[var(--rm-text-muted)] text-sm font-bold">
+          <div className="text-center py-6 bg-[var(--rm-surface-subtle)] rounded-[var(--rm-radius-card)] border border-dashed border-[var(--rm-border)] text-[var(--rm-text-secondary)] text-sm font-semibold">
             購入品目がありません。
           </div>
         )}
