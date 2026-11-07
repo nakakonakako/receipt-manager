@@ -17,6 +17,7 @@ export const ChatInterface: React.FC = () => {
   const { session } = useAuth()
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const suggestionsRef = useRef<HTMLDivElement>(null)
 
   const [query, setQuery] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
@@ -114,6 +115,7 @@ export const ChatInterface: React.FC = () => {
       if (status === 422) setQuery(currentQuery)
       const errorMessage: Message = {
         role: 'assistant',
+        isError: true,
         content:
           status === 413
             ? '送信内容が大きすぎます。質問を短くして再度お試しください。'
@@ -133,19 +135,19 @@ export const ChatInterface: React.FC = () => {
 
   return (
     <div className="rm-card flex flex-col h-[600px] sm:h-auto sm:flex-1 sm:min-h-0 overflow-hidden relative">
-      <div className="bg-stone-100 border-b border-stone-200 p-4 text-stone-900 font-semibold flex justify-between items-center shrink-0 z-10">
-        <span>家計簿AIチャット 🤖</span>
+      <div className="bg-[var(--rm-surface-muted)] border-b border-[var(--rm-border-subtle)] p-4 text-[var(--rm-text-primary)] font-semibold flex justify-between items-center shrink-0 z-10">
+        <span>家計簿AIチャット</span>
       </div>
 
-      <div className="bg-blue-50 border-b border-blue-100 p-3 flex flex-col sm:flex-row gap-3 text-sm shrink-0">
+      <div className="bg-[var(--rm-surface-subtle)] border-b border-[var(--rm-border-subtle)] p-3 flex flex-col sm:flex-row gap-3 text-sm shrink-0">
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-gray-600 font-bold text-xs whitespace-nowrap">
+          <span className="text-[var(--rm-text-secondary)] font-semibold text-xs whitespace-nowrap">
             対象データ:
           </span>
           <select
             value={dataType}
             onChange={(e) => setDataType(e.target.value)}
-            className="rm-field flex-1 px-2 py-1.5 text-stone-700 outline-none focus:border-blue-600 font-medium"
+            className="rm-field flex-1 px-2 py-1.5 font-medium"
           >
             <option value="all">すべて</option>
             <option value="receipt">レシート詳細のみ</option>
@@ -153,13 +155,13 @@ export const ChatInterface: React.FC = () => {
           </select>
         </div>
         <div className="flex items-center gap-2 flex-1">
-          <span className="text-gray-600 font-bold text-xs whitespace-nowrap">
+          <span className="text-[var(--rm-text-secondary)] font-semibold text-xs whitespace-nowrap">
             対象期間:
           </span>
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
-            className="rm-field flex-1 px-2 py-1.5 text-stone-700 outline-none focus:border-blue-600 font-medium"
+            className="rm-field flex-1 px-2 py-1.5 font-medium"
           >
             <option value="3months">過去3ヶ月</option>
             <option value="1month">今月のみ</option>
@@ -170,14 +172,19 @@ export const ChatInterface: React.FC = () => {
 
       <div className="flex-1 p-4 overflow-y-auto space-y-5 bg-[var(--rm-surface-subtle)] custom-scrollbar relative">
         {isFetchingHistory ? (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--rm-text-muted)] gap-3">
-            <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
-            <span className="font-bold text-sm">履歴を読み込み中...</span>
+          <div
+            role="status"
+            className="flex flex-col items-center justify-center h-full text-[var(--rm-text-secondary)] gap-3"
+          >
+            <span className="w-8 h-8 border-4 border-[var(--rm-receipt)] border-t-transparent rounded-full animate-spin"></span>
+            <span className="font-semibold text-sm">履歴を読み込み中...</span>
           </div>
         ) : messages.length === 0 && !isLoading ? (
-          <div className="flex flex-col items-center justify-center h-full text-[var(--rm-text-muted)] gap-2">
-            <span className="text-4xl mb-2">👋</span>
-            <span className="font-bold text-sm text-center">
+          <div className="flex flex-col items-center justify-center h-full text-[var(--rm-text-secondary)] gap-2">
+            <span className="text-4xl mb-2 text-[var(--rm-receipt)]" aria-hidden="true">
+              ⌕
+            </span>
+            <span className="font-semibold text-sm text-center">
               こんにちは！
               <br />
               過去のデータから何でも検索できます。
@@ -190,19 +197,24 @@ export const ChatInterface: React.FC = () => {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
-                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl p-3.5 whitespace-pre-wrap shadow-sm ${
+                className={`max-w-[85%] sm:max-w-[75%] rounded-[var(--rm-radius-panel)] p-3.5 whitespace-pre-wrap [overflow-wrap:anywhere] shadow-[var(--rm-shadow-raised)] ${
                   msg.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-sm'
-                    : 'bg-white text-gray-800 border border-gray-100 rounded-bl-sm prose prose-sm max-w-none'
+                    ? 'bg-[var(--rm-receipt)] text-white rounded-br-[var(--rm-radius-control)]'
+                    : msg.isError
+                      ? 'bg-[var(--rm-danger-subtle)] text-[var(--rm-danger)] border border-[var(--rm-danger)] rounded-bl-[var(--rm-radius-control)]'
+                      : 'bg-[var(--rm-surface)] text-[var(--rm-text-primary)] border border-[var(--rm-border-subtle)] rounded-bl-[var(--rm-radius-control)]'
                 }`}
+                role={msg.isError ? 'alert' : undefined}
               >
-                {msg.role === 'assistant' ? (
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    rehypePlugins={[rehypeRaw, rehypeSanitize]}
-                  >
-                    {msg.content}
-                  </ReactMarkdown>
+                {msg.role === 'assistant' && !msg.isError ? (
+                  <div className="prose prose-sm max-w-none prose-p:text-[var(--rm-text-primary)] prose-headings:text-[var(--rm-text-primary)] prose-strong:text-[var(--rm-text-primary)] prose-li:text-[var(--rm-text-primary)] prose-a:text-[var(--rm-receipt)] [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeRaw, rehypeSanitize]}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   <span className="font-medium">{msg.content}</span>
                 )}
@@ -213,17 +225,21 @@ export const ChatInterface: React.FC = () => {
 
         {isLoading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-bl-sm p-4 flex gap-1.5 items-center">
+            <div
+              role="status"
+              aria-label="回答を生成中"
+              className="bg-[var(--rm-surface)] border border-[var(--rm-border-subtle)] shadow-[var(--rm-shadow-raised)] rounded-[var(--rm-radius-panel)] rounded-bl-[var(--rm-radius-control)] p-4 flex gap-1.5 items-center"
+            >
               <div
-                className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+                className="w-2 h-2 bg-[var(--rm-text-muted)] rounded-full animate-bounce"
                 style={{ animationDelay: '0ms' }}
               ></div>
               <div
-                className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+                className="w-2 h-2 bg-[var(--rm-text-muted)] rounded-full animate-bounce"
                 style={{ animationDelay: '150ms' }}
               ></div>
               <div
-                className="w-2 h-2 bg-blue-400 rounded-full animate-bounce"
+                className="w-2 h-2 bg-[var(--rm-text-muted)] rounded-full animate-bounce"
                 style={{ animationDelay: '300ms' }}
               ></div>
             </div>
@@ -233,23 +249,38 @@ export const ChatInterface: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-3 sm:p-4 bg-white border-t border-gray-200 flex flex-col relative shrink-0">
+      <div className="p-3 sm:p-4 bg-[var(--rm-surface)] border-t border-[var(--rm-border-subtle)] flex flex-col relative shrink-0">
         {showSuggestions && query.trim() && filteredSuggestions.length > 0 && (
-          <div className="absolute bottom-full left-0 mb-2 w-full bg-white border border-gray-200 rounded-xl shadow-2xl z-20 max-h-48 overflow-y-auto custom-scrollbar">
-            <div className="text-xs text-[var(--rm-text-muted)] bg-gray-50 px-4 py-2 border-b font-bold sticky top-0">
+          <div
+            ref={suggestionsRef}
+            onBlurCapture={(event) => {
+              if (
+                !(event.relatedTarget instanceof Node) ||
+                !event.currentTarget.contains(event.relatedTarget)
+              ) {
+                setShowSuggestions(false)
+              }
+            }}
+            className="absolute bottom-full left-0 mb-2 w-full bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] z-20 max-h-48 overflow-y-auto custom-scrollbar"
+          >
+            <div className="text-xs text-[var(--rm-text-secondary)] bg-[var(--rm-surface-muted)] px-4 py-2 border-b border-[var(--rm-border-subtle)] font-semibold sticky top-0">
               過去の質問から検索
             </div>
             {filteredSuggestions.map((suggestion, index) => (
-              <div
+              <button
                 key={index}
+                type="button"
                 onClick={() => {
                   setQuery(suggestion)
                   setShowSuggestions(false)
                 }}
-                className="px-4 py-3 text-sm font-medium text-gray-700 hover:bg-blue-50 cursor-pointer border-b last:border-0 transition-colors"
+                className="w-full text-left px-4 py-3 text-sm font-medium text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] border-b border-[var(--rm-border-subtle)] last:border-0 transition-colors"
               >
-                🔍 {suggestion}
-              </div>
+                <span aria-hidden="true" className="mr-2 text-[var(--rm-text-muted)]">
+                  ⌕
+                </span>
+                {suggestion}
+              </button>
             ))}
           </div>
         )}
@@ -264,11 +295,19 @@ export const ChatInterface: React.FC = () => {
                 setShowSuggestions(true)
               }}
               onFocus={() => setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+              onBlur={(event) => {
+                if (
+                  event.relatedTarget instanceof Node &&
+                  suggestionsRef.current?.contains(event.relatedTarget)
+                ) {
+                  return
+                }
+                setTimeout(() => setShowSuggestions(false), 200)
+              }}
               onKeyDown={(e) =>
                 e.key === 'Enter' && !e.nativeEvent.isComposing && handleSend()
               }
-              className="w-full bg-gray-50 border-gray-200 focus:bg-white pr-10"
+              className="rm-field w-full !rounded-[var(--rm-radius-control)] !border-[var(--rm-border)] !bg-[var(--rm-surface-subtle)] !text-[var(--rm-text-primary)] focus:!bg-[var(--rm-surface)] focus:!ring-0 pr-10"
             />
             <span className="mt-1 block text-right text-xs text-[var(--rm-text-muted)]">
               {Array.from(query).length}/500
@@ -277,7 +316,7 @@ export const ChatInterface: React.FC = () => {
           <Button
             onClick={handleSend}
             disabled={isLoading || !query.trim()}
-            className="px-5 py-2.5 shadow-sm font-bold flex items-center gap-1"
+            className="!rounded-[var(--rm-radius-control)] !bg-[var(--rm-receipt)] hover:!bg-[var(--rm-receipt)] !shadow-[var(--rm-shadow-raised)] px-5 py-2.5 font-semibold flex items-center gap-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--rm-focus)] disabled:!bg-[var(--rm-surface-muted)] disabled:!text-[var(--rm-text-muted)] disabled:!shadow-none"
           >
             送信
           </Button>
