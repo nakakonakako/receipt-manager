@@ -114,23 +114,29 @@ export const DashboardPage: React.FC = () => {
 
   if (isLoading && allMonths.length === 0) {
     return (
-      <div className="text-center py-20 text-[var(--rm-text-secondary)] font-bold flex flex-col items-center gap-3">
-        <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></span>
+      <div
+        role="status"
+        className="text-center py-20 text-[var(--rm-text-secondary)] font-semibold flex flex-col items-center gap-3"
+      >
+        <span className="w-8 h-8 border-4 border-[var(--rm-receipt)] border-t-transparent rounded-full animate-spin"></span>
         データを読み込み中...
       </div>
     )
   }
 
   return (
-    <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
-      <div className="flex justify-between items-center border-b pb-3 mb-6">
-        <h2 className="text-xl font-bold text-gray-800">統計ダッシュボード</h2>
+    <div className="rm-card p-4 sm:p-5 min-h-[600px] flex flex-col max-w-4xl mx-auto">
+      <div className="flex flex-wrap justify-between items-center gap-3 border-b border-[var(--rm-border-subtle)] pb-3 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-[var(--rm-text-primary)]">
+          統計ダッシュボード
+        </h2>
 
         {allMonths.length > 0 && (
           <select
             value={currentMonth}
             onChange={(e) => setCurrentMonth(e.target.value)}
-            className="p-2 border border-gray-300 rounded-lg bg-gray-50 font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="対象月"
+            className="rm-field max-w-full px-3 py-2 text-sm sm:text-base font-medium hover:border-[var(--rm-text-muted)]"
           >
             {allMonths.map((m) => {
               const [y, mo] = m.split('-')
@@ -145,23 +151,29 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-20">
-          <span className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin inline-block"></span>
+        <div
+          role="status"
+          aria-label="月のデータを読み込み中"
+          className="text-center py-20"
+        >
+          <span className="w-8 h-8 border-4 border-[var(--rm-receipt)] border-t-transparent rounded-full animate-spin inline-block"></span>
         </div>
       ) : chartData.length === 0 ? (
-        <div className="text-center py-20 text-[var(--rm-text-muted)] font-bold border-2 border-dashed rounded-xl border-gray-200 bg-gray-50">
+        <div className="text-center py-20 px-4 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
           この月のデータはありません。
         </div>
       ) : (
         <div className="space-y-8">
-          <div className="text-center bg-gray-50 rounded-xl p-6 border border-gray-100">
-            <p className="text-sm font-bold text-[var(--rm-text-muted)] mb-1">月間合計支出</p>
-            <p className="text-4xl font-extrabold text-gray-800">
+          <div className="text-center bg-[var(--rm-surface-muted)] rounded-[var(--rm-radius-panel)] p-5 sm:p-6 border border-[var(--rm-border-subtle)]">
+            <p className="text-sm font-semibold text-[var(--rm-text-secondary)] mb-1">
+              月間合計支出
+            </p>
+            <p className="text-2xl sm:text-4xl font-bold tracking-tight tabular-nums whitespace-nowrap text-[var(--rm-text-primary)]">
               ¥{totalAmount.toLocaleString()}
             </p>
           </div>
 
-          <div className="h-[300px] w-full">
+          <div className="h-[340px] w-full min-w-0 sm:h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -175,11 +187,14 @@ export const DashboardPage: React.FC = () => {
                 />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: '8px',
-                    border: 'none',
-                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                    color: 'var(--rm-text-primary)',
+                    backgroundColor: 'var(--rm-surface)',
+                    border: '1px solid var(--rm-border-subtle)',
+                    borderRadius: 'var(--rm-radius-control)',
+                    boxShadow: 'var(--rm-shadow-popover)',
                   }}
-                  itemStyle={{ fontWeight: 'bold' }}
+                  labelStyle={{ color: 'var(--rm-text-secondary)' }}
+                  itemStyle={{ color: 'var(--rm-text-primary)', fontWeight: 600 }}
                   formatter={(
                     value:
                       | number
@@ -193,14 +208,23 @@ export const DashboardPage: React.FC = () => {
                   }}
                 />
                 <Legend
-                  wrapperStyle={{ fontWeight: 'bold', fontSize: '12px' }}
+                  formatter={(value) => (
+                    <span className="text-[var(--rm-text-secondary)]">
+                      {value}
+                    </span>
+                  )}
+                  wrapperStyle={{
+                    color: 'var(--rm-text-secondary)',
+                    fontWeight: 600,
+                    fontSize: '12px',
+                  }}
                 />
               </PieChart>
             </ResponsiveContainer>
           </div>
 
           <div className="space-y-2">
-            <h3 className="font-extrabold text-gray-700 mb-3 border-b pb-2">
+            <h3 className="font-bold text-[var(--rm-text-primary)] mb-3 border-b border-[var(--rm-border-subtle)] pb-2">
               カテゴリ別内訳
             </h3>
             {chartData.map((item) => {
@@ -211,23 +235,25 @@ export const DashboardPage: React.FC = () => {
               return (
                 <div
                   key={item.name}
-                  className="flex justify-between items-center p-3 bg-white border border-gray-100 shadow-sm rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex min-w-0 justify-between items-center gap-3 p-3 bg-[var(--rm-surface)] border border-[var(--rm-border-subtle)] rounded-[var(--rm-radius-card)] hover:bg-[var(--rm-surface-subtle)] transition-colors"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-3">
                     <span
-                      className="w-3 h-3 rounded-full"
+                      className="w-3 h-3 shrink-0 rounded-full"
                       style={{
                         backgroundColor:
                           CATEGORY_COLORS[item.name] || '#CBD5E1',
                       }}
                     ></span>
-                    <span className="font-bold text-gray-700">{item.name}</span>
+                    <span className="min-w-0 break-words font-semibold text-[var(--rm-text-primary)]">
+                      {item.name}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-[var(--rm-text-muted)] text-sm font-bold w-12 text-right">
+                  <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+                    <span className="text-[var(--rm-text-secondary)] text-sm font-semibold w-12 text-right tabular-nums">
                       {percentage}%
                     </span>
-                    <span className="font-extrabold text-gray-800 w-24 text-right">
+                    <span className="text-right text-[13px] sm:text-base font-bold tabular-nums whitespace-nowrap text-[var(--rm-text-primary)]">
                       ¥{item.value.toLocaleString()}
                     </span>
                   </div>
