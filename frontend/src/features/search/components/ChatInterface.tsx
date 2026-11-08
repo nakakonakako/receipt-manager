@@ -170,7 +170,7 @@ export const ChatInterface: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex-1 p-4 overflow-y-auto space-y-5 bg-[var(--rm-surface-subtle)] custom-scrollbar relative">
+      <div className="flex-1 p-4 overflow-y-auto rm-scrollbar-stable space-y-5 bg-[var(--rm-surface-subtle)] custom-scrollbar relative">
         {isFetchingHistory ? (
           <div
             role="status"

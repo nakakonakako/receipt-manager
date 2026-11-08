@@ -71,7 +71,9 @@ export const MainLayout = () => {
 
       <div
         className={`flex-1 min-h-0 transition-opacity duration-300 w-full max-w-4xl mx-auto px-3 sm:px-6 pb-3 sm:pb-6 ${
-          activeTab === 'chat' ? 'flex flex-col' : 'overflow-y-auto'
+          activeTab === 'chat'
+            ? 'flex flex-col'
+            : 'overflow-y-auto rm-scrollbar-stable'
         }`}
       >
         {activeTab === 'register' && <RegisterPage />}

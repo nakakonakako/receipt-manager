@@ -111,3 +111,7 @@ body {
 html {
   scrollbar-gutter: stable;
 }
+
+.rm-scrollbar-stable {
+  scrollbar-gutter: stable;
+}
