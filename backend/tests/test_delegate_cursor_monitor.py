@@ -209,6 +209,96 @@ class DelegateCursorMonitorTests(unittest.TestCase):
         self.assertEqual(len(pending), 1)
         self.assertEqual(json.loads(pending[0])["subtype"], "success")
 
+    def test_usage_words_in_worker_result_are_not_cli_evidence(self) -> None:
+        agent = self.fake_agent(
+            "import json, sys\n"
+            "print(json.dumps({'type': 'result', 'subtype': 'error', 'is_error': True, "
+            "'result': \"ActionRequiredError: You're out of usage.\"}))\n"
+            "sys.exit(1)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertNotIn("outcome: cursor_usage_exhausted", result.stdout)
+
+    def test_usage_failure_keeps_partial_workspace_and_does_not_retry(self) -> None:
+        staged = self.checkout / "staged.txt"
+        unstaged = self.checkout / "unstaged.txt"
+        untracked = self.checkout / "untracked.txt"
+        for command in (
+            ("init",),
+            ("config", "user.email", "test@example.invalid"),
+            ("config", "user.name", "Test"),
+        ):
+            subprocess.run(
+                ("git", *command), cwd=self.checkout, check=True, capture_output=True
+            )
+        staged.write_text("initial")
+        unstaged.write_text("initial")
+        subprocess.run(("git", "add", "."), cwd=self.checkout, check=True)
+        subprocess.run(
+            ("git", "commit", "-m", "initial"),
+            cwd=self.checkout,
+            check=True,
+            capture_output=True,
+        )
+        staged.write_text("staged")
+        subprocess.run(("git", "add", "staged.txt"), cwd=self.checkout, check=True)
+        unstaged.write_text("unstaged")
+        untracked.write_text("untracked")
+        marker = self.checkout / "runs.txt"
+        agent = self.fake_agent(
+            "from pathlib import Path\nimport sys\n"
+            + "p = Path("
+            + repr(str(marker))
+            + ")\n"
+            + "p.write_text((p.read_text() if p.exists() else '') + 'run\\n')\n"
+            + 'print("ActionRequiredError: limit. You\'re out of usage.", file=sys.stderr)\n'
+            + "sys.exit(1)\n"
+        )
+        result = self.run_agent(agent)
+        self.assertIn("outcome: cursor_usage_exhausted", result.stdout)
+        self.assertEqual(marker.read_text(), "run\n")
+        self.assertEqual(staged.read_text(), "staged")
+        self.assertEqual(unstaged.read_text(), "unstaged")
+        self.assertEqual(untracked.read_text(), "untracked")
+        status = subprocess.check_output(
+            ("git", "status", "--short"), cwd=self.checkout, text=True
+        )
+        self.assertIn("M  staged.txt", status)
+        self.assertIn(" M unstaged.txt", status)
+        self.assertIn("?? untracked.txt", status)
+
+    def test_usage_exhaustion_requires_failed_cli_diagnostic(self) -> None:
+        cases = [
+            ("ActionRequiredError: Increase limits. You're out of usage.", False, True),
+            ("You're out of usage.", False, False),
+            ("ActionRequiredError: You're out of usage.", True, False),
+            ("The documentation says You're out of usage.", False, False),
+            ("resource_exhausted insufficient model capacity", False, False),
+            ("network connection error", False, False),
+            ("authentication failed", False, False),
+            ("MCP initialization error", False, False),
+        ]
+        for message, success, expected in cases:
+            with self.subTest(message=message, success=success):
+                source = (
+                    "import json, os, sys\n"
+                    + "data = "
+                    + repr(("\x1b[31m" + message + "\x1b[0m").encode())
+                    + "\n"
+                    + "for byte in data: os.write(2, bytes([byte]))\n"
+                    + (
+                        "print(json.dumps({'type':'result','subtype':'success'}))\n"
+                        if success
+                        else "sys.exit(19)\n"
+                    )
+                )
+                result = self.run_agent(self.fake_agent(source))
+                self.assertEqual(
+                    "outcome: cursor_usage_exhausted" in result.stdout,
+                    expected,
+                    result.stdout,
+                )
+
     def test_status_snapshot_updates_are_memory_only_until_checkpoint(self) -> None:
         writes: list[dict[str, object]] = []
         snapshot = MONITOR_MODULE.StatusSnapshot(

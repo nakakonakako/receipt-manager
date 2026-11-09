@@ -305,16 +305,25 @@ For an explicitly supervisor-approved Other Models route, use only:
 - `--fallback-tier normal` -> `claude-sonnet-5-5-medium`
 - `--model-override gpt-5.6-luna-medium` -> reserve candidate
 
-These options are mutually exclusive with `--tier` and with each other. The
-delegate never detects quota exhaustion, retries at another tier, or switches
-routes automatically. The monitor's stderr categories are triage signals only:
-`resource_exhausted` or capacity text alone does not prove a quota limit. The
-Supervisor may explicitly choose Other Models after reviewing credible usage /
-quota evidence, or after the same persistent service/model-side failure occurs
-in a second independent, bounded run on the normal Cursor Models route. Keep a
-quota limit distinct from capacity and service failures. Environment and
-approval-policy failures follow the execution-environment policy above; they do
-not justify model or route changes.
+These options are mutually exclusive with `--tier` and with each other.
+When the monitor reports `cursor_usage_exhausted`, stop Cursor retries and
+announce that the current Codex Supervisor is taking over because the CLI usage
+limit was confirmed. Inspect `git status --short`, `git diff --cached`,
+`git diff`, and untracked paths before working; preserve all existing staged,
+unstaged and untracked changes. Continue in the same worker worktree, without
+reset, clean, stash or removal. Do not launch another Codex process or switch
+models. Implement, run the normal quality checks, verify affected UI in a real
+browser, and perform the final review under the same criteria as a Cursor worker.
+For UI checks use the existing project Playwright MCP launcher and devserver
+helper if available, with the dedicated verification port, one authenticated
+profile user at a time, no credential inspection or OAuth automation, and stop
+only servers owned by the session. If browser operation is unavailable, report
+UI behavior as UNCONFIRMED with the cause and required setup; never claim PASS.
+The monitor recognizes the observed `ActionRequiredError` usage message only on
+failure, after ANSI removal. It does not infer quota from `resource_exhausted`,
+capacity, network, authentication, MCP, or implementation failures. The
+structured quota error format is unverified. Other Models options remain
+explicit and are never selected automatically.
 
 Implementation-difficulty escalation remains `light` → `normal` → `hard` after
 clarifying the work order. If a `hard` attempt still needs a design change,

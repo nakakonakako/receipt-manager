@@ -891,6 +891,7 @@ class StderrDiagnostics:
     def __init__(self) -> None:
         self.buffer = bytearray()
         self.discarding_long_line = False
+        self.usage_exhausted = False
         self.error_events: list[dict[str, str]] = []
         self.leading_excerpts: list[str] = []
         self.trailing_excerpts: list[str] = []
@@ -905,6 +906,14 @@ class StderrDiagnostics:
         text = raw_line.decode("utf-8", errors="replace")
         if truncated:
             text += " [line truncated]"
+        clean = _ANSI_RE.sub("", text).strip()
+        usage_line = not truncated and bool(
+            re.match(
+                r"^ActionRequiredError:.{0,2048}\bYou\x27re out of usage\.", clean, re.I
+            )
+        )
+        if usage_line:
+            self.usage_exhausted = True
         occurred_at = utc_now()
         added: list[dict[str, str]] = []
         for category, pattern in ERROR_PATTERNS.items():
@@ -913,7 +922,7 @@ class StderrDiagnostics:
                 if len(self.error_events) < 30:
                     self.error_events.append(record)
                     added.append(record)
-        safe_line = scrub_stderr_line(text)
+        safe_line = "[cursor usage error]" if usage_line else scrub_stderr_line(text)
         if len(self.leading_excerpts) < MAX_DIAGNOSTIC_LINES // 2:
             self.leading_excerpts.append(safe_line)
         else:
@@ -1561,13 +1570,17 @@ def main() -> int:
             )
         if interrupted_signal is not None:
             outcome = "interrupted"
-        elif exit_code != 0:
-            outcome = "failed"
-        elif result_status == "success" and result_is_error is not True:
+        elif (
+            exit_code == 0
+            and result_status == "success"
+            and result_is_error is not True
+        ):
             outcome = "succeeded"
+        elif stderr_diagnostics.usage_exhausted and result_status != "success":
+            outcome = "cursor_usage_exhausted"
         else:
             outcome = "failed"
-        if outcome in {"failed", "interrupted"}:
+        if outcome in {"failed", "interrupted", "cursor_usage_exhausted"}:
             stderr_diagnostic_log = save_failure_diagnostics(
                 state_dir_fd, state_dir, pid, stderr_diagnostics
             )

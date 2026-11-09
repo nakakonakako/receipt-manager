@@ -272,22 +272,24 @@ changes is intentional and explicitly approved by the supervisor or user.
 
 ## Cursor Models quota and explicit Other Models routes
 
-The monitor automatically categorizes bounded stderr signals such as
-`resource_exhausted`, network, authentication, permissions, and MCP
-initialization. These categories help diagnosis; they do not decide the final
-cause or change the model route. The current CLI result/status output does not
-provide a verified quota-specific signal or remaining-pool balance. In
-particular, one `resource_exhausted` or capacity error does not establish
-usage/quota exhaustion.
-
-Only the Supervisor chooses an Other Models route, after reviewing separate,
-credible usage/quota evidence or a recurring service/model-side failure. For
-the latter, make one independent, bounded confirmation run on the normal Cursor
-Models route and require the same failure to recur before considering a route
-change. Do not retry indefinitely. Repair network, MCP, authentication,
-worktree, dev-server, browser, or other environment failures without changing
-models. Keep implementation-difficulty retries and Sol redesign escalation
-separate from this route decision.
+When the monitor reports `cursor_usage_exhausted`, stop Cursor retries and
+announce that the current Codex Supervisor is taking over because the CLI usage
+limit was confirmed. Inspect `git status --short`, `git diff --cached`,
+`git diff`, and untracked paths before working; preserve all existing staged,
+unstaged and untracked changes. Continue in the same worker worktree, without
+reset, clean, stash or removal. Do not launch another Codex process or switch
+models. Implement, run the normal quality checks, verify affected UI in a real
+browser, and perform the final review under the same criteria as a Cursor worker.
+For UI checks use the existing project Playwright MCP launcher and devserver
+helper if available, with the dedicated verification port, one authenticated
+profile user at a time, no credential inspection or OAuth automation, and stop
+only servers owned by the session. If browser operation is unavailable, report
+UI behavior as UNCONFIRMED with the cause and required setup; never claim PASS.
+The monitor recognizes the observed `ActionRequiredError` usage message only on
+failure, after ANSI removal. It does not infer quota from `resource_exhausted`,
+capacity, network, authentication, MCP, or implementation failures. The
+structured quota error format is unverified. Other Models options remain
+explicit and are never selected automatically.
 
 Supported explicit routes are:
 

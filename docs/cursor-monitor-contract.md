@@ -1,7 +1,7 @@
-# Cursor委譲monitor共通契約 v1
+# Cursor委譲monitor共通契約 v2
 
 この文書は、receipt-managerとprice-memoのCodex → Cursor委譲monitorで
-共通して保証する外部動作の初版です。共通ライブラリや同一の内部実装は
+共通して保証する外部動作です。共通ライブラリや同一の内部実装は
 要求しません。Monitor共通契約v1は両リポジトリで採用済みです。
 両リポジトリは独立したMonitor実装とテストを持ち、採用状態はそれぞれのPRで
 確認しています。
@@ -92,3 +92,15 @@ price-memoのテスト実行結果や保証として読み替えません。
    変更だけで両repoが準拠したとは扱いません。
 4. 共通ライブラリ、外部repoを参照するCI、両repoを一括変更するWorkerは導入せず、
    各repoの独立実装と契約テストを維持します。
+
+## MON-09: 明示的な利用枠切れと引き継ぎ
+
+対応テスト: `test_usage_exhaustion_requires_failed_cli_diagnostic`,
+`test_usage_words_in_worker_result_are_not_cli_evidence`,
+`test_usage_failure_keeps_partial_workspace_and_does_not_retry`
+
+失敗時に観測済み CLI の `ActionRequiredError` と明示的な利用枠切れ文言を
+stderr から検出し、`cursor_usage_exhausted` を報告する。ANSI と分割入力を
+扱い、成功・中断・通常の文章や容量不足だけでは判定しない。Supervisor は
+再試行せず、既存変更を保護して同じ worktree で引き継ぐ。構造化 quota エラーの
+外部形式は未確認であり推測しない。
