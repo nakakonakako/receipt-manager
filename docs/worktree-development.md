@@ -32,13 +32,35 @@ receipt-manager-codex
 Use this command for every new Codex session in this repository. Before Codex
 starts, the launcher fetches `origin/main`, creates a uniquely named worktree
 from the fetched commit under `~/worktrees/receipt-manager/`, verifies its HEAD
-and clean state, and starts Codex with that worktree as its working directory.
-It never updates or reuses the normal checkout or an existing feature worktree.
-Fetch, GitHub access, or verification failures stop startup. The launcher is
-installed as a file copy under `~/.local/bin`, so reinstall it after pulling
-launcher changes. Worktrees created for sessions are preserved; remove one only
-through the documented explicit `scripts/worktree.sh remove <path>` flow after
+and clean state, runs that new worktree's `scripts/worktree.sh setup` for
+development, verifies that setup preserved the baseline, and starts Codex in
+that worktree. Setup installs the lockfile-pinned root/frontend dependencies,
+prepares the managed backend runtime, and links only configured development
+environment files through the existing validation rules. It does not start
+servers, touch the Playwright authentication profile, or access a database.
+Since every invocation creates a new worktree, this one-time-per-worktree setup
+does run dependency installation for each new session. npm's local cache is
+used; Playwright MCP and Chromium remain shared user-level installs and are
+prepared by their existing MCP launchers on first use, not duplicated in each
+worktree.
+
+The launcher never updates or reuses the normal checkout or an existing
+feature worktree. Fetch, GitHub access, Git verification, or setup failures stop
+startup and retain the new worktree for inspection. The launcher is installed
+as a file copy under `~/.local/bin`, so reinstall it after pulling launcher
+changes. Worktrees created for sessions are preserved; remove one only through
+the documented explicit `scripts/worktree.sh remove <path>` flow after
 reviewing its state.
+
+For work already in progress, continue or resume its existing Codex session in
+the same feature worktree. Do not start `receipt-manager-codex` for that
+continuation: it intentionally creates a separate clean worktree and does not
+move, reset, or reuse feature work. From that worktree, use `codex resume` to
+select a session already associated with it. If setup was never completed for
+that worktree, inspect its changes first, then run
+`scripts/worktree.sh setup <path> --environment development` once. Use the
+launcher for a new task or a new session that should start from current
+`origin/main`.
 
 This guarantee covers only new sessions started with `receipt-manager-codex`.
 Direct `codex` invocations, IDE-managed starts, API starts, and resumed sessions

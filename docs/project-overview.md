@@ -25,7 +25,8 @@
 
 新しいCodexセッションは `receipt-manager-codex` から起動する。この
 ランチャーは起動前にGitHubの `origin/main` を取得し、そのコミットから
-専用worktreeを作成してCodexを開始する。導入・制約は
+専用worktreeを作成し、公式setupを完了してからCodexを開始する。既存機能の
+継続は作業中のCodexセッションとworktreeをそのまま利用する。導入・制約は
 [`worktree-development.md`](./worktree-development.md#starting-codex) を参照。
 
 ---

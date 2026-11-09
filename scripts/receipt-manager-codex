@@ -6,6 +6,8 @@ die() {
   exit 2
 }
 
+command -v codex >/dev/null 2>&1 || die "codex executable not found in PATH. Codex was not started."
+
 checkout="${RECEIPT_MANAGER_CHECKOUT:-$HOME/web/receipt-manager}"
 checkout="$(cd "$checkout" 2>/dev/null && pwd -P)" || die "Repository checkout not found: ${RECEIPT_MANAGER_CHECKOUT:-$HOME/web/receipt-manager}"
 git -C "$checkout" rev-parse --show-toplevel >/dev/null 2>&1 || die "Not a Git checkout: $checkout"
@@ -41,5 +43,11 @@ actual="$(git -C "$workspace" rev-parse HEAD 2>/dev/null)" || die "Cannot verify
 
 printf '[receipt-manager-codex] baseline: origin/main %s\n' "$baseline" >&2
 printf '[receipt-manager-codex] workspace: %s (%s)\n' "$workspace" "$branch" >&2
-command -v codex >/dev/null 2>&1 || die "codex executable not found in PATH. The fresh worktree is preserved: $workspace"
+if ! "$workspace/scripts/worktree.sh" setup "$workspace" --environment development; then
+  die "Development worktree setup failed. Codex was not started; inspect and repair the preserved worktree: $workspace"
+fi
+actual="$(git -C "$workspace" rev-parse HEAD 2>/dev/null)" || die "Cannot verify worktree HEAD after setup."
+[[ "$actual" == "$baseline" ]] || die "Worktree HEAD changed during setup; Codex was not started. Inspect the preserved worktree: $workspace"
+[[ -z "$(git -C "$workspace" status --porcelain=v1)" ]] \
+  || die "Worktree is not clean after setup; Codex was not started. Inspect the preserved worktree: $workspace"
 exec codex -C "$workspace" "$@"

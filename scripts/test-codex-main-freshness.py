@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -28,7 +27,7 @@ def git(path: Path, *args: str) -> str:
 
 def commit(path: Path, name: str) -> str:
     (path / "tracked.txt").write_text(name + "\n", encoding="utf-8")
-    run(["git", "-C", str(path), "add", "tracked.txt"])
+    run(["git", "-C", str(path), "add", "-A"])
     run(["git", "-C", str(path), "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
          "commit", "-m", name])
     return git(path, "rev-parse", "HEAD")
@@ -40,6 +39,15 @@ def fixture(base: Path, label: str) -> tuple[Path, Path, Path]:
     checkout = base / f"{label}-checkout"
     run(["git", "init", "--bare", "--initial-branch=main", str(bare)])
     run(["git", "init", "--initial-branch=main", str(source)])
+    setup_script = source / "scripts" / "worktree.sh"
+    setup_script.parent.mkdir()
+    setup_script.write_text(
+        "#!/usr/bin/env bash\n"
+        "printf '%s\\n' \"$@\" > \"$SETUP_MARKER\"\n"
+        "[[ \"${SETUP_SHOULD_FAIL:-0}\" != 1 ]]\n",
+        encoding="utf-8",
+    )
+    setup_script.chmod(0o755)
     commit(source, "initial")
     run(["git", "-C", str(source), "remote", "add", "origin", str(bare)])
     run(["git", "-C", str(source), "push", "-u", "origin", "main"])
@@ -82,6 +90,7 @@ def execute_case(base: Path, label: str, state: str) -> None:
         "HOME": str(home), "PATH": f"{fake_bin}:{os.environ['PATH']}",
         "RECEIPT_MANAGER_CHECKOUT": str(checkout), "RECEIPT_MANAGER_SESSION_ID": label,
         "CODEX_MARKER": str(marker),
+        "SETUP_MARKER": str(base / f"setup-{label}"),
     }
     result = run([str(LAUNCHER), "--version"], env=env)
     lines = marker.read_text(encoding="utf-8").splitlines()
@@ -89,6 +98,8 @@ def execute_case(base: Path, label: str, state: str) -> None:
     assert lines[0] == "-C", lines
     assert git(workspace, "rev-parse", "HEAD") == remote_head
     assert git(workspace, "status", "--porcelain=v1") == ""
+    setup_args = Path(env["SETUP_MARKER"]).read_text(encoding="utf-8").splitlines()
+    assert setup_args == ["setup", str(workspace), "--environment", "development"], setup_args
     assert git(checkout, "rev-parse", "HEAD") == original_head
     assert git(checkout, "branch", "--show-current") == original_branch
     if state == "dirty":
@@ -119,6 +130,27 @@ def main() -> None:
         assert result.returncode != 0 and "Could not fetch origin/main" in result.stderr
         assert not marker.exists()
 
+        _, _, checkout = fixture(base, "setup-failure")
+        home = base / "home-setup-failure"
+        fake_bin = base / "bin-setup-failure"
+        home.mkdir()
+        fake_bin.mkdir()
+        marker = base / "called-setup-failure"
+        setup_marker = base / "setup-called-setup-failure"
+        stub = fake_bin / "codex"
+        stub.write_text("#!/usr/bin/env bash\ntouch \"$CODEX_MARKER\"\n", encoding="utf-8")
+        stub.chmod(0o755)
+        env = os.environ | {
+            "HOME": str(home), "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RECEIPT_MANAGER_CHECKOUT": str(checkout), "RECEIPT_MANAGER_SESSION_ID": "setup-failure",
+            "CODEX_MARKER": str(marker), "SETUP_MARKER": str(setup_marker), "SETUP_SHOULD_FAIL": "1",
+        }
+        result = run([str(LAUNCHER)], env=env, check=False)
+        workspace = home / "worktrees" / "receipt-manager" / "codex-session-setup-failure"
+        assert result.returncode != 0 and "Development worktree setup failed" in result.stderr
+        assert setup_marker.is_file() and not marker.exists()
+        assert workspace.is_dir() and git(workspace, "rev-parse", "HEAD") == git(checkout, "rev-parse", "origin/main")
+
         _, _, checkout = fixture(base, "collision")
         collision_home = base / "home-collision"
         collision_home.mkdir()
@@ -129,6 +161,18 @@ def main() -> None:
             "RECEIPT_MANAGER_SESSION_ID": "collision",
         }, check=False)
         assert result.returncode != 0 and "branch already exists" in result.stderr
+
+        _, _, checkout = fixture(base, "codex-missing")
+        missing_codex_home = base / "home-codex-missing"
+        missing_codex_home.mkdir()
+        missing_codex_bin = base / "bin-codex-missing"
+        missing_codex_bin.mkdir()
+        result = run([str(LAUNCHER)], env=os.environ | {
+            "HOME": str(missing_codex_home), "PATH": f"{missing_codex_bin}:/usr/bin:/bin",
+            "RECEIPT_MANAGER_CHECKOUT": str(checkout), "RECEIPT_MANAGER_SESSION_ID": "codex-missing",
+        }, check=False)
+        assert result.returncode != 0 and "codex executable not found" in result.stderr
+        assert not (missing_codex_home / "worktrees" / "receipt-manager" / "codex-session-codex-missing").exists()
     print("Codex main freshness scenarios passed")
 
 
