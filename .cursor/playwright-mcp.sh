@@ -3,6 +3,18 @@ set -euo pipefail
 
 workspace_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$workspace_root"
+# Codex may start MCP servers without the WSLg display environment. Use the
+# standard WSLg X11 socket only when no display was supplied by the caller.
+if [[ -z "${DISPLAY:-}" && "$(uname -s)" == Linux ]]; then
+  if [[ "$(uname -r)" == *[Mm]icrosoft* && -S /mnt/wslg/.X11-unix/X0 && -S /tmp/.X11-unix/X0 ]]; then
+    export DISPLAY=:0
+  else
+    echo "Authenticated Playwright MCP requires a graphical DISPLAY; see docs/worktree-development.md." >&2
+    exit 1
+  fi
+fi
+# Do not silently fall back to a headless browser when a GUI is required.
+export PLAYWRIGHT_MCP_HEADLESS=false
 config_file="$workspace_root/.cursor/playwright-mcp.json"
 profile_dir="${HOME:?HOME must be set}/.local/state/receipt-manager/playwright-profile"
 browser_cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:?HOME must be set}/.cache/ms-playwright}"

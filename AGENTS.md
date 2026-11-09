@@ -195,6 +195,13 @@ When changing frontend UI:
   open it at once. Do not inspect, copy, reset, or log profile/auth state and do
   not automate Google OAuth. The unauthenticated MCP uses `--isolated` and
   must not read saved auth state.
+- For manual login, use the actual authenticated MCP browser window; opening
+  the URL in a normal browser uses a different profile. A snapshot or a
+  running MCP does not prove the human can see or operate its window. Do not
+  report readiness until the human confirms both. After manual login, fully
+  restart the MCP browser and verify the authenticated screen again. Follow
+  the Codex/Cursor and WSLg procedure in `docs/worktree-development.md`; if
+  visibility or persistence cannot be confirmed, report it as unconfirmed.
 - Approve only the MCP needed for the task in `.cursor/mcp.json`. Never use
   `--approve-mcps` to approve all servers.
 

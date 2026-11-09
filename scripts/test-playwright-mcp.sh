@@ -41,6 +41,7 @@ if [[ -n "${PLAYWRIGHT_MCP_STORAGE_STATE:-}" ]]; then
   exit 19
 fi
 printf '%s\n' "$*" >> "$PLAYWRIGHT_MCP_TEST_LOG"
+printf '%s\n' "${DISPLAY:-unset}|${PLAYWRIGHT_MCP_HEADLESS:-unset}" >> "$PLAYWRIGHT_MCP_TEST_ENV_LOG"
 if [[ "$*" == *"playwright install chromium"* ]]; then
   [[ "${PLAYWRIGHT_MCP_TEST_INSTALL_FAIL:-0}" != 1 ]] || exit 17
   mkdir -p "$PLAYWRIGHT_BROWSERS_PATH/chromium_headless_shell-1247/chrome-headless-shell-linux64" "$PLAYWRIGHT_BROWSERS_PATH/chromium-1247/chrome-linux64"
@@ -56,6 +57,8 @@ export HOME="$test_root/home"
 export PATH="$test_root/bin:$PATH"
 export PLAYWRIGHT_BROWSERS_PATH="$test_root/cache"
 export PLAYWRIGHT_MCP_TEST_LOG="$log_file"
+export PLAYWRIGHT_MCP_TEST_ENV_LOG="$test_root/env.log"
+export DISPLAY=:91
 
 # The mock refuses any auth state passed to either launcher.
 
@@ -65,6 +68,7 @@ bash "$source_root/.cursor/playwright-mcp.sh"
 grep -Fq -- '--package=playwright@1.64.0-alpha-1790635538000 playwright install chromium' "$log_file"
 grep -Fq -- '@playwright/mcp@0.0.83 --config ' "$log_file"
 grep -Fq -- "--user-data-dir $HOME/.local/state/receipt-manager/playwright-profile" "$log_file"
+grep -Fxq -- ':91|false' "$PLAYWRIGHT_MCP_TEST_ENV_LOG"
 if grep -Fq -- '--headless' "$log_file"; then
   echo "Authenticated MCP must stay headed for manual login." >&2
   exit 1
@@ -76,6 +80,27 @@ fi
 bash "$source_root/.cursor/playwright-mcp.sh"
 [[ "$(wc -l < "$log_file")" -eq 1 ]]
 grep -Fq -- '@playwright/mcp@0.0.83' "$log_file"
+
+# On Linux without a display or WSLg, do not silently start headless.
+cat > "$test_root/bin/uname" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in -s) echo Linux ;; -r) echo generic-linux ;; esac
+EOF
+chmod +x "$test_root/bin/uname"
+: > "$log_file"
+if env -u DISPLAY bash "$source_root/.cursor/playwright-mcp.sh" >/dev/null 2>&1; then
+  echo "Expected authenticated MCP to require a graphical display." >&2
+  exit 1
+fi
+[[ ! -s "$log_file" ]]
+rm "$test_root/bin/uname"
+
+# On WSLg the standard socket supplies the display if Codex omitted it.
+if [[ "$(uname -r)" == *[Mm]icrosoft* && -S /mnt/wslg/.X11-unix/X0 && -S /tmp/.X11-unix/X0 ]]; then
+  : > "$PLAYWRIGHT_MCP_TEST_ENV_LOG"
+  env -u DISPLAY PLAYWRIGHT_MCP_HEADLESS=true bash "$source_root/.cursor/playwright-mcp.sh"
+  grep -Fxq -- ':0|false' "$PLAYWRIGHT_MCP_TEST_ENV_LOG"
+fi
 
 # Unauthenticated MCP is isolated, headless, and never uses the persistent profile.
 : > "$log_file"

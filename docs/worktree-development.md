@@ -149,7 +149,53 @@ The official MCP servers in `.cursor/mcp.json` are deliberately separate:
 Both launchers pin `@playwright/mcp@0.0.83`, Playwright
 `1.64.0-alpha-1790635538000`, and Chromium revision `1247`. They install the
 matching browser into `~/.cache/ms-playwright` if absent. The authenticated
-launcher is headed so the initial human sign-in can be completed in its GUI.
+launcher forces headed mode. On Linux, if `DISPLAY` is absent, it uses `:0`
+only when WSL and both standard WSLg X11 sockets are present; otherwise it
+fails rather than silently starting headless. An existing `DISPLAY` is
+preserved. A socket or a successful MCP snapshot does not prove the window is
+visible or accessible to the human.
+
+### Human sign-in in the authenticated MCP browser
+
+The Windows browser opened separately at `localhost:5274` has its own profile;
+logging in there does not authenticate the MCP browser. Do not start a second
+browser with the shared profile, inspect its files, or automate OAuth. Follow
+this sequence in both Codex and Cursor:
+
+1. Run `npm run devserver:status` and `npm run devserver:ensure` in the target
+   worktree. Reuse only a verified same-worktree server and stop only servers
+   owned by the session. Select `playwright`, not `playwright-unauth`. For
+   Codex, start or restart Codex from the trusted target worktree so its
+   `.codex/config.toml` launches that worktree's current script. For Cursor,
+   enable only `playwright` and start the worker from that worktree.
+2. Have the agent navigate the MCP to `http://localhost:5274/`. On Windows/WSL2,
+   WSLg should present the Linux Chromium window on the Windows desktop; use
+   Alt+Tab or the taskbar to locate that window. Confirm it shows this URL and
+   the Receipt Manager screen. Ask the human to confirm that they can both see
+   and operate **that same window**. Do not call the environment ready based
+   solely on a tool result, snapshot, process, or WSLg socket.
+3. Only after that confirmation, the human operates the Google login button
+   and completes OAuth in the MCP window. The agent must not click OAuth or
+   read authentication state. If the window is absent, report manual login as
+   unconfirmed and diagnose WSLg/display setup; do not use another browser or
+   expose a debugging port as a shortcut. WSLg support and troubleshooting:
+   [Microsoft's Linux GUI app guide](https://learn.microsoft.com/en-us/windows/wsl/tutorials/gui-apps).
+4. After the human reports completion, confirm the authenticated application
+   screen at the same origin. Then end the owning Codex or Cursor MCP session
+   so its Chromium exits and releases the profile; do not kill an unknown
+   process. Restart the client and its authenticated MCP from the same worktree,
+   navigate to the same URL, and confirm the authenticated application screen
+   again without a new login. A closed tab alone does not prove the MCP browser
+   or profile is released. If release, restart, or the second screen cannot be
+   confirmed, report persistence as unconfirmed. Stop only the session's own
+   verification servers when the work is complete.
+
+If the window does not appear, verify the actual MCP process has a graphical
+display and that WSLg works in the user's interactive Windows session. A Codex
+session launched before a launcher change retains its old MCP process until
+restarted. Never reset the profile or change hosted Auth settings to diagnose
+visibility. A different graphical environment must provide its own valid
+`DISPLAY`; if none is available, manual login remains unconfirmed.
 
 For first use, inspect `.cursor/mcp.json`, then explicitly approve only the MCP
 needed for that task from the target worktree, for example
