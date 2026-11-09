@@ -3,18 +3,32 @@ set -euo pipefail
 
 workspace_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$workspace_root"
+if [[ "${1:-}" != --mode-locked || $# -ne 1 ]]; then
+  [[ $# -eq 0 ]] || { echo 'Unexpected Playwright MCP arguments.' >&2; exit 1; }
+  exec python3 "$workspace_root/scripts/playwright-mcp-mode.py" run "$workspace_root/.cursor/playwright-mcp.sh"
+fi
+mode="${RECEIPT_MANAGER_PLAYWRIGHT_MODE:?mode must be selected by the launcher}"
+case "$mode" in
+  headless) export PLAYWRIGHT_MCP_HEADLESS=true ;;
+  gui) export PLAYWRIGHT_MCP_HEADLESS=false ;;
+  *) echo 'Invalid authenticated Playwright MCP mode.' >&2; exit 1 ;;
+esac
 # Codex may start MCP servers without the WSLg display environment. Use the
 # standard WSLg X11 socket only when no display was supplied by the caller.
-if [[ -z "${DISPLAY:-}" && "$(uname -s)" == Linux ]]; then
-  if [[ "$(uname -r)" == *[Mm]icrosoft* && -S /mnt/wslg/.X11-unix/X0 && -S /tmp/.X11-unix/X0 ]]; then
-    export DISPLAY=:0
-  else
-    echo "Authenticated Playwright MCP requires a graphical DISPLAY; see docs/worktree-development.md." >&2
+if [[ "$mode" == gui && "$(uname -s)" == Linux ]]; then
+  if [[ -z "${DISPLAY:-}" ]]; then
+    if [[ "$(uname -r)" == *[Mm]icrosoft* && -S /mnt/wslg/.X11-unix/X0 && -S /tmp/.X11-unix/X0 ]]; then
+      export DISPLAY=:0
+    else
+      echo "GUI Playwright MCP requires a graphical DISPLAY; see docs/worktree-development.md." >&2
+      exit 1
+    fi
+  fi
+  if ! command -v xdpyinfo >/dev/null || ! xdpyinfo -display "$DISPLAY" >/dev/null 2>&1; then
+    echo "GUI Playwright MCP cannot connect to DISPLAY (xdpyinfo required); see docs/worktree-development.md." >&2
     exit 1
   fi
 fi
-# Do not silently fall back to a headless browser when a GUI is required.
-export PLAYWRIGHT_MCP_HEADLESS=false
 config_file="$workspace_root/.cursor/playwright-mcp.json"
 profile_dir="${HOME:?HOME must be set}/.local/state/receipt-manager/playwright-profile"
 browser_cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:?HOME must be set}/.cache/ms-playwright}"

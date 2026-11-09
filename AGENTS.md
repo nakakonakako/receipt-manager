@@ -198,8 +198,10 @@ When changing frontend UI:
 - For manual login, use the actual authenticated MCP browser window; opening
   the URL in a normal browser uses a different profile. A snapshot or a
   running MCP does not prove the human can see or operate its window. Do not
-  report readiness until the human confirms both. After manual login, fully
-  restart the MCP browser and verify the authenticated screen again. Follow
+  report readiness until the human confirms both. The default mode is headless;
+  select GUI explicitly for manual login. Fully stop the owning MCP and browser
+  before switching modes. After manual login, select headless, fully restart
+  the MCP browser, and verify the authenticated screen again. Follow
   the Codex/Cursor and WSLg procedure in `docs/worktree-development.md`; if
   visibility or persistence cannot be confirmed, report it as unconfirmed.
 - Approve only the MCP needed for the task in `.cursor/mcp.json`. Never use

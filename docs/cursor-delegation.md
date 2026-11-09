@@ -326,7 +326,8 @@ do not independently attest which backend model ultimately served the turn.
 ## Playwright MCP permissions
 
 The project exposes two pinned MCP servers in `.cursor/mcp.json`:
-`playwright` for headed authenticated checks using the one shared profile, and
+`playwright` for headless authenticated checks using the one shared profile
+(GUI mode is explicitly selected for human login), and
 `playwright-unauth` for isolated pre-login checks. `.cursor/cli.json` grants
 only the named Playwright MCP capabilities while preserving existing Shell
 permissions and denials. Never add `--approve-mcps`; when approval is required,
