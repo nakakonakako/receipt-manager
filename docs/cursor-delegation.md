@@ -326,7 +326,8 @@ do not independently attest which backend model ultimately served the turn.
 ## Playwright MCP permissions
 
 The project exposes two pinned MCP servers in `.cursor/mcp.json`:
-`playwright` for headed authenticated checks using the one shared profile, and
+`playwright` for headless authenticated checks using the one shared profile
+(GUI mode is explicitly selected for human login), and
 `playwright-unauth` for isolated pre-login checks. `.cursor/cli.json` grants
 only the named Playwright MCP capabilities while preserving existing Shell
 permissions and denials. Never add `--approve-mcps`; when approval is required,
@@ -344,6 +345,10 @@ and can be open in only one browser at a time. Never inspect, copy, clear, or
 log it, and never automate OAuth. See
 [worktree-development.md](./worktree-development.md) for browser setup, manual
 first login, Supabase redirect allowlisting, server safety, and pin updates.
+The human must confirm that the actual MCP window is visible and operable
+before manual login is called ready. An ordinary browser at the same URL has a
+different profile. Confirm login persistence after a complete MCP restart;
+otherwise report visibility and persistence as unconfirmed.
 
 ## Completion report
 

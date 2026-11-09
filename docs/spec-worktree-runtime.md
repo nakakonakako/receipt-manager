@@ -1,5 +1,9 @@
 # Worktree runtime and db:plan
 
+For the authenticated Playwright MCP's headed display requirements, human
+visibility gate, and login persistence verification, see
+[worktree-development.md](./worktree-development.md#human-sign-in-in-the-authenticated-mcp-browser).
+
 ## Worktree environment link validation
 
 `scripts/worktree.sh` remains responsible for Git operations, dependency setup,

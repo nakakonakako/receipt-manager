@@ -294,6 +294,7 @@ npm run dev
 ```
 
 - 人間用開発環境は Vite `5174` → FastAPI `8000`、Cursor検証用は Vite `5274` → FastAPI `8100` の固定構成。後者は `npm run devserver:ensure|status|stop` で同一worktree所有の検証済みプロセスだけを再利用・停止し、未知の占有者や設定不一致では失敗する。詳細は [worktree-development.md](./worktree-development.md)
+- 認証用Playwright MCPは通常ヘッドレスで、手動ログイン時のみ同じプロファイルのGUIを明示選択する。GUI時はWSLgの標準ソケットが存在する場合に限り未設定の `DISPLAY` を補完する。モード切替前にMCPとブラウザを終了し、人間が表示・操作を確認してログイン後、ヘッドレスで認証維持を確認する。詳細は [worktree-development.md](./worktree-development.md)
 - `scripts/worktree.sh remove` は確認プロンプト前と削除直前に `/proc` のcwdを検査し、対象worktree内の稼働プロセスや検査不能な同一ユーザーPIDがあれば削除を拒否する。cwdを読めず関連を確認できないPIDは検出限界として扱う。詳細は [worktree-development.md](./worktree-development.md)
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
@@ -394,6 +395,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-11-10 | 認証用Playwright MCPのWSLg表示と手動ログイン確認手順を明確化 |
 | 2026-11-05 | Cursor用Playwright MCPを認証済み共有profileと未認証isolatedに分け、専用devserverを追加 |
 | 2026-10-31 | Cursor委譲monitorのstate directory、workspace lock、status、診断ログ操作をdir_fd基準で安全化 |
 | 2026-10-31 | worktree環境リンク検証をPython化し、直接絶対symlinkの検証を3段階で実行 |
