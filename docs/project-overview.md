@@ -87,6 +87,8 @@ Supabase（Auth + Postgres + RLS）
 
 ### 4.1 UI タブ（`frontend/src/components/MainLayout.tsx`）
 
+画面全体のナビゲーションは1280px以上でロゴを含む左サイドバーとメイン領域右上のアカウント操作、タブレット幅で上部タブ、スマートフォン幅でプルダウンを表示する試作。各画面内の機能切り替えは従来通り。詳細: [spec-main-navigation.md](./spec-main-navigation.md)。
+
 | タブ | ラベル | ステータス | 概要 |
 |------|--------|------------|------|
 | `register` | 登録 | 現行 | レシート撮影 / 手動入力 / CSV 読込 |
