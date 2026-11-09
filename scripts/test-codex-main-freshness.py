@@ -154,10 +154,16 @@ def main() -> None:
         _, _, checkout = fixture(base, "collision")
         collision_home = base / "home-collision"
         collision_home.mkdir()
+        collision_bin = base / "bin-collision"
+        collision_bin.mkdir()
+        collision_codex = collision_bin / "codex"
+        collision_codex.write_text("#!/usr/bin/env bash\nexit 99\n", encoding="utf-8")
+        collision_codex.chmod(0o755)
         task = "codex-session-collision"
         run(["git", "-C", str(checkout), "branch", f"codex/{task}"])
         result = run([str(LAUNCHER)], env=os.environ | {
-            "HOME": str(collision_home), "RECEIPT_MANAGER_CHECKOUT": str(checkout),
+            "HOME": str(collision_home), "PATH": f"{collision_bin}:{os.environ['PATH']}",
+            "RECEIPT_MANAGER_CHECKOUT": str(checkout),
             "RECEIPT_MANAGER_SESSION_ID": "collision",
         }, check=False)
         assert result.returncode != 0 and "branch already exists" in result.stderr
