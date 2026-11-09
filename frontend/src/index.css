@@ -108,10 +108,8 @@ body {
   }
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 .rm-scrollbar-stable {
   scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #8b8580 transparent;
 }
