@@ -24,7 +24,7 @@ export const MainLayout = () => {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
-      <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-6 pt-3 sm:pt-6 shrink-0">
+      <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-6 pt-3 sm:pt-6 xl:pt-3 shrink-0">
         {/* スマホ幅ではプルダウンで切り替え（タブがつぶれるのを防ぐ） */}
         <div className="sm:hidden mb-4 shrink-0">
           <label htmlFor="main-tab-select" className="sr-only">
@@ -68,7 +68,7 @@ export const MainLayout = () => {
           ))}
         </div>
 
-        <nav aria-label="メインナビゲーション" className="hidden xl:flex absolute top-6 right-full mr-1 w-[180px] flex-col gap-1">
+        <nav aria-label="メインナビゲーション" className="hidden xl:flex absolute top-3 right-full mr-1 w-[180px] flex-col gap-1">
           {TABS.map((tab) => (
             <button
               key={tab.key}
