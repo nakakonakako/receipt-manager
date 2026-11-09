@@ -58,6 +58,10 @@ class DelegateCursorRoutingTests(unittest.TestCase):
             "import json, os, sys\n"
             "with open(os.environ['ROUTING_CALLS'], 'a', encoding='utf-8') as out:\n"
             " out.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+            "if os.environ.get('ROUTING_USAGE'):\n"
+            " open('partial.txt', 'w').write('partial')\n"
+            " print(\"ActionRequiredError: limit. You're out of usage.\", file=sys.stderr)\n"
+            " raise SystemExit(1)\n"
             "if os.environ.get('ROUTING_FAIL'):\n"
             " print('network connection failed', file=sys.stderr, flush=True)\n"
             " raise SystemExit(1)\n"
@@ -97,6 +101,25 @@ class DelegateCursorRoutingTests(unittest.TestCase):
         if not self.calls.exists():
             return []
         return [json.loads(line) for line in self.calls.read_text(encoding="utf-8").splitlines()]
+
+    def test_launcher_usage_handoff_preserves_worker_workspace(self) -> None:
+        workspace = self.root / "worker"
+        subprocess.run(["git", "-C", str(self.repo), "worktree", "add", "-b", "worker", str(workspace)], check=True, capture_output=True)
+        (workspace / "README.md").write_text("staged\n")
+        subprocess.run(["git", "-C", str(workspace), "add", "README.md"], check=True)
+        (workspace / "README.md").write_text("unstaged\n")
+        (workspace / "existing.txt").write_text("existing")
+        result = self.run_delegate("--workspace", str(workspace), env={**self.env, "ROUTING_USAGE": "1"})
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("outcome: cursor_usage_exhausted", result.stdout)
+        self.assertEqual(len(self.calls_read()), 1)
+        self.assertEqual((workspace / "partial.txt").read_text(), "partial")
+        self.assertEqual((workspace / "existing.txt").read_text(), "existing")
+        self.assertEqual((workspace / "README.md").read_text(), "unstaged\n")
+        staged = subprocess.check_output(["git", "-C", str(workspace), "show", ":README.md"], text=True)
+        self.assertEqual(staged, "staged\n")
+        (workspace / "supervisor.txt").write_text("continued")
+        self.assertEqual((workspace / "partial.txt").read_text(), "partial")
 
     def test_every_supported_model_route_is_explicit_and_recorded(self) -> None:
         routes = (
