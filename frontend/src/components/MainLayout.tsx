@@ -24,7 +24,7 @@ export const MainLayout = () => {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 w-full overflow-hidden">
-      <div className="w-full max-w-4xl mx-auto px-3 sm:px-6 pt-3 sm:pt-6 shrink-0">
+      <div className="relative w-full max-w-4xl mx-auto px-3 sm:px-6 pt-3 sm:pt-6 shrink-0">
         {/* スマホ幅ではプルダウンで切り替え（タブがつぶれるのを防ぐ） */}
         <div className="sm:hidden mb-4 shrink-0">
           <label htmlFor="main-tab-select" className="sr-only">
@@ -49,8 +49,8 @@ export const MainLayout = () => {
           </div>
         </div>
 
-        {/* タブレット・PC幅では従来通りタブを表示 */}
-        <div className="hidden sm:flex shrink-0 bg-stone-100 p-1 rounded-xl mb-6 border border-stone-200">
+        {/* タブレット幅では従来通りタブを表示 */}
+        <div className="hidden sm:flex xl:hidden shrink-0 bg-stone-100 p-1 rounded-xl mb-6 border border-stone-200">
           {TABS.map((tab) => (
             <button
               key={tab.key}
@@ -67,6 +67,24 @@ export const MainLayout = () => {
             </button>
           ))}
         </div>
+
+        <nav aria-label="メインナビゲーション" className="hidden xl:flex absolute top-6 right-full mr-1 w-[180px] flex-col gap-1">
+          {TABS.map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              aria-pressed={activeTab === tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`min-h-11 w-full px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex items-center gap-3 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                activeTab === tab.key
+                  ? 'bg-stone-200 text-stone-900'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+              }`}
+            >
+              <span className="text-lg" aria-hidden="true">{tab.icon}</span> {tab.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       <div
