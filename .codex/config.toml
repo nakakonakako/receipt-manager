@@ -2,3 +2,12 @@
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 1
+
+# Launch Codex from this worktree root; these launchers use the current workspace.
+[mcp_servers.playwright]
+command = "bash"
+args = [".cursor/playwright-mcp.sh"]
+
+[mcp_servers.playwright-unauth]
+command = "bash"
+args = [".cursor/playwright-unauth-mcp.sh"]

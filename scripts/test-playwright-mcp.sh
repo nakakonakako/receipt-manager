@@ -101,4 +101,17 @@ if grep -Fq -- '@playwright/mcp@0.0.83' "$log_file"; then
   exit 1
 fi
 
+python3 - "$source_root" <<'PYTEST'
+import pathlib, sys, tomllib
+root = pathlib.Path(sys.argv[1])
+config = tomllib.loads((root / ".codex/config.toml").read_text())
+assert config["agents"]["enabled"] is True
+assert config["agents"]["max_concurrent_threads_per_session"] == 1
+for name in ("playwright", "playwright-unauth"):
+    server = config["mcp_servers"][name]
+    assert server["command"] == "bash"
+    assert server["args"] == [f".cursor/{name}-mcp.sh"]
+    assert "cwd" not in server
+PYTEST
+
 echo "Playwright MCP configuration tests passed."
