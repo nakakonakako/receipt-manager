@@ -7,7 +7,7 @@
     "devserver:stop": "bash scripts/cursor-devserver.sh stop",
     "devserver:status": "bash scripts/cursor-devserver.sh status",
     "check": "npm run check:worktree && npm run check:frontend && npm run check:backend && npm run test:production-db-gate",
-    "check:worktree": "bash scripts/test-worktree.sh && python3 scripts/test-worktree-env.py && python3 scripts/test-delegate-cursor-routing.py && python3 scripts/test-delegate-cursor-state.py && bash scripts/test-playwright-mcp.sh && python3 scripts/test-cursor-devserver.py && bash scripts/test-dev-env.sh && bash scripts/test-backend-runtime.sh && bash scripts/test-db-plan.sh && python3 scripts/test-dev-supervisor.py && python3 scripts/test_migration_history.py",
+    "check:worktree": "bash scripts/test-worktree.sh && python3 scripts/test-worktree-env.py && python3 scripts/test-delegate-cursor-routing.py && python3 scripts/test-delegate-cursor-state.py && python3 scripts/test-codex-main-freshness.py && bash scripts/test-playwright-mcp.sh && python3 scripts/test-cursor-devserver.py && bash scripts/test-dev-env.sh && bash scripts/test-backend-runtime.sh && bash scripts/test-db-plan.sh && python3 scripts/test-dev-supervisor.py && python3 scripts/test_migration_history.py",
     "test:db-migration-reader": "bash scripts/test-migration-preflight-reader.sh",
     "worktree": "bash scripts/worktree.sh",
     "check:frontend": "npm run lint --prefix frontend && npm run test --prefix frontend && npm run build --prefix frontend",

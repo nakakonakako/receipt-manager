@@ -23,6 +23,11 @@
 
 詳細な設計判断は別 md（`docs/spec-*.md` など）に切り出し、ここからはリンクする。
 
+新しいCodexセッションは `receipt-manager-codex` から起動する。この
+ランチャーは起動前にGitHubの `origin/main` を取得し、そのコミットから
+専用worktreeを作成してCodexを開始する。導入・制約は
+[`worktree-development.md`](./worktree-development.md#starting-codex) を参照。
+
 ---
 
 ## 1. 目的

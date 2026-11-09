@@ -19,6 +19,33 @@ scripts/worktree.sh setup <path> --environment development
 scripts/worktree.sh remove <path>
 ```
 
+## Starting Codex
+
+Install the repository's external Codex launcher after updating the normal
+checkout:
+
+```bash
+scripts/install-codex-launcher.sh
+receipt-manager-codex
+```
+
+Use this command for every new Codex session in this repository. Before Codex
+starts, the launcher fetches `origin/main`, creates a uniquely named worktree
+from the fetched commit under `~/worktrees/receipt-manager/`, verifies its HEAD
+and clean state, and starts Codex with that worktree as its working directory.
+It never updates or reuses the normal checkout or an existing feature worktree.
+Fetch, GitHub access, or verification failures stop startup. The launcher is
+installed as a file copy under `~/.local/bin`, so reinstall it after pulling
+launcher changes. Worktrees created for sessions are preserved; remove one only
+through the documented explicit `scripts/worktree.sh remove <path>` flow after
+reviewing its state.
+
+This guarantee covers only new sessions started with `receipt-manager-codex`.
+Direct `codex` invocations, IDE-managed starts, API starts, and resumed sessions
+bypass the repository launcher and must not be assumed to have fresh
+instructions. The launcher verifies freshness at successful fetch time; a
+later push to GitHub does not change an already running session.
+
 `create` creates a Git worktree under the standard directory and runs dependency
 and environment setup. When it creates a **new** branch with the default base
 `origin/main` (exactly that ref, including the implicit default), it first

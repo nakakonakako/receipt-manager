@@ -153,6 +153,13 @@ outside Git under `~/.config/receipt-manager/<environment>/`. Follow
 [worktree-development.md](./worktree-development.md) for create, list, reuse,
 setup, removal, and Cursor delegation commands.
 
+For new Codex sessions, use the installed `receipt-manager-codex` launcher
+described in [worktree-development.md](./worktree-development.md#starting-codex).
+It fetches `origin/main` before Codex reads repository instructions and starts
+in a new verified worktree. The delegation launcher guard below remains
+separate: it validates the checkout used to launch Cursor, and does not protect
+Codex sessions that were started through another entry point.
+
 Use a direct checkout only when one worker is running, the checkout is clean,
 and there is no concurrent work. Use the standard Git worktree flow when workers
 run in parallel, the checkout is dirty, edits are concurrent, or a large or
@@ -161,7 +168,8 @@ moved or removed automatically.
 
 ## Launcher checkout freshness and provenance
 
-Before invoking the launcher, the Supervisor explicitly fetches the baseline:
+When invoking `scripts/delegate-cursor.sh` directly, the Supervisor explicitly
+fetches the baseline:
 
 ```sh
 git fetch origin main
@@ -198,13 +206,10 @@ worktree manager are always loaded from the launcher's source checkout; a
 modified copy inside the Worker workspace is not executed. These records
 contain paths and Git identifiers only, not environment values or credentials.
 
-If the ordinary `~/web/receipt-manager` checkout is behind, fetch first and
-create a dedicated harness worktree from `origin/main`, then run that
-worktree's launcher. Do not update the ordinary checkout to make delegation
-work. This guard is implemented by the launcher version being run: checking a
-new launcher does not protect an invocation that directly starts an older
-launcher which predates the guard. The Supervisor must select and inspect the
-actual launcher checkout before starting delegation.
+If the ordinary checkout is behind, launch Cursor from a current dedicated
+worktree. This delegation guard is implemented by the script version being
+run; it is independent of the Codex session launcher and only runs when
+delegation starts.
 
 The delegation monitor locks the canonical path of the workspace passed to
 Cursor. Duplicate delegation to the same workspace is rejected, including

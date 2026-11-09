@@ -1,5 +1,16 @@
 # receipt-manager
 
+## Codex session startup freshness
+
+For every new Codex session in this repository, start with the installed
+`receipt-manager-codex` command, not `codex` directly. The launcher fetches
+GitHub `origin/main`, creates a new worktree at that exact commit, and starts
+Codex there so the current `AGENTS.md` is loaded from the verified checkout.
+Install or refresh it with `scripts/install-codex-launcher.sh` after updating
+this repository. If fetch or worktree verification fails, stop; do not continue
+from an older checkout. This applies to new sessions only; direct Codex starts
+and resumed sessions bypass the guard.
+
 ## Project source of truth
 
 Before making non-trivial changes, read `docs/project-overview.md`.
