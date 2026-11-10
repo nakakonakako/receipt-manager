@@ -1,7 +1,7 @@
 # Receipt 履歴・管理画面：上部UIコンパクト化 B案 仕様（実装用ドラフト）
 
 - 作成日: 2026-11-10
-- 状態: **B案を試作するための仕様。実装・ブラウザー検証は未完了**
+- 状態: **B案を実装済み。ブラウザー検証を実施し、実データでの一部確認は継続**
 - 対象repo: `nakakonakako/receipt-manager`
 - 想定配置先: `docs/spec-history-toolbar-compact.md`
 - 対象: `frontend/src/features/history/components/HistoryPage.tsx` の履歴一覧上部の操作領域
