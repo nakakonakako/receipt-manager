@@ -102,7 +102,7 @@ Supabase（Auth + Postgres + RLS）
 |------|------|------------|------------|
 | レシート | `frontend/src/features/receipt/` | 現行 | 画像 → `/analyze` → 編集（カテゴリ・タグ等）→ `/save`。まとめて解析は開始時点の待機タスクを登録順に1件ずつ実行。手動入力もあり |
 | CSV | `frontend/src/features/csv/` | 現行 | CSV → 列マッピング（Gemini またはプリセット）→ 月ごとの `/save_csv`。1ファイルはヘッダーを含む論理行20,000行、20MiBまで。日付範囲の制限はなく、複数年を含められる |
-| 履歴 | `frontend/src/features/history/` | 現行・強化予定 | 月選択、明細編集削除、テキスト検索。分類フィルタは [planned-history-category-filter.md](./planned-history-category-filter.md) |
+| 履歴 | `frontend/src/features/history/` | 現行・強化予定 | 年別の月選択、月別合計、明細編集削除、入力に応じた全期間検索。上部操作の配置は [履歴ツールバー仕様](./spec-history-toolbar-compact.md)。分類フィルタは [planned-history-category-filter.md](./planned-history-category-filter.md) |
 | AIチャット | `frontend/src/features/search/` | 現行 | `/search` + `chat_messages` 履歴 |
 | ダッシュボード | `frontend/src/features/dashboard/` | 現行 | `main_category` 集計。CSV は「キャッシュレス（未分類）」扱い |
 

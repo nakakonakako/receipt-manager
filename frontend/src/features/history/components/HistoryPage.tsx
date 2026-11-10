@@ -1,7 +1,25 @@
-import React, { useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useHistory } from '../hooks/useHistory'
 import { HistoryEditModal } from './HistoryEditModal'
+
+const MonthChevron: React.FC<{ direction: 'left' | 'right' }> = ({
+  direction,
+}) => (
+  <svg
+    aria-hidden="true"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d={direction === 'left' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} />
+  </svg>
+)
 
 export const HistoryPage: React.FC = () => {
   const receiptCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -24,7 +42,10 @@ export const HistoryPage: React.FC = () => {
     searchQuery,
     setSearchQuery,
     searchScope,
-    setSearchScope,
+    submittedQuery,
+    clearSearch,
+    viewStatus,
+    retryLoad,
     sortOrder,
     setSortOrder,
     filteredReceipts,
@@ -49,6 +70,17 @@ export const HistoryPage: React.FC = () => {
     isFetchingMonth,
   } = useHistory()
 
+  const [selectedYear, setSelectedYear] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+  const years = [...new Set(allMonths.map((month) => month.slice(0, 4)))]
+  const displayedYear = years.includes(selectedYear)
+    ? selectedYear
+    : currentMonth?.slice(0, 4) || years[0] || ''
+
   if (isLoading) {
     return (
       <div
@@ -63,172 +95,201 @@ export const HistoryPage: React.FC = () => {
 
   return (
     <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
-      <div className="flex gap-2 mb-3">
-        <button
-          onClick={() => setSearchScope('current')}
-          className={`min-h-11 flex-1 py-2 text-sm font-semibold rounded-md border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-            searchScope === 'current'
-              ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)] border-[var(--rm-receipt)]'
-              : 'bg-[var(--rm-surface)] text-[var(--rm-text-secondary)] border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)]'
-          }`}
-        >
-          この月だけ検索
-        </button>
-        <button
-          onClick={() => setSearchScope('all')}
-          className={`min-h-11 flex-1 py-2 text-sm font-semibold rounded-md border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-            searchScope === 'all'
-              ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)] border-[var(--rm-receipt)]'
-              : 'bg-[var(--rm-surface)] text-[var(--rm-text-secondary)] border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)]'
-          }`}
-        >
-          全期間検索
-        </button>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-        <div className="relative flex-1">
+      {searchScope === 'current' ? (
+        <p className="flex flex-col text-xs font-semibold text-[var(--rm-text-secondary)] text-center">
+          {formattedCurrentMonth}の
+          {activeTab === 'receipts' ? 'レシート' : 'キャッシュレス'}合計
           <span
-            aria-hidden="true"
-            className="absolute left-3 top-2.5 text-[var(--rm-text-muted)]"
+            className={`text-2xl font-bold ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
           >
-            ⌕
+            {viewStatus === 'ready'
+              ? `¥${(activeTab === 'receipts' ? receiptTotal : csvTotal).toLocaleString()}`
+              : viewStatus === 'error'
+                ? '取得できません'
+                : '読み込み中'}
           </span>
-          <input
-            type="text"
-            placeholder="店名や商品名で検索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="店名や商品名で検索"
-            className="rm-field w-full pl-9 pr-3 py-2.5"
-          />
-        </div>
-        <button
-          onClick={() =>
-            setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
-          }
-          className="min-h-11 flex justify-center items-center gap-2 px-5 py-2.5 bg-[var(--rm-surface)] hover:bg-[var(--rm-surface-subtle)] border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold rounded-md transition-colors w-full sm:w-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-        >
-          <span
-            className={`transition-transform duration-300 ${sortOrder === 'asc' ? 'rotate-180' : ''}`}
-          >
-            ↓
-          </span>
-          {sortOrder === 'desc' ? '新しい順' : '古い順'}
-        </button>
-      </div>
-
-      <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl mb-6">
-        <button
-          onClick={() => setActiveTab('receipts')}
-          className={`min-h-11 sm:min-h-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-            activeTab === 'receipts'
-              ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
-              : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
-          }`}
-        >
-          <span aria-hidden="true">▤</span> レシート
-        </button>
-        <button
-          onClick={() => setActiveTab('csv')}
-          className={`min-h-11 sm:min-h-10 flex-1 py-2.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-            activeTab === 'csv'
-              ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
-              : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
-          }`}
-        >
-          <span aria-hidden="true">▤</span> キャッシュレス
-        </button>
-      </div>
-
-      {searchScope === 'current' && (
-        <div className="flex items-center justify-between bg-[var(--rm-surface-subtle)] p-3 sm:p-4 rounded-[var(--rm-radius-panel)] mb-6 border border-[var(--rm-border-subtle)] relative z-20">
+        </p>
+      ) : (
+        <p className="min-h-11 flex items-center justify-center text-sm font-semibold text-[var(--rm-text-secondary)]">
+          全期間の検索
+        </p>
+      )}
+      <div
+        aria-hidden="true"
+        className="border-t border-[var(--rm-border-subtle)] mt-2"
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-2 my-2">
+        <div className="flex bg-stone-100 border border-stone-200 p-1 sm:p-0.5 sm:h-9 rounded-xl w-full sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
           <button
-            onClick={handlePrevMonth}
-            disabled={currentIndex >= allMonths.length - 1}
-            aria-label="前の月"
-            className="min-h-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            onClick={() => setActiveTab('receipts')}
+            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+              activeTab === 'receipts'
+                ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
+                : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
+            }`}
           >
-            ‹
+            レシート
           </button>
+          <button
+            onClick={() => setActiveTab('csv')}
+            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+              activeTab === 'csv'
+                ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
+                : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
+            }`}
+          >
+            キャッシュレス
+          </button>
+        </div>
+        {searchScope === 'current' && (
+          <div className="flex items-center justify-center gap-2 relative z-20">
+            <button
+              onClick={handlePrevMonth}
+              disabled={currentIndex >= allMonths.length - 1}
+              aria-label="前の月"
+              className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              <MonthChevron direction="left" />
+            </button>
 
-          <div className="text-center relative flex-1 mx-2 sm:mx-4">
-            <div className="relative inline-block w-full sm:w-auto">
-              <button
-                onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)}
-                aria-label="表示する月を選択"
-                className={`min-h-11 text-lg sm:text-xl font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 sm:px-4 py-2 transition-all flex items-center justify-between w-full sm:w-[220px] relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-                  isMonthDropdownOpen
-                    ? 'rounded-t-[var(--rm-radius-panel)] border-b-transparent shadow-none'
-                    : 'rounded-md shadow-sm hover:border-[var(--rm-focus)]'
-                }`}
-              >
-                <span className="w-5 hidden sm:block"></span>
-                <span className="flex-1 text-center whitespace-nowrap">
-                  {formattedCurrentMonth}
-                </span>
-                <span
-                  className={`text-[var(--rm-text-muted)] text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
+            <div className="text-center relative">
+              <div className="relative inline-block">
+                <button
+                  onClick={() => {
+                    setSelectedYear(currentMonth?.slice(0, 4) || years[0] || '')
+                    setIsMonthDropdownOpen(!isMonthDropdownOpen)
+                  }}
+                  aria-expanded={isMonthDropdownOpen}
+                  aria-label="表示する月を選択"
+                  className={`min-h-11 sm:min-h-9 text-sm font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 py-1.5 transition-all flex items-center justify-center w-full sm:w-auto relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                    isMonthDropdownOpen
+                      ? 'rounded-t-[var(--rm-radius-panel)] border-b-transparent shadow-none'
+                      : 'rounded-md shadow-sm hover:border-[var(--rm-focus)]'
+                  }`}
                 >
-                  ▼
-                </span>
-              </button>
+                  <span className="text-center whitespace-nowrap">
+                    {formattedCurrentMonth}
+                  </span>
+                </button>
 
-              {isMonthDropdownOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-30"
-                    onClick={() => setIsMonthDropdownOpen(false)}
-                  ></div>
-                  <div className="absolute top-full left-0 w-full bg-[var(--rm-surface)] border border-[var(--rm-border)] border-t-0 rounded-b-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] z-40 overflow-hidden -mt-[1px]">
-                    <ul className="max-h-60 overflow-y-auto pb-2 pt-1">
-                      {allMonths.map((m) => {
-                        const [y, mo] = m.split('-')
-                        return (
-                          <li key={m} className="px-2 py-0.5">
+                {isMonthDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-30"
+                      onClick={() => setIsMonthDropdownOpen(false)}
+                    ></div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-60 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] z-40 p-3 mt-1">
+                      <div className="relative mb-2">
+                        <select
+                          id="history-year"
+                          aria-label="年"
+                          value={displayedYear}
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          className="rm-field w-full min-h-11 appearance-none text-center px-0"
+                        >
+                          {years.map((year) => (
+                            <option key={year} value={year}>
+                              {year}年
+                            </option>
+                          ))}
+                        </select>
+                        <span
+                          aria-hidden="true"
+                          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--rm-text-secondary)]"
+                        >
+                          ▼
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {allMonths
+                          .filter((month) =>
+                            month.startsWith(`${displayedYear}-`)
+                          )
+                          .sort()
+                          .map((month) => (
                             <button
+                              key={month}
                               onClick={() => {
-                                setCurrentMonth(m)
+                                setCurrentMonth(month)
                                 setIsMonthDropdownOpen(false)
                               }}
-                              className={`w-full text-center px-4 py-2 rounded-lg text-lg transition-colors ${
-                                m === currentMonth
-                                  ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)] font-bold'
-                                  : 'text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)] font-semibold'
-                              }`}
+                              className={`min-h-11 rounded-lg text-sm font-semibold ${month === currentMonth ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)]' : 'text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)]'}`}
                             >
-                              {`${y}年 ${parseInt(mo)}月`}
+                              {parseInt(month.slice(5), 10)}月
                             </button>
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  </div>
-                </>
-              )}
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
-            <p className="text-xs sm:text-sm font-semibold text-[var(--rm-text-secondary)] mt-2">
-              合計:{' '}
-              <span
-                className={`text-base sm:text-lg ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
-              >
-                ¥
-                {(activeTab === 'receipts'
-                  ? receiptTotal
-                  : csvTotal
-                ).toLocaleString()}
-              </span>
-            </p>
-          </div>
 
+            <button
+              onClick={handleNextMonth}
+              disabled={currentIndex <= 0}
+              aria-label="次の月"
+              className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            >
+              <MonthChevron direction="right" />
+            </button>
+          </div>
+        )}
+        <div className="flex justify-end gap-2 lg:col-start-3">
           <button
-            onClick={handleNextMonth}
-            disabled={currentIndex <= 0}
-            aria-label="次の月"
-            className="min-h-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            type="button"
+            onClick={() => {
+              if (searchOpen) clearSearch()
+              setSearchOpen(!searchOpen)
+            }}
+            aria-label="検索"
+            aria-expanded={searchOpen}
+            aria-controls="history-search"
+            className={`inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md border border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)] ${searchOpen ? 'bg-stone-100 text-stone-900' : 'text-[var(--rm-text-secondary)]'}`}
           >
-            ›
+            <svg
+              aria-hidden="true"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m16 16 4 4" />
+            </svg>
           </button>
+          <button
+            onClick={() =>
+              setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
+            }
+            className="inline-flex items-center justify-center w-[104px] min-h-11 sm:min-h-9 px-2 text-sm rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
+          >
+            {sortOrder === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
+          </button>
+        </div>
+      </div>
+      {searchOpen && (
+        <div id="history-search" className="mb-3">
+          <input
+            ref={searchInputRef}
+            type="search"
+            placeholder="過去の履歴を検索"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="過去の履歴を検索"
+            className="rm-field w-full min-h-11 px-3"
+          />
+        </div>
+      )}
+      {submittedQuery && (
+        <div
+          className="mb-3 text-sm font-semibold text-[var(--rm-text-secondary)]"
+          role="status"
+        >
+          {`「${submittedQuery}」の全期間検索${viewStatus === 'ready' ? ` · ${activeTab === 'receipts' ? filteredReceipts.length : filteredCsv.length}件` : ''}`}
         </div>
       )}
 
@@ -263,13 +324,23 @@ export const HistoryPage: React.FC = () => {
       >
         {activeTab === 'receipts' && (
           <div className="space-y-3 h-full overflow-y-auto pr-1">
-            {isFetchingMonth ? (
+            {viewStatus === 'error' ? (
+              <div
+                role="alert"
+                className="text-center py-12 text-[var(--rm-danger)]"
+              >
+                取得に失敗しました。{' '}
+                <button onClick={retryLoad} className="underline min-h-11">
+                  再試行
+                </button>
+              </div>
+            ) : isFetchingMonth ? (
               <div
                 role="status"
                 className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]"
               >
                 <span className="w-8 h-8 border-4 border-[var(--rm-receipt)] border-t-transparent rounded-full animate-spin"></span>
-                データを取得中...
+                {submittedQuery ? '全期間の検索...' : 'データを取得中...'}
               </div>
             ) : filteredReceipts.length === 0 ? (
               <p className="text-center text-[var(--rm-text-secondary)] font-semibold py-16 border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
@@ -283,44 +354,44 @@ export const HistoryPage: React.FC = () => {
                     receiptCardRefs.current[receipt.id] = el
                   }}
                   className={`border rounded-[var(--rm-radius-card)] overflow-hidden bg-[var(--rm-surface)] shadow-sm hover:shadow-md transition-shadow ${
-                    expandedReceiptId === receipt.id && searchQuery
+                    expandedReceiptId === receipt.id && submittedQuery
                       ? 'border-[var(--rm-receipt)] ring-2 ring-[var(--rm-receipt-subtle)]'
                       : 'border-[var(--rm-border-subtle)]'
                   }`}
                 >
                   <div
                     onClick={() => toggleAccordion(receipt.id)}
-                    className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 cursor-pointer gap-2 sm:gap-4"
+                    className="flex flex-col sm:flex-row sm:items-center p-3 sm:px-3 sm:py-2 cursor-pointer gap-2 sm:gap-3"
                   >
-                    <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-xs font-semibold text-[var(--rm-text-secondary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
+                    <div className="flex flex-wrap gap-1 justify-between items-center w-full sm:w-auto shrink-0">
+                      <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
                         {receipt.date}
                       </span>
-                      <span className="sm:hidden font-bold text-[var(--rm-receipt)] text-lg">
+                      <span className="sm:hidden font-bold text-[var(--rm-receipt)] text-xl">
                         ¥{receipt.total_amount.toLocaleString()}
                       </span>
                     </div>
 
-                    <div className="font-semibold text-[var(--rm-text-primary)] flex-1 truncate text-base sm:text-sm">
+                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 flex-1 truncate text-base sm:text-sm">
                       {receipt.store_name}
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] w-24 text-right text-lg">
+                    <div className="flex items-center justify-end gap-3 sm:gap-2 shrink-0 mt-1 sm:mt-0">
+                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] min-w-24 w-auto whitespace-nowrap text-right text-xl">
                         ¥{receipt.total_amount.toLocaleString()}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 sm:gap-1">
                         <button
                           onClick={(e) => openEditReceipt(receipt, e)}
                           aria-label={`${receipt.store_name}を編集`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-receipt)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                           ✎
                         </button>
                         <button
                           onClick={(e) => requestDeleteReceipt(receipt.id, e)}
                           aria-label={`${receipt.store_name}を削除`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-danger)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                         >
                           ×
                         </button>
@@ -342,7 +413,7 @@ export const HistoryPage: React.FC = () => {
                               key={item.id || item.item_name}
                               className={`flex justify-between font-bold border-b border-[var(--rm-border-subtle)] pb-1 last:border-0 last:pb-0 ${
                                 expandedReceiptId === receipt.id &&
-                                searchQuery === item.item_name
+                                submittedQuery === item.item_name
                                   ? 'text-[var(--rm-receipt)] bg-[var(--rm-receipt-subtle)] -mx-2 px-2 py-1 rounded-md'
                                   : 'text-[var(--rm-text-secondary)]'
                               }`}
@@ -366,13 +437,23 @@ export const HistoryPage: React.FC = () => {
 
         {activeTab === 'csv' && (
           <div className="space-y-3 h-full overflow-y-auto pr-1">
-            {isFetchingMonth ? (
+            {viewStatus === 'error' ? (
+              <div
+                role="alert"
+                className="text-center py-12 text-[var(--rm-danger)]"
+              >
+                取得に失敗しました。{' '}
+                <button onClick={retryLoad} className="underline min-h-11">
+                  再試行
+                </button>
+              </div>
+            ) : isFetchingMonth ? (
               <div
                 role="status"
                 className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]"
               >
                 <span className="w-8 h-8 border-4 border-[var(--rm-csv)] border-t-transparent rounded-full animate-spin"></span>
-                データを取得中...
+                {submittedQuery ? '全期間の検索...' : 'データを取得中...'}
               </div>
             ) : filteredCsv.length === 0 ? (
               <p className="text-center text-[var(--rm-text-secondary)] font-semibold py-16 border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
@@ -384,36 +465,36 @@ export const HistoryPage: React.FC = () => {
                   key={csv.id}
                   className="border border-[var(--rm-border-subtle)] rounded-[var(--rm-radius-card)] overflow-hidden bg-[var(--rm-surface)] shadow-sm hover:shadow-md transition-shadow"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 gap-2 sm:gap-4">
-                    <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-xs font-semibold text-[var(--rm-text-secondary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
+                  <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:px-3 sm:py-2 gap-2 sm:gap-3">
+                    <div className="flex flex-wrap gap-1 justify-between items-center w-full sm:w-auto shrink-0">
+                      <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
                         {csv.date}
                       </span>
-                      <span className="sm:hidden font-bold text-[var(--rm-csv)] text-lg">
+                      <span className="sm:hidden font-bold text-[var(--rm-csv)] text-xl">
                         ¥{csv.price.toLocaleString()}
                       </span>
                     </div>
 
-                    <div className="font-semibold text-[var(--rm-text-primary)] flex-1 truncate text-base sm:text-sm">
+                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 flex-1 truncate text-base sm:text-sm">
                       {csv.store}
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] w-24 text-right text-lg">
+                    <div className="flex items-center justify-end gap-3 sm:gap-2 shrink-0 mt-1 sm:mt-0">
+                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] min-w-24 w-auto whitespace-nowrap text-right text-xl">
                         ¥{csv.price.toLocaleString()}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 sm:gap-1">
                         <button
                           onClick={() => openEditCsv(csv)}
                           aria-label={`${csv.store}を編集`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-csv)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                           ✎
                         </button>
                         <button
                           onClick={() => requestDeleteCsv(csv.id)}
                           aria-label={`${csv.store}を削除`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-danger)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                         >
                           ×
                         </button>
@@ -433,9 +514,10 @@ export const HistoryPage: React.FC = () => {
             variant="secondary"
             onClick={handlePrevMonth}
             disabled={currentIndex >= allMonths.length - 1}
+            aria-label="前の月"
             className="px-3 py-1.5"
           >
-            ‹
+            <MonthChevron direction="left" />
           </Button>
           <span className="text-sm font-semibold text-[var(--rm-text-secondary)]">
             {formattedCurrentMonth}
@@ -444,9 +526,10 @@ export const HistoryPage: React.FC = () => {
             variant="secondary"
             onClick={handleNextMonth}
             disabled={currentIndex <= 0}
+            aria-label="次の月"
             className="px-3 py-1.5"
           >
-            ›
+            <MonthChevron direction="right" />
           </Button>
         </div>
       )}

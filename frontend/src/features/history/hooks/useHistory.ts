@@ -1,4 +1,11 @@
-import { useState, useEffect, useEffectEvent, useMemo } from 'react'
+import {
+  useState,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useReducer,
+} from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import {
   fetchTransactions,
@@ -14,6 +21,8 @@ import type {
   HistoryReceiptItem,
 } from '../types'
 import { toast } from 'sonner'
+import { createMonthLoader, loadMonths } from './monthLoader'
+import { searchReducer } from './searchState'
 
 export const useHistory = () => {
   const { getHeaders } = useApiConfig()
@@ -22,7 +31,6 @@ export const useHistory = () => {
   const [receipts, setReceipts] = useState<HistoryReceipt[]>([])
   const [csvData, setCsvData] = useState<HistoryCsvTransaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isFetchingMonth, setIsFetchingMonth] = useState(false)
   const [expandedReceiptId, setExpandedReceiptId] = useState<string | null>(
     null
   )
@@ -33,11 +41,20 @@ export const useHistory = () => {
   const [currentReceiptMonth, setCurrentReceiptMonth] = useState('')
   const [currentCsvMonth, setCurrentCsvMonth] = useState('')
 
-  const [loadedMonths, setLoadedMonths] = useState<Set<string>>(new Set())
-
-  const [searchQuery, setSearchQuery] = useState('')
+  const [search, dispatchSearch] = useReducer(searchReducer, {
+    draft: '',
+    submitted: '',
+  })
+  const searchQuery = search.draft
+  const submittedQuery = search.submitted
+  const setSearchQuery = (value: string) =>
+    dispatchSearch({ type: 'edit', value })
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc')
-  const [searchScope, setSearchScope] = useState<'current' | 'all'>('current')
+  const [loadState, setLoadState] = useState<{
+    key: string
+    status: 'loading' | 'ready' | 'error'
+  }>({ key: '', status: 'loading' })
+  const [retry, setRetry] = useState(0)
 
   const [deleteTarget, setDeleteTarget] = useState<{
     type: 'receipt' | 'csv'
@@ -50,6 +67,8 @@ export const useHistory = () => {
   const [editType, setEditType] = useState<'receipt' | 'csv' | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const getHeadersForEffect = useEffectEvent(getHeaders)
+
+  const loader = useRef(createMonthLoader())
 
   useEffect(() => {
     const initLoad = async () => {
@@ -80,7 +99,7 @@ export const useHistory = () => {
           setReceipts(data.receipts || [])
           setCsvData(data.csv_transactions || [])
 
-          setLoadedMonths(new Set([initialMonthToLoad]))
+          loader.current.markLoaded(initialMonthToLoad)
         } catch (error) {
           console.error('データの取得に失敗しました:', error)
           toast.error('データの取得に失敗しました。')
@@ -97,87 +116,62 @@ export const useHistory = () => {
   const setCurrentMonth =
     activeTab === 'receipts' ? setCurrentReceiptMonth : setCurrentCsvMonth
 
-  const loadMonthData = useEffectEvent(async (month: string) => {
-    if (!month || loadedMonths.has(month) || isLoading) return
-
-    setIsFetchingMonth(true)
-    const headers = await getHeaders()
-    if (headers) {
-      try {
-        const data = await fetchTransactions(month, headers)
-
-        setReceipts((prev) => {
-          const existingIds = new Set(prev.map((r) => r.id))
-          const newReceipts = (data.receipts || []).filter(
-            (r) => !existingIds.has(r.id)
-          )
-          return [...prev, ...newReceipts]
-        })
-        setCsvData((prev) => {
-          const existingIds = new Set(prev.map((c) => c.id))
-          const newCsv = (data.csv_transactions || []).filter(
-            (c) => !existingIds.has(c.id)
-          )
-          return [...prev, ...newCsv]
-        })
-
-        setLoadedMonths((prev) => new Set(prev).add(month))
-      } catch (error) {
-        console.error('データの取得に失敗しました:', error)
-        toast.error('データの取得に失敗しました。')
-      } finally {
-        setIsFetchingMonth(false)
-      }
-    } else {
-      setIsFetchingMonth(false)
+  const searchScope = submittedQuery ? 'all' : 'current'
+  const loadKey = JSON.stringify([
+    searchScope,
+    activeTab,
+    searchScope === 'all' ? submittedQuery : currentMonth,
+    retry,
+  ])
+  const loadForView = useEffectEvent(
+    async (months: string[], isActive: () => boolean) => {
+      await loadMonths(
+        months,
+        (month) =>
+          loader.current.ensure(month, async (requestedMonth) => {
+            const headers = await getHeaders()
+            if (!headers) throw new Error('認証情報を取得できませんでした')
+            const data = await fetchTransactions(requestedMonth, headers)
+            setReceipts((prev) => {
+              const ids = new Set(prev.map((item) => item.id))
+              return [
+                ...prev,
+                ...(data.receipts || []).filter((item) => !ids.has(item.id)),
+              ]
+            })
+            setCsvData((prev) => {
+              const ids = new Set(prev.map((item) => item.id))
+              return [
+                ...prev,
+                ...(data.csv_transactions || []).filter(
+                  (item) => !ids.has(item.id)
+                ),
+              ]
+            })
+          }),
+        isActive
+      )
     }
-  })
-
+  )
   useEffect(() => {
-    void loadMonthData(currentMonth)
-  }, [currentMonth])
-
-  const loadAllMonthsData = useEffectEvent(async (months: string[]) => {
-    const missingMonths = months.filter((month) => !loadedMonths.has(month))
-    if (missingMonths.length === 0) return
-
-    const headers = await getHeaders()
-    if (!headers) return
-
-    setIsFetchingMonth(true)
-    try {
-      for (const month of missingMonths) {
-        const data = await fetchTransactions(month, headers)
-
-        setReceipts((prev) => {
-          const existingIds = new Set(prev.map((r) => r.id))
-          const newReceipts = (data.receipts || []).filter(
-            (r) => !existingIds.has(r.id)
-          )
-          return [...prev, ...newReceipts]
-        })
-        setCsvData((prev) => {
-          const existingIds = new Set(prev.map((c) => c.id))
-          const newCsv = (data.csv_transactions || []).filter(
-            (c) => !existingIds.has(c.id)
-          )
-          return [...prev, ...newCsv]
-        })
-
-        setLoadedMonths((prev) => new Set(prev).add(month))
-      }
-    } catch (error) {
-      console.error('全期間データの取得に失敗しました:', error)
-      toast.error('全期間データの取得に失敗しました。')
-    } finally {
-      setIsFetchingMonth(false)
+    if (isLoading) return
+    let active = true
+    const months = searchScope === 'all' ? allMonths : [currentMonth]
+    setLoadState({ key: loadKey, status: 'loading' })
+    void loadForView(months, () => active)
+      .then(() => {
+        if (active) setLoadState({ key: loadKey, status: 'ready' })
+      })
+      .catch(() => {
+        if (active) setLoadState({ key: loadKey, status: 'error' })
+      })
+    return () => {
+      active = false
     }
-  })
-
-  useEffect(() => {
-    if (searchScope !== 'all' || isLoading || allMonths.length === 0) return
-    void loadAllMonthsData(allMonths)
-  }, [searchScope, isLoading, allMonths])
+  }, [loadKey, isLoading, allMonths, currentMonth, searchScope])
+  const viewStatus = loadState.key === loadKey ? loadState.status : 'loading'
+  const isFetchingMonth = viewStatus === 'loading'
+  const clearSearch = () => dispatchSearch({ type: 'clear' })
 
   const currentIndex = allMonths.indexOf(currentMonth)
   const handlePrevMonth = () => {
@@ -304,14 +298,16 @@ export const useHistory = () => {
       searchScope === 'current'
         ? receipts.filter((r) => r.date.startsWith(currentMonth))
         : [...receipts]
-    if (searchQuery) {
+    if (submittedQuery) {
       filtered = filtered.filter(
         (r) =>
-          r.store_name.includes(searchQuery) ||
+          r.store_name.includes(submittedQuery) ||
           r.receipt_items.some(
             (item) =>
-              item.item_name.includes(searchQuery) ||
-              (item.search_tags ?? []).some((tag) => tag.includes(searchQuery))
+              item.item_name.includes(submittedQuery) ||
+              (item.search_tags ?? []).some((tag) =>
+                tag.includes(submittedQuery)
+              )
           )
       )
     }
@@ -320,26 +316,30 @@ export const useHistory = () => {
         ? b.date.localeCompare(a.date)
         : a.date.localeCompare(b.date)
     )
-    const total = filtered.reduce((sum, r) => sum + r.total_amount, 0)
+    const total = receipts
+      .filter((r) => r.date.startsWith(currentMonth))
+      .reduce((sum, r) => sum + r.total_amount, 0)
     return { filteredReceipts: filtered, receiptTotal: total }
-  }, [receipts, currentMonth, searchQuery, sortOrder, searchScope])
+  }, [receipts, currentMonth, submittedQuery, sortOrder, searchScope])
 
   const { filteredCsv, csvTotal } = useMemo(() => {
     let filtered =
       searchScope === 'current'
         ? csvData.filter((c) => c.date.startsWith(currentMonth))
         : [...csvData]
-    if (searchQuery) {
-      filtered = filtered.filter((c) => c.store.includes(searchQuery))
+    if (submittedQuery) {
+      filtered = filtered.filter((c) => c.store.includes(submittedQuery))
     }
     filtered.sort((a, b) =>
       sortOrder === 'desc'
         ? b.date.localeCompare(a.date)
         : a.date.localeCompare(b.date)
     )
-    const total = filtered.reduce((sum, c) => sum + c.price, 0)
+    const total = csvData
+      .filter((c) => c.date.startsWith(currentMonth))
+      .reduce((sum, c) => sum + c.price, 0)
     return { filteredCsv: filtered, csvTotal: total }
-  }, [csvData, currentMonth, searchQuery, sortOrder, searchScope])
+  }, [csvData, currentMonth, submittedQuery, sortOrder, searchScope])
 
   const toggleAccordion = (id: string) =>
     setExpandedReceiptId((prev) => (prev === id ? null : id))
@@ -361,7 +361,10 @@ export const useHistory = () => {
     searchQuery,
     setSearchQuery,
     searchScope,
-    setSearchScope,
+    submittedQuery,
+    clearSearch,
+    viewStatus,
+    retryLoad: () => setRetry((value) => value + 1),
     sortOrder,
     setSortOrder,
     filteredReceipts,
