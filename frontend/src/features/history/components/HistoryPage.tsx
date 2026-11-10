@@ -179,18 +179,13 @@ export const HistoryPage: React.FC = () => {
                       onClick={() => setIsMonthDropdownOpen(false)}
                     ></div>
                     <div className="absolute top-full left-1/2 -translate-x-1/2 w-60 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] z-40 p-3 mt-1">
-                      <label
-                        className="block text-xs font-semibold text-[var(--rm-text-secondary)] mb-1"
-                        htmlFor="history-year"
-                      >
-                        年
-                      </label>
                       <div className="relative mb-2">
                         <select
                           id="history-year"
+                          aria-label="年"
                           value={displayedYear}
                           onChange={(e) => setSelectedYear(e.target.value)}
-                          className="rm-field w-full min-h-11 appearance-none text-center px-10"
+                          className="rm-field w-full min-h-11 appearance-none text-left pl-3 pr-10"
                         >
                           {years.map((year) => (
                             <option key={year} value={year}>
