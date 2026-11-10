@@ -1,4 +1,11 @@
-import { useState, useEffect, useEffectEvent, useMemo, useRef, useReducer } from 'react'
+import {
+  useState,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useReducer,
+} from 'react'
 import { useApiConfig } from '@/hooks/useApiConfig'
 import {
   fetchTransactions,
@@ -164,7 +171,6 @@ export const useHistory = () => {
   }, [loadKey, isLoading, allMonths, currentMonth, searchScope])
   const viewStatus = loadState.key === loadKey ? loadState.status : 'loading'
   const isFetchingMonth = viewStatus === 'loading'
-  const submitSearch = () => dispatchSearch({ type: 'submit' })
   const clearSearch = () => dispatchSearch({ type: 'clear' })
 
   const currentIndex = allMonths.indexOf(currentMonth)
@@ -356,7 +362,6 @@ export const useHistory = () => {
     setSearchQuery,
     searchScope,
     submittedQuery,
-    submitSearch,
     clearSearch,
     viewStatus,
     retryLoad: () => setRetry((value) => value + 1),

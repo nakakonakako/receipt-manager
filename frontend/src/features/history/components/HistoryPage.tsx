@@ -25,7 +25,6 @@ export const HistoryPage: React.FC = () => {
     setSearchQuery,
     searchScope,
     submittedQuery,
-    submitSearch,
     clearSearch,
     viewStatus,
     retryLoad,
@@ -78,7 +77,7 @@ export const HistoryPage: React.FC = () => {
 
   return (
     <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
-      {searchScope === 'current' && (
+      {searchScope === 'current' ? (
         <p className="flex flex-col text-xs font-semibold text-[var(--rm-text-secondary)] text-center">
           {formattedCurrentMonth}の
           {activeTab === 'receipts' ? 'レシート' : 'キャッシュレス'}合計
@@ -91,6 +90,10 @@ export const HistoryPage: React.FC = () => {
                 ? '取得できません'
                 : '読み込み中'}
           </span>
+        </p>
+      ) : (
+        <p className="min-h-11 flex items-center justify-center text-sm font-semibold text-[var(--rm-text-secondary)]">
+          全期間の検索
         </p>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-2 my-3">
@@ -258,38 +261,15 @@ export const HistoryPage: React.FC = () => {
       </div>
       {searchOpen && (
         <div id="history-search" className="mb-3">
-          <form
-            className="flex min-w-0 gap-2"
-            onSubmit={(event) => {
-              event.preventDefault()
-              submitSearch()
-            }}
-          >
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder="過去の履歴を検索"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              aria-label="過去の履歴を検索"
-              className="rm-field min-w-0 flex-1 min-h-11 px-3"
-            />
-            <button
-              type="submit"
-              className="min-h-11 px-4 rounded-md bg-[var(--rm-receipt)] text-white font-semibold"
-            >
-              検索
-            </button>
-            {submittedQuery && (
-              <button
-                type="button"
-                onClick={clearSearch}
-                className="min-h-11 px-2 text-sm font-semibold text-[var(--rm-text-secondary)]"
-              >
-                解除
-              </button>
-            )}
-          </form>
+          <input
+            ref={searchInputRef}
+            type="search"
+            placeholder="過去の履歴を検索"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="過去の履歴を検索"
+            className="rm-field w-full min-h-11 px-3"
+          />
         </div>
       )}
       {submittedQuery && (
@@ -348,7 +328,7 @@ export const HistoryPage: React.FC = () => {
                 className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]"
               >
                 <span className="w-8 h-8 border-4 border-[var(--rm-receipt)] border-t-transparent rounded-full animate-spin"></span>
-                {submittedQuery ? '全期間を検索中...' : 'データを取得中...'}
+                {submittedQuery ? '全期間の検索...' : 'データを取得中...'}
               </div>
             ) : filteredReceipts.length === 0 ? (
               <p className="text-center text-[var(--rm-text-secondary)] font-semibold py-16 border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
@@ -461,7 +441,7 @@ export const HistoryPage: React.FC = () => {
                 className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]"
               >
                 <span className="w-8 h-8 border-4 border-[var(--rm-csv)] border-t-transparent rounded-full animate-spin"></span>
-                {submittedQuery ? '全期間を検索中...' : 'データを取得中...'}
+                {submittedQuery ? '全期間の検索...' : 'データを取得中...'}
               </div>
             ) : filteredCsv.length === 0 ? (
               <p className="text-center text-[var(--rm-text-secondary)] font-semibold py-16 border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
