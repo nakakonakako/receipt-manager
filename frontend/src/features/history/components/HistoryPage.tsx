@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useRef, useState } from 'react'
 import { Button } from '@/components/ui/Button'
 import { useHistory } from '../hooks/useHistory'
 import { HistoryEditModal } from './HistoryEditModal'
@@ -49,6 +49,12 @@ export const HistoryPage: React.FC = () => {
     isFetchingMonth,
   } = useHistory()
 
+  const [selectedYear, setSelectedYear] = useState('')
+  const years = [...new Set(allMonths.map((month) => month.slice(0, 4)))]
+  const displayedYear = years.includes(selectedYear)
+    ? selectedYear
+    : currentMonth?.slice(0, 4) || years[0] || ''
+
   if (isLoading) {
     return (
       <div
@@ -63,8 +69,8 @@ export const HistoryPage: React.FC = () => {
 
   return (
     <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
-      <div className="flex flex-wrap items-center gap-2 mb-2">
-        <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl w-full sm:w-auto shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl w-full sm:w-auto shrink-0 whitespace-nowrap">
           <button
             onClick={() => setActiveTab('receipts')}
             className={`min-h-11 sm:min-h-10 flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
@@ -73,7 +79,7 @@ export const HistoryPage: React.FC = () => {
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
             }`}
           >
-            <span aria-hidden="true">▤</span> レシート
+            レシート
           </button>
           <button
             onClick={() => setActiveTab('csv')}
@@ -83,90 +89,112 @@ export const HistoryPage: React.FC = () => {
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
             }`}
           >
-            <span aria-hidden="true">▤</span> キャッシュレス
+            キャッシュレス
           </button>
         </div>
 
         {searchScope === 'current' && (
-          <div className="flex flex-wrap items-center justify-center gap-2 relative z-20">
-            <button
-              onClick={handlePrevMonth}
-              disabled={currentIndex >= allMonths.length - 1}
-              aria-label="前の月"
-              className="min-h-11 min-w-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-            >
-              ‹
-            </button>
+          <div className="contents">
+            <div className="flex items-center justify-center gap-2 relative z-20">
+              <button
+                onClick={handlePrevMonth}
+                disabled={currentIndex >= allMonths.length - 1}
+                aria-label="前の月"
+                className="min-h-11 min-w-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              >
+                ‹
+              </button>
 
-            <div className="text-center relative">
-              <div className="relative inline-block">
-                <button
-                  onClick={() => setIsMonthDropdownOpen(!isMonthDropdownOpen)}
-                  aria-label="表示する月を選択"
-                  className={`min-h-11 text-sm font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 sm:px-4 py-2 transition-all flex items-center justify-between w-full sm:w-[160px] relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-                    isMonthDropdownOpen
-                      ? 'rounded-t-[var(--rm-radius-panel)] border-b-transparent shadow-none'
-                      : 'rounded-md shadow-sm hover:border-[var(--rm-focus)]'
-                  }`}
-                >
-                  <span className="w-5 hidden sm:block"></span>
-                  <span className="flex-1 text-center whitespace-nowrap">
-                    {formattedCurrentMonth}
-                  </span>
-                  <span
-                    className={`text-[var(--rm-text-muted)] text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
+              <div className="text-center relative">
+                <div className="relative inline-block">
+                  <button
+                    onClick={() => {
+                      setSelectedYear(
+                        currentMonth?.slice(0, 4) || years[0] || ''
+                      )
+                      setIsMonthDropdownOpen(!isMonthDropdownOpen)
+                    }}
+                    aria-expanded={isMonthDropdownOpen}
+                    aria-label="表示する月を選択"
+                    className={`min-h-11 text-base font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 sm:px-4 py-2 transition-all flex items-center justify-between w-full sm:w-[160px] relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                      isMonthDropdownOpen
+                        ? 'rounded-t-[var(--rm-radius-panel)] border-b-transparent shadow-none'
+                        : 'rounded-md shadow-sm hover:border-[var(--rm-focus)]'
+                    }`}
                   >
-                    ▼
-                  </span>
-                </button>
+                    <span className="w-5 hidden sm:block"></span>
+                    <span className="flex-1 text-center whitespace-nowrap">
+                      {formattedCurrentMonth}
+                    </span>
+                    <span
+                      className={`text-[var(--rm-text-muted)] text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
+                    >
+                      ▼
+                    </span>
+                  </button>
 
-                {isMonthDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-30"
-                      onClick={() => setIsMonthDropdownOpen(false)}
-                    ></div>
-                    <div className="absolute top-full left-0 w-full bg-[var(--rm-surface)] border border-[var(--rm-border)] border-t-0 rounded-b-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] z-40 overflow-hidden -mt-[1px]">
-                      <ul className="max-h-60 overflow-y-auto pb-2 pt-1">
-                        {allMonths.map((m) => {
-                          const [y, mo] = m.split('-')
-                          return (
-                            <li key={m} className="px-2 py-0.5">
+                  {isMonthDropdownOpen && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-30"
+                        onClick={() => setIsMonthDropdownOpen(false)}
+                      ></div>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-60 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-[var(--rm-radius-panel)] shadow-[var(--rm-shadow-popover)] z-40 p-3 mt-1">
+                        <label
+                          className="block text-xs font-semibold text-[var(--rm-text-secondary)] mb-1"
+                          htmlFor="history-year"
+                        >
+                          年
+                        </label>
+                        <select
+                          id="history-year"
+                          value={displayedYear}
+                          onChange={(e) => setSelectedYear(e.target.value)}
+                          className="rm-field w-full min-h-11 mb-2"
+                        >
+                          {years.map((year) => (
+                            <option key={year} value={year}>
+                              {year}年
+                            </option>
+                          ))}
+                        </select>
+                        <div className="grid grid-cols-3 gap-1">
+                          {allMonths
+                            .filter((month) =>
+                              month.startsWith(`${displayedYear}-`)
+                            )
+                            .map((month) => (
                               <button
+                                key={month}
                                 onClick={() => {
-                                  setCurrentMonth(m)
+                                  setCurrentMonth(month)
                                   setIsMonthDropdownOpen(false)
                                 }}
-                                className={`w-full text-center px-2 py-2 rounded-lg text-sm whitespace-nowrap transition-colors ${
-                                  m === currentMonth
-                                    ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)] font-bold'
-                                    : 'text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)] font-semibold'
-                                }`}
+                                className={`min-h-11 rounded-lg text-sm font-semibold ${month === currentMonth ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)]' : 'text-[var(--rm-text-secondary)] hover:bg-[var(--rm-surface-subtle)]'}`}
                               >
-                                {`${y}年 ${parseInt(mo)}月`}
+                                {parseInt(month.slice(5), 10)}月
                               </button>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
-                  </>
-                )}
+                            ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <button
-              onClick={handleNextMonth}
-              disabled={currentIndex <= 0}
-              aria-label="次の月"
-              className="min-h-11 min-w-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-            >
-              ›
-            </button>
-            <p className="text-xs sm:text-sm font-semibold text-[var(--rm-text-secondary)] whitespace-nowrap">
-              合計:{' '}
+              <button
+                onClick={handleNextMonth}
+                disabled={currentIndex <= 0}
+                aria-label="次の月"
+                className="min-h-11 min-w-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              >
+                ›
+              </button>
+            </div>
+            <p className="flex flex-col text-xs font-semibold text-[var(--rm-text-secondary)] whitespace-nowrap text-right ml-auto">
+              合計
               <span
-                className={`text-base sm:text-lg ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
+                className={`text-xl font-bold ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
               >
                 ¥
                 {(activeTab === 'receipts'
@@ -297,10 +325,10 @@ export const HistoryPage: React.FC = () => {
                     className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 cursor-pointer gap-2 sm:gap-4"
                   >
                     <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-xs font-semibold text-[var(--rm-text-secondary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
+                      <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
                         {receipt.date}
                       </span>
-                      <span className="sm:hidden font-bold text-[var(--rm-receipt)] text-lg">
+                      <span className="sm:hidden font-bold text-[var(--rm-receipt)] text-xl">
                         ¥{receipt.total_amount.toLocaleString()}
                       </span>
                     </div>
@@ -310,21 +338,21 @@ export const HistoryPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-end gap-3 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] w-24 text-right text-lg">
+                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] w-24 text-right text-xl">
                         ¥{receipt.total_amount.toLocaleString()}
                       </span>
                       <div className="flex gap-2">
                         <button
                           onClick={(e) => openEditReceipt(receipt, e)}
                           aria-label={`${receipt.store_name}を編集`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-receipt)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                           ✎
                         </button>
                         <button
                           onClick={(e) => requestDeleteReceipt(receipt.id, e)}
                           aria-label={`${receipt.store_name}を削除`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-danger)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                         >
                           ×
                         </button>
@@ -390,10 +418,10 @@ export const HistoryPage: React.FC = () => {
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 gap-2 sm:gap-4">
                     <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-xs font-semibold text-[var(--rm-text-secondary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
+                      <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
                         {csv.date}
                       </span>
-                      <span className="sm:hidden font-bold text-[var(--rm-csv)] text-lg">
+                      <span className="sm:hidden font-bold text-[var(--rm-csv)] text-xl">
                         ¥{csv.price.toLocaleString()}
                       </span>
                     </div>
@@ -403,21 +431,21 @@ export const HistoryPage: React.FC = () => {
                     </div>
 
                     <div className="flex items-center justify-end gap-3 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] w-24 text-right text-lg">
+                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] w-24 text-right text-xl">
                         ¥{csv.price.toLocaleString()}
                       </span>
                       <div className="flex gap-2">
                         <button
                           onClick={() => openEditCsv(csv)}
                           aria-label={`${csv.store}を編集`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-csv)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                           ✎
                         </button>
                         <button
                           onClick={() => requestDeleteCsv(csv.id)}
                           aria-label={`${csv.store}を削除`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-danger)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors border border-[var(--rm-border)] shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                         >
                           ×
                         </button>
