@@ -29,6 +29,7 @@ if [[ "$mode" == gui && "$(uname -s)" == Linux ]]; then
     exit 1
   fi
 fi
+source "$workspace_root/.cursor/playwright-output-dir.sh"
 config_file="$workspace_root/.cursor/playwright-mcp.json"
 profile_dir="${HOME:?HOME must be set}/.local/state/receipt-manager/playwright-profile"
 browser_cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:?HOME must be set}/.cache/ms-playwright}"
@@ -60,4 +61,5 @@ chmod 700 "$profile_dir"
 
 exec npx --yes "@playwright/mcp@$mcp_version" \
   --config "$config_file" \
+  --output-dir "$output_dir" \
   --user-data-dir "$profile_dir"
