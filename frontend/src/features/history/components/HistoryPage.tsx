@@ -150,18 +150,26 @@ export const HistoryPage: React.FC = () => {
                         >
                           年
                         </label>
-                        <select
-                          id="history-year"
-                          value={displayedYear}
-                          onChange={(e) => setSelectedYear(e.target.value)}
-                          className="rm-field w-full min-h-11 mb-2"
-                        >
-                          {years.map((year) => (
-                            <option key={year} value={year}>
-                              {year}年
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative mb-2">
+                          <select
+                            id="history-year"
+                            value={displayedYear}
+                            onChange={(e) => setSelectedYear(e.target.value)}
+                            className="rm-field w-full min-h-11 appearance-none text-center px-10"
+                          >
+                            {years.map((year) => (
+                              <option key={year} value={year}>
+                                {year}年
+                              </option>
+                            ))}
+                          </select>
+                          <span
+                            aria-hidden="true"
+                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-[var(--rm-text-secondary)]"
+                          >
+                            ▼
+                          </span>
+                        </div>
                         <div className="grid grid-cols-3 gap-1">
                           {allMonths
                             .filter((month) =>
@@ -253,14 +261,14 @@ export const HistoryPage: React.FC = () => {
           {sortOrder === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
         </button>
       </div>
-      <div
-        className="mb-3 text-sm font-semibold text-[var(--rm-text-secondary)]"
-        role="status"
-      >
-        {submittedQuery
-          ? `「${submittedQuery}」の全期間検索${viewStatus === 'ready' ? ` · ${activeTab === 'receipts' ? filteredReceipts.length : filteredCsv.length}件` : ''}`
-          : `${formattedCurrentMonth}の履歴`}
-      </div>
+      {submittedQuery && (
+        <div
+          className="mb-3 text-sm font-semibold text-[var(--rm-text-secondary)]"
+          role="status"
+        >
+          {`「${submittedQuery}」の全期間検索${viewStatus === 'ready' ? ` · ${activeTab === 'receipts' ? filteredReceipts.length : filteredCsv.length}件` : ''}`}
+        </div>
+      )}
 
       <div
         className="flex-1 min-h-0"
