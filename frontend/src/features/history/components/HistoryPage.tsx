@@ -24,7 +24,11 @@ export const HistoryPage: React.FC = () => {
     searchQuery,
     setSearchQuery,
     searchScope,
-    setSearchScope,
+    submittedQuery,
+    submitSearch,
+    clearSearch,
+    viewStatus,
+    retryLoad,
     sortOrder,
     setSortOrder,
     filteredReceipts,
@@ -69,7 +73,7 @@ export const HistoryPage: React.FC = () => {
 
   return (
     <div className="rm-card p-4 min-h-[600px] flex flex-col max-w-4xl mx-auto">
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] sm:items-center gap-3 mb-3">
         <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl w-full sm:w-auto shrink-0 whitespace-nowrap">
           <button
             onClick={() => setActiveTab('receipts')}
@@ -94,8 +98,8 @@ export const HistoryPage: React.FC = () => {
         </div>
 
         {searchScope === 'current' && (
-          <div className="contents">
-            <div className="flex items-center justify-center gap-2 relative z-20">
+          <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 relative z-20">
               <button
                 onClick={handlePrevMonth}
                 disabled={currentIndex >= allMonths.length - 1}
@@ -191,77 +195,71 @@ export const HistoryPage: React.FC = () => {
                 ›
               </button>
             </div>
-            <p className="flex flex-col text-xs font-semibold text-[var(--rm-text-secondary)] whitespace-nowrap text-right ml-auto">
-              合計
+            <p className="flex flex-col text-xs font-semibold text-[var(--rm-text-secondary)] sm:text-right">
+              {formattedCurrentMonth}の
+              {activeTab === 'receipts' ? 'レシート' : 'キャッシュレス'}合計
               <span
                 className={`text-xl font-bold ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
               >
-                ¥
-                {(activeTab === 'receipts'
-                  ? receiptTotal
-                  : csvTotal
-                ).toLocaleString()}
+                {viewStatus === 'ready'
+                  ? `¥${(activeTab === 'receipts' ? receiptTotal : csvTotal).toLocaleString()}`
+                  : viewStatus === 'error'
+                    ? '取得できません'
+                    : '読み込み中'}
               </span>
             </p>
           </div>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mb-3">
-        <div className="contents">
-          <div className="relative flex-1 min-w-[180px]">
-            <span
-              aria-hidden="true"
-              className="absolute left-3 top-2.5 text-[var(--rm-text-muted)]"
-            >
-              ⌕
-            </span>
-            <input
-              type="text"
-              placeholder="店名や商品名で検索..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              aria-label="店名や商品名で検索"
-              className="rm-field w-full pl-9 pr-3 py-2.5"
-            />
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <button
-              onClick={() => setSearchScope('current')}
-              className={`min-h-11 px-3 py-2 text-sm font-semibold rounded-md border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-                searchScope === 'current'
-                  ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)] border-[var(--rm-receipt)]'
-                  : 'bg-[var(--rm-surface)] text-[var(--rm-text-secondary)] border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)]'
-              }`}
-            >
-              この月だけ検索
-            </button>
-            <button
-              onClick={() => setSearchScope('all')}
-              className={`min-h-11 px-3 py-2 text-sm font-semibold rounded-md border transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
-                searchScope === 'all'
-                  ? 'bg-[var(--rm-receipt-subtle)] text-[var(--rm-receipt)] border-[var(--rm-receipt)]'
-                  : 'bg-[var(--rm-surface)] text-[var(--rm-text-secondary)] border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)]'
-              }`}
-            >
-              全期間検索
-            </button>
-          </div>
-
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 mb-3">
+        <form
+          className="flex min-w-0 gap-2"
+          onSubmit={(event) => {
+            event.preventDefault()
+            submitSearch()
+          }}
+        >
+          <input
+            type="search"
+            placeholder="過去の履歴を検索"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            aria-label="過去の履歴を検索"
+            className="rm-field min-w-0 flex-1 min-h-11 px-3"
+          />
           <button
-            onClick={() =>
-              setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
-            }
-            className="min-h-11 flex justify-center items-center gap-2 px-5 py-2.5 bg-[var(--rm-surface)] hover:bg-[var(--rm-surface-subtle)] border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold rounded-md transition-colors w-auto shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+            type="submit"
+            className="min-h-11 px-4 rounded-md bg-[var(--rm-receipt)] text-white font-semibold"
           >
-            <span
-              className={`transition-transform duration-300 ${sortOrder === 'asc' ? 'rotate-180' : ''}`}
-            >
-              ↓
-            </span>
-            {sortOrder === 'desc' ? '新しい順' : '古い順'}
+            検索
           </button>
-        </div>
+          {submittedQuery && (
+            <button
+              type="button"
+              onClick={clearSearch}
+              className="min-h-11 px-2 text-sm font-semibold text-[var(--rm-text-secondary)]"
+            >
+              解除
+            </button>
+          )}
+        </form>
+        <button
+          onClick={() =>
+            setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
+          }
+          className="min-h-11 px-4 rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
+        >
+          {sortOrder === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
+        </button>
+      </div>
+      <div
+        className="mb-3 text-sm font-semibold text-[var(--rm-text-secondary)]"
+        role="status"
+      >
+        {submittedQuery
+          ? `「${submittedQuery}」の全期間検索${viewStatus === 'ready' ? ` · ${activeTab === 'receipts' ? filteredReceipts.length : filteredCsv.length}件` : ''}`
+          : `${formattedCurrentMonth}の履歴`}
       </div>
 
       <div
@@ -295,13 +293,23 @@ export const HistoryPage: React.FC = () => {
       >
         {activeTab === 'receipts' && (
           <div className="space-y-3 h-full overflow-y-auto pr-1">
-            {isFetchingMonth ? (
+            {viewStatus === 'error' ? (
+              <div
+                role="alert"
+                className="text-center py-12 text-[var(--rm-danger)]"
+              >
+                取得に失敗しました。{' '}
+                <button onClick={retryLoad} className="underline min-h-11">
+                  再試行
+                </button>
+              </div>
+            ) : isFetchingMonth ? (
               <div
                 role="status"
                 className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]"
               >
                 <span className="w-8 h-8 border-4 border-[var(--rm-receipt)] border-t-transparent rounded-full animate-spin"></span>
-                データを取得中...
+                {submittedQuery ? '全期間を検索中...' : 'データを取得中...'}
               </div>
             ) : filteredReceipts.length === 0 ? (
               <p className="text-center text-[var(--rm-text-secondary)] font-semibold py-16 border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
@@ -315,7 +323,7 @@ export const HistoryPage: React.FC = () => {
                     receiptCardRefs.current[receipt.id] = el
                   }}
                   className={`border rounded-[var(--rm-radius-card)] overflow-hidden bg-[var(--rm-surface)] shadow-sm hover:shadow-md transition-shadow ${
-                    expandedReceiptId === receipt.id && searchQuery
+                    expandedReceiptId === receipt.id && submittedQuery
                       ? 'border-[var(--rm-receipt)] ring-2 ring-[var(--rm-receipt-subtle)]'
                       : 'border-[var(--rm-border-subtle)]'
                   }`}
@@ -374,7 +382,7 @@ export const HistoryPage: React.FC = () => {
                               key={item.id || item.item_name}
                               className={`flex justify-between font-bold border-b border-[var(--rm-border-subtle)] pb-1 last:border-0 last:pb-0 ${
                                 expandedReceiptId === receipt.id &&
-                                searchQuery === item.item_name
+                                submittedQuery === item.item_name
                                   ? 'text-[var(--rm-receipt)] bg-[var(--rm-receipt-subtle)] -mx-2 px-2 py-1 rounded-md'
                                   : 'text-[var(--rm-text-secondary)]'
                               }`}
@@ -398,13 +406,23 @@ export const HistoryPage: React.FC = () => {
 
         {activeTab === 'csv' && (
           <div className="space-y-3 h-full overflow-y-auto pr-1">
-            {isFetchingMonth ? (
+            {viewStatus === 'error' ? (
+              <div
+                role="alert"
+                className="text-center py-12 text-[var(--rm-danger)]"
+              >
+                取得に失敗しました。{' '}
+                <button onClick={retryLoad} className="underline min-h-11">
+                  再試行
+                </button>
+              </div>
+            ) : isFetchingMonth ? (
               <div
                 role="status"
                 className="text-center py-16 flex flex-col items-center gap-3 text-[var(--rm-text-secondary)] font-semibold border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]"
               >
                 <span className="w-8 h-8 border-4 border-[var(--rm-csv)] border-t-transparent rounded-full animate-spin"></span>
-                データを取得中...
+                {submittedQuery ? '全期間を検索中...' : 'データを取得中...'}
               </div>
             ) : filteredCsv.length === 0 ? (
               <p className="text-center text-[var(--rm-text-secondary)] font-semibold py-16 border border-dashed rounded-[var(--rm-radius-panel)] border-[var(--rm-border)] bg-[var(--rm-surface-subtle)]">
