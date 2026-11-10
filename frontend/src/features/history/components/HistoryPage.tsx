@@ -205,6 +205,7 @@ export const HistoryPage: React.FC = () => {
                           .filter((month) =>
                             month.startsWith(`${displayedYear}-`)
                           )
+                          .sort()
                           .map((month) => (
                             <button
                               key={month}
