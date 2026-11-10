@@ -3,6 +3,24 @@ import { Button } from '@/components/ui/Button'
 import { useHistory } from '../hooks/useHistory'
 import { HistoryEditModal } from './HistoryEditModal'
 
+const MonthChevron: React.FC<{ direction: 'left' | 'right' }> = ({
+  direction,
+}) => (
+  <svg
+    aria-hidden="true"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d={direction === 'left' ? 'm15 18-6-6 6-6' : 'm9 18 6-6-6-6'} />
+  </svg>
+)
+
 export const HistoryPage: React.FC = () => {
   const receiptCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const touchStartXRef = useRef<number | null>(null)
@@ -96,11 +114,15 @@ export const HistoryPage: React.FC = () => {
           全期間の検索
         </p>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-2 my-3">
-        <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl w-full sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
+      <div
+        aria-hidden="true"
+        className="border-t border-[var(--rm-border-subtle)] mt-2"
+      />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-2 my-2">
+        <div className="flex bg-stone-100 border border-stone-200 p-1 sm:p-0.5 sm:h-9 rounded-xl w-full sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
           <button
             onClick={() => setActiveTab('receipts')}
-            className={`min-h-11 sm:min-h-9 flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'receipts'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -110,7 +132,7 @@ export const HistoryPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('csv')}
-            className={`min-h-11 sm:min-h-9 flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'csv'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -125,9 +147,9 @@ export const HistoryPage: React.FC = () => {
               onClick={handlePrevMonth}
               disabled={currentIndex >= allMonths.length - 1}
               aria-label="前の月"
-              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
-              ‹
+              <MonthChevron direction="left" />
             </button>
 
             <div className="text-center relative">
@@ -139,20 +161,14 @@ export const HistoryPage: React.FC = () => {
                   }}
                   aria-expanded={isMonthDropdownOpen}
                   aria-label="表示する月を選択"
-                  className={`min-h-11 sm:min-h-9 text-sm font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 py-1.5 transition-all flex items-center justify-between w-full sm:w-[144px] relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                  className={`min-h-11 sm:min-h-9 text-sm font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 py-1.5 transition-all flex items-center justify-center w-full sm:w-auto relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
                     isMonthDropdownOpen
                       ? 'rounded-t-[var(--rm-radius-panel)] border-b-transparent shadow-none'
                       : 'rounded-md shadow-sm hover:border-[var(--rm-focus)]'
                   }`}
                 >
-                  <span className="w-5 hidden sm:block"></span>
-                  <span className="flex-1 text-center whitespace-nowrap">
+                  <span className="text-center whitespace-nowrap">
                     {formattedCurrentMonth}
-                  </span>
-                  <span
-                    className={`text-[var(--rm-text-muted)] text-sm w-5 text-right transition-transform duration-200 ${isMonthDropdownOpen ? 'rotate-180' : ''}`}
-                  >
-                    ▼
                   </span>
                 </button>
 
@@ -217,9 +233,9 @@ export const HistoryPage: React.FC = () => {
               onClick={handleNextMonth}
               disabled={currentIndex <= 0}
               aria-label="次の月"
-              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              className="inline-flex items-center justify-center min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
-              ›
+              <MonthChevron direction="right" />
             </button>
           </div>
         )}
@@ -253,7 +269,7 @@ export const HistoryPage: React.FC = () => {
             onClick={() =>
               setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
             }
-            className="min-h-11 sm:min-h-9 px-3 text-sm rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
+            className="inline-flex items-center justify-center w-[104px] min-h-11 sm:min-h-9 px-2 text-sm rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
           >
             {sortOrder === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
           </button>
@@ -349,9 +365,9 @@ export const HistoryPage: React.FC = () => {
                 >
                   <div
                     onClick={() => toggleAccordion(receipt.id)}
-                    className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 cursor-pointer gap-2 sm:gap-4"
+                    className="flex flex-col sm:flex-row sm:items-center p-3 sm:px-3 sm:py-2 cursor-pointer gap-2 sm:gap-3"
                   >
-                    <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
+                    <div className="flex flex-wrap gap-1 justify-between items-center w-full sm:w-auto shrink-0">
                       <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
                         {receipt.date}
                       </span>
@@ -360,26 +376,26 @@ export const HistoryPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="font-semibold text-[var(--rm-text-primary)] flex-1 truncate text-base sm:text-sm">
+                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 flex-1 truncate text-base sm:text-sm">
                       {receipt.store_name}
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] w-24 text-right text-xl">
+                    <div className="flex items-center justify-end gap-3 sm:gap-2 shrink-0 mt-1 sm:mt-0">
+                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] min-w-24 w-auto whitespace-nowrap text-right text-xl">
                         ¥{receipt.total_amount.toLocaleString()}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 sm:gap-1">
                         <button
                           onClick={(e) => openEditReceipt(receipt, e)}
                           aria-label={`${receipt.store_name}を編集`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                           ✎
                         </button>
                         <button
                           onClick={(e) => requestDeleteReceipt(receipt.id, e)}
                           aria-label={`${receipt.store_name}を削除`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                         >
                           ×
                         </button>
@@ -453,8 +469,8 @@ export const HistoryPage: React.FC = () => {
                   key={csv.id}
                   className="border border-[var(--rm-border-subtle)] rounded-[var(--rm-radius-card)] overflow-hidden bg-[var(--rm-surface)] shadow-sm hover:shadow-md transition-shadow"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:p-4 gap-2 sm:gap-4">
-                    <div className="flex justify-between items-center w-full sm:w-auto shrink-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:px-3 sm:py-2 gap-2 sm:gap-3">
+                    <div className="flex flex-wrap gap-1 justify-between items-center w-full sm:w-auto shrink-0">
                       <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
                         {csv.date}
                       </span>
@@ -463,26 +479,26 @@ export const HistoryPage: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="font-semibold text-[var(--rm-text-primary)] flex-1 truncate text-base sm:text-sm">
+                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 flex-1 truncate text-base sm:text-sm">
                       {csv.store}
                     </div>
 
-                    <div className="flex items-center justify-end gap-3 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] w-24 text-right text-xl">
+                    <div className="flex items-center justify-end gap-3 sm:gap-2 shrink-0 mt-1 sm:mt-0">
+                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] min-w-24 w-auto whitespace-nowrap text-right text-xl">
                         ¥{csv.price.toLocaleString()}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 sm:gap-1">
                         <button
                           onClick={() => openEditCsv(csv)}
                           aria-label={`${csv.store}を編集`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                           ✎
                         </button>
                         <button
                           onClick={() => requestDeleteCsv(csv.id)}
                           aria-label={`${csv.store}を削除`}
-                          className="min-h-11 min-w-11 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                         >
                           ×
                         </button>
@@ -502,9 +518,10 @@ export const HistoryPage: React.FC = () => {
             variant="secondary"
             onClick={handlePrevMonth}
             disabled={currentIndex >= allMonths.length - 1}
+            aria-label="前の月"
             className="px-3 py-1.5"
           >
-            ‹
+            <MonthChevron direction="left" />
           </Button>
           <span className="text-sm font-semibold text-[var(--rm-text-secondary)]">
             {formattedCurrentMonth}
@@ -513,9 +530,10 @@ export const HistoryPage: React.FC = () => {
             variant="secondary"
             onClick={handleNextMonth}
             disabled={currentIndex <= 0}
+            aria-label="次の月"
             className="px-3 py-1.5"
           >
-            ›
+            <MonthChevron direction="right" />
           </Button>
         </div>
       )}
