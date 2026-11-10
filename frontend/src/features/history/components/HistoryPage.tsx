@@ -185,7 +185,7 @@ export const HistoryPage: React.FC = () => {
                           aria-label="年"
                           value={displayedYear}
                           onChange={(e) => setSelectedYear(e.target.value)}
-                          className="rm-field w-full min-h-11 appearance-none text-left pl-3 pr-10"
+                          className="rm-field w-full min-h-11 appearance-none text-center px-0"
                         >
                           {years.map((year) => (
                             <option key={year} value={year}>
