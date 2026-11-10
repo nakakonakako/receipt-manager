@@ -82,7 +82,7 @@ export const HistoryPage: React.FC = () => {
           {formattedCurrentMonth}の
           {activeTab === 'receipts' ? 'レシート' : 'キャッシュレス'}合計
           <span
-            className={`text-xl font-bold ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
+            className={`text-2xl font-bold ${activeTab === 'receipts' ? 'text-[var(--rm-receipt)]' : 'text-[var(--rm-csv)]'}`}
           >
             {viewStatus === 'ready'
               ? `¥${(activeTab === 'receipts' ? receiptTotal : csvTotal).toLocaleString()}`
@@ -97,10 +97,10 @@ export const HistoryPage: React.FC = () => {
         </p>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-2 my-3">
-        <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl w-full sm:w-auto shrink-0 whitespace-nowrap">
+        <div className="flex bg-stone-100 border border-stone-200 p-1 rounded-xl w-full sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
           <button
             onClick={() => setActiveTab('receipts')}
-            className={`min-h-11 sm:min-h-10 flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`min-h-11 sm:min-h-9 flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'receipts'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -110,7 +110,7 @@ export const HistoryPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('csv')}
-            className={`min-h-11 sm:min-h-10 flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`min-h-11 sm:min-h-9 flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'csv'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -125,7 +125,7 @@ export const HistoryPage: React.FC = () => {
               onClick={handlePrevMonth}
               disabled={currentIndex >= allMonths.length - 1}
               aria-label="前の月"
-              className="min-h-11 min-w-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
               ‹
             </button>
@@ -139,7 +139,7 @@ export const HistoryPage: React.FC = () => {
                   }}
                   aria-expanded={isMonthDropdownOpen}
                   aria-label="表示する月を選択"
-                  className={`min-h-11 text-base font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 sm:px-4 py-2 transition-all flex items-center justify-between w-full sm:w-[160px] relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+                  className={`min-h-11 sm:min-h-9 text-sm font-bold text-[var(--rm-text-primary)] bg-[var(--rm-surface)] border border-[var(--rm-border)] px-3 py-1.5 transition-all flex items-center justify-between w-full sm:w-[144px] relative z-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
                     isMonthDropdownOpen
                       ? 'rounded-t-[var(--rm-radius-panel)] border-b-transparent shadow-none'
                       : 'rounded-md shadow-sm hover:border-[var(--rm-focus)]'
@@ -217,7 +217,7 @@ export const HistoryPage: React.FC = () => {
               onClick={handleNextMonth}
               disabled={currentIndex <= 0}
               aria-label="次の月"
-              className="min-h-11 min-w-11 px-3 sm:px-4 py-2 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+              className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 px-2 py-1 bg-[var(--rm-surface)] border border-[var(--rm-border)] rounded-md shadow-sm hover:bg-[var(--rm-surface-subtle)] text-2xl leading-none font-semibold text-[var(--rm-text-secondary)] disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
             >
               ›
             </button>
@@ -233,7 +233,7 @@ export const HistoryPage: React.FC = () => {
             aria-label="検索"
             aria-expanded={searchOpen}
             aria-controls="history-search"
-            className={`inline-flex h-11 w-11 items-center justify-center rounded-md border border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)] ${searchOpen ? 'bg-stone-100 text-stone-900' : 'text-[var(--rm-text-secondary)]'}`}
+            className={`inline-flex h-11 w-11 sm:h-9 sm:w-9 items-center justify-center rounded-md border border-[var(--rm-border)] hover:bg-[var(--rm-surface-subtle)] ${searchOpen ? 'bg-stone-100 text-stone-900' : 'text-[var(--rm-text-secondary)]'}`}
           >
             <svg
               aria-hidden="true"
@@ -253,7 +253,7 @@ export const HistoryPage: React.FC = () => {
             onClick={() =>
               setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
             }
-            className="min-h-11 px-4 rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
+            className="min-h-11 sm:min-h-9 px-3 text-sm rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
           >
             {sortOrder === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
           </button>
