@@ -603,6 +603,37 @@ class AiQuotaRuntimeTests(unittest.TestCase):
         answer_question.assert_not_called()
         self.assertEqual(self.quota.claim_calls, [])
 
+    def test_receipt_claim_uses_verified_identity_not_client_supplied_user_id(self):
+        verified_user_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        forged_user_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        supabase = Mock()
+        supabase.options.headers = {}
+        supabase.auth.get_user.return_value = SimpleNamespace(
+            user=SimpleNamespace(id=verified_user_id)
+        )
+        with (
+            patch.dict(
+                os.environ,
+                {"SUPABASE_URL": "https://example.invalid", "SUPABASE_KEY": "test-key"},
+            ),
+            patch("app.services.supabase_service.create_client", return_value=supabase),
+            patch.object(
+                main.gemini_service,
+                "analyze_receipt",
+                return_value=ModelResult({"receipts": []}, TokenUsage(True, 1, 1, 0)),
+            ),
+        ):
+            response = self.client.post(
+                f"/analyze?user_id={forged_user_id}",
+                headers={"x-supabase-token": "test-token", "x-user-id": forged_user_id},
+                data={"user_id": forged_user_id},
+                files=[("files", ("receipt.jpg", _jpeg_bytes(), "image/jpeg"))],
+            )
+        self.assertEqual(response.status_code, 200)
+        supabase.auth.get_user.assert_called_once_with("test-token")
+        self.assertEqual(self.quota.claim_calls[0][1], verified_user_id)
+        self.assertNotEqual(self.quota.claim_calls[0][1], forged_user_id)
+
     def test_search_data_fetch_failure_happens_before_claim(self):
         service = self.allow_user(Mock())
         service.get_all_data.side_effect = RuntimeError(SECRET_DSN)
