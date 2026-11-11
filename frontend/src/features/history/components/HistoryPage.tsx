@@ -359,49 +359,42 @@ export const HistoryPage: React.FC = () => {
                       : 'border-[var(--rm-border-subtle)]'
                   }`}
                 >
-                  <div
-                    onClick={() => toggleAccordion(receipt.id)}
-                    className="flex flex-col sm:flex-row sm:items-center p-3 sm:px-3 sm:py-2 cursor-pointer gap-2 sm:gap-3"
-                  >
-                    <div className="flex flex-wrap gap-1 justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
-                        {receipt.date}
-                      </span>
-                      <span className="sm:hidden font-bold text-[var(--rm-receipt)] text-xl">
-                        ¥{receipt.total_amount.toLocaleString()}
-                      </span>
+                  <div className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 p-2 sm:flex sm:gap-3 sm:px-3 sm:py-2">
+                    <button
+                      type="button"
+                      onClick={() => toggleAccordion(receipt.id)}
+                      aria-label={`${receipt.store_name}の明細`}
+                      aria-expanded={expandedReceiptId === receipt.id}
+                      className="absolute inset-0 rounded-[var(--rm-radius-card)] cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                    />
+                    <span className="pointer-events-none justify-self-start whitespace-nowrap text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md sm:order-1 sm:shrink-0">
+                      {receipt.date}
+                    </span>
+                    <div className="relative z-10 justify-self-end flex gap-1 sm:order-4 sm:shrink-0 sm:-ml-1">
+                      <button
+                        onClick={(e) => openEditReceipt(receipt, e)}
+                        aria-label={`${receipt.store_name}を編集`}
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={(e) => requestDeleteReceipt(receipt.id, e)}
+                        aria-label={`${receipt.store_name}を削除`}
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                      >
+                        ×
+                      </button>
                     </div>
-
-                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 flex-1 truncate text-base sm:text-sm">
+                    <div className="pointer-events-none font-semibold text-[var(--rm-text-primary)] min-w-0 truncate text-base sm:text-sm sm:flex-1 sm:order-2">
                       {receipt.store_name}
                     </div>
-
-                    <div className="flex items-center justify-end gap-3 sm:gap-2 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-receipt)] min-w-24 w-auto whitespace-nowrap text-right text-xl">
-                        ¥{receipt.total_amount.toLocaleString()}
-                      </span>
-                      <div className="flex gap-2 sm:gap-1">
-                        <button
-                          onClick={(e) => openEditReceipt(receipt, e)}
-                          aria-label={`${receipt.store_name}を編集`}
-                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={(e) => requestDeleteReceipt(receipt.id, e)}
-                          aria-label={`${receipt.store_name}を削除`}
-                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                        >
-                          ×
-                        </button>
-                      </div>
-                      <span
-                        className={`text-[var(--rm-text-muted)] text-xs w-4 text-center transition-transform duration-300 ${expandedReceiptId === receipt.id ? 'rotate-180' : ''}`}
-                      >
-                        ▼
-                      </span>
-                    </div>
+                    <span className="pointer-events-none font-bold text-[var(--rm-receipt)] whitespace-nowrap text-right text-xl sm:min-w-24 sm:order-3">
+                      ¥{receipt.total_amount.toLocaleString()}
+                    </span>
+                    <span aria-hidden="true" className={`pointer-events-none hidden sm:block sm:order-5 sm:-ml-1 text-[var(--rm-text-muted)] text-xs w-4 text-center transition-transform duration-300 ${expandedReceiptId === receipt.id ? 'rotate-180' : ''}`}>
+                      ▼
+                    </span>
                   </div>
 
                   {expandedReceiptId === receipt.id &&
@@ -465,41 +458,32 @@ export const HistoryPage: React.FC = () => {
                   key={csv.id}
                   className="border border-[var(--rm-border-subtle)] rounded-[var(--rm-radius-card)] overflow-hidden bg-[var(--rm-surface)] shadow-sm hover:shadow-md transition-shadow"
                 >
-                  <div className="flex flex-col sm:flex-row sm:items-center p-3 sm:px-3 sm:py-2 gap-2 sm:gap-3">
-                    <div className="flex flex-wrap gap-1 justify-between items-center w-full sm:w-auto shrink-0">
-                      <span className="text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md">
-                        {csv.date}
-                      </span>
-                      <span className="sm:hidden font-bold text-[var(--rm-csv)] text-xl">
-                        ¥{csv.price.toLocaleString()}
-                      </span>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 p-2 sm:flex sm:gap-3 sm:px-3 sm:py-2">
+                    <span className="justify-self-start whitespace-nowrap text-sm font-semibold text-[var(--rm-text-primary)] bg-[var(--rm-surface-muted)] px-2.5 py-1 rounded-md sm:order-1 sm:shrink-0">
+                      {csv.date}
+                    </span>
+                    <div className="justify-self-end flex gap-1 sm:order-4 sm:shrink-0 sm:-ml-1">
+                      <button
+                        onClick={() => openEditCsv(csv)}
+                        aria-label={`${csv.store}を編集`}
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={() => requestDeleteCsv(csv.id)}
+                        aria-label={`${csv.store}を削除`}
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                      >
+                        ×
+                      </button>
                     </div>
-
-                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 flex-1 truncate text-base sm:text-sm">
+                    <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 truncate text-base sm:text-sm sm:flex-1 sm:order-2">
                       {csv.store}
                     </div>
-
-                    <div className="flex items-center justify-end gap-3 sm:gap-2 shrink-0 mt-1 sm:mt-0">
-                      <span className="hidden sm:block font-bold text-[var(--rm-csv)] min-w-24 w-auto whitespace-nowrap text-right text-xl">
-                        ¥{csv.price.toLocaleString()}
-                      </span>
-                      <div className="flex gap-2 sm:gap-1">
-                        <button
-                          onClick={() => openEditCsv(csv)}
-                          aria-label={`${csv.store}を編集`}
-                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
-                        >
-                          ✎
-                        </button>
-                        <button
-                          onClick={() => requestDeleteCsv(csv.id)}
-                          aria-label={`${csv.store}を削除`}
-                          className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
+                    <span className="font-bold text-[var(--rm-csv)] whitespace-nowrap text-right text-xl sm:min-w-24 sm:order-3">
+                      ¥{csv.price.toLocaleString()}
+                    </span>
                   </div>
                 </div>
               ))
