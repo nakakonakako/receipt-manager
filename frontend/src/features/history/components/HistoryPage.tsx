@@ -118,11 +118,11 @@ export const HistoryPage: React.FC = () => {
         aria-hidden="true"
         className="border-t border-[var(--rm-border-subtle)] mt-2"
       />
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-2 my-2">
-        <div className="flex bg-stone-100 border border-stone-200 p-1 sm:p-0.5 sm:h-9 rounded-xl w-full sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
+      <div className="flex flex-wrap sm:grid sm:grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-1 sm:gap-2 my-2">
+        <div className="flex bg-stone-100 border border-stone-200 p-0.5 sm:h-9 rounded-xl w-fit sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
           <button
             onClick={() => setActiveTab('receipts')}
-            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-1 sm:px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'receipts'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -132,7 +132,7 @@ export const HistoryPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('csv')}
-            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-1 sm:px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'csv'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -142,7 +142,7 @@ export const HistoryPage: React.FC = () => {
           </button>
         </div>
         {searchScope === 'current' && (
-          <div className="flex items-center justify-center gap-2 relative z-20">
+          <div className="order-first sm:order-none w-full sm:w-auto flex items-center justify-center gap-2 relative z-20">
             <button
               onClick={handlePrevMonth}
               disabled={currentIndex >= allMonths.length - 1}
@@ -235,7 +235,7 @@ export const HistoryPage: React.FC = () => {
             </button>
           </div>
         )}
-        <div className="flex justify-end gap-2 lg:col-start-3">
+        <div className="flex justify-end gap-1 sm:gap-2 ml-auto sm:ml-0 lg:col-start-3">
           <button
             type="button"
             onClick={() => {
@@ -265,7 +265,7 @@ export const HistoryPage: React.FC = () => {
             onClick={() =>
               setSortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))
             }
-            className="inline-flex items-center justify-center w-[104px] min-h-11 sm:min-h-9 px-2 text-sm rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
+            className="inline-flex items-center justify-center w-[88px] sm:w-[104px] min-h-11 sm:min-h-9 px-2 text-sm rounded-md border border-[var(--rm-border)] text-[var(--rm-text-secondary)] font-semibold hover:bg-[var(--rm-surface-subtle)]"
           >
             {sortOrder === 'desc' ? '↓ 新しい順' : '↑ 古い順'}
           </button>

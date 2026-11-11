@@ -395,6 +395,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-11-11 | 履歴画面のスマートフォン操作列を月選択の下に集約 |
 | 2026-11-10 | 認証用Playwright MCPのWSLg表示と手動ログイン確認手順を明確化 |
 | 2026-11-05 | Cursor用Playwright MCPを認証済み共有profileと未認証isolatedに分け、専用devserverを追加 |
 | 2026-10-31 | Cursor委譲monitorのstate directory、workspace lock、status、診断ログ操作をdir_fd基準で安全化 |
