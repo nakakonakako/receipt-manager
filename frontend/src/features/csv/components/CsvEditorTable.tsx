@@ -1,6 +1,7 @@
 import React from 'react'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { DateInput } from '@/components/ui/DateInput'
 import { NumberInput } from '@/components/ui/NumberInput'
 import { type CsvEditorTableProps } from '../types'
 
@@ -51,11 +52,11 @@ export const CsvEditorTable: React.FC<CsvEditorTableProps> = ({
             {parsedData.map((row, i) => (
               <tr key={i} className="border-b border-[var(--rm-border-subtle)] bg-[var(--rm-surface)] hover:bg-[var(--rm-surface-subtle)]">
                 <td className="pl-2 pr-3 md:px-2 py-2 overflow-hidden">
-                  <Input
-                    type="date"
+                  <DateInput
+                    aria-label={`日付 ${i + 1}行目`}
                     value={row.date}
                     onChange={(e) => onDataChange(i, 'date', e.target.value)}
-                    className={`w-full min-w-0 max-w-full px-1 text-xs md:px-1.5 md:text-sm ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
+                    wrapClassName={`px-1 text-xs md:px-1.5 md:text-sm ${!row.date ? 'border-red-500 bg-red-50' : ''}`}
                   />
                 </td>
                 <td className="pl-3 pr-2 md:px-2 py-2">
