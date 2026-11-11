@@ -21,6 +21,7 @@ export type EditingItem = Omit<ReceiptItem, 'price'> & {
 
 export interface ReceiptEditorProps {
   initialData: Receipt
+  mode?: 'manual' | 'ocr'
   onSave: (data: Receipt) => void
   onCancel: () => void
 }

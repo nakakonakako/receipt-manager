@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { DateInput } from '@/components/ui/DateInput'
 import { NumberInput } from '@/components/ui/NumberInput'
+import { getReceiptAdjustment, getReceiptTotal, updateReceiptTotal } from '../utils/receiptTotal'
 
 function normalizeEditingItem(item: ReceiptItem): EditingItem {
   return {
@@ -32,6 +33,7 @@ function emptyLineItem(): EditingItem {
 
 export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
   initialData,
+  mode = 'ocr',
   onSave,
   onCancel,
 }) => {
@@ -44,10 +46,12 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
     initialData.payment_method || 'unknown'
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [totalAmount, setTotalAmount] = useState(initialData.total_amount || 0)
+  // Manual mode stores only the adjustment; OCR mode stores the extracted total.
+  const [amount, setAmount] = useState(mode === 'manual' ? 0 : initialData.total_amount || 0)
 
   const itemsSum = items.reduce((sum, item) => sum + Number(item.price || 0), 0)
-  const adjustmentAmount = totalAmount > 0 ? totalAmount - itemsSum : 0
+  const totalAmount = getReceiptTotal(mode, itemsSum, amount)
+  const adjustmentAmount = getReceiptAdjustment(mode, itemsSum, amount)
 
   const handleItemChange = (
     index: number,
@@ -171,9 +175,10 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-[var(--rm-text-secondary)]">合計金額:</span>
           <NumberInput
+              aria-label="合計金額"
               value={totalAmount}
               onChange={(val) =>
-                setTotalAmount(val === '' || val === '-' ? 0 : Number(val))
+                setAmount(updateReceiptTotal(mode, itemsSum, val === '' || val === '-' ? 0 : Number(val)))
               }
               className="h-9 w-32 bg-[var(--rm-surface-subtle)] px-2 py-1 text-right text-lg font-bold shadow-sm focus:bg-white"
             />
