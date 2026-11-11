@@ -69,6 +69,7 @@ export const ManualRegister: React.FC = () => {
       <ReceiptEditor
         key={resetKey}
         initialData={emptyReceipt}
+        mode="manual"
         onSave={handleSave}
         onCancel={handleCancel}
       />
