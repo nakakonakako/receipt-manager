@@ -389,7 +389,7 @@ export const HistoryPage: React.FC = () => {
                     <div className="pointer-events-none font-semibold text-[var(--rm-text-primary)] min-w-0 truncate text-base sm:text-sm sm:flex-1 sm:order-2">
                       {receipt.store_name}
                     </div>
-                    <span className="pointer-events-none font-bold text-[var(--rm-receipt)] whitespace-nowrap text-right text-xl sm:min-w-24 sm:order-3">
+                    <span className="pointer-events-none font-bold text-[var(--rm-receipt)] whitespace-nowrap text-right text-xl pr-[14px] sm:pr-0 sm:min-w-24 sm:order-3">
                       ¥{receipt.total_amount.toLocaleString()}
                     </span>
                     <span aria-hidden="true" className={`pointer-events-none hidden sm:block sm:order-5 sm:-ml-1 text-[var(--rm-text-muted)] text-xs w-4 text-center transition-transform duration-300 ${expandedReceiptId === receipt.id ? 'rotate-180' : ''}`}>
@@ -481,7 +481,7 @@ export const HistoryPage: React.FC = () => {
                     <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 truncate text-base sm:text-sm sm:flex-1 sm:order-2">
                       {csv.store}
                     </div>
-                    <span className="font-bold text-[var(--rm-csv)] whitespace-nowrap text-right text-xl sm:min-w-24 sm:order-3">
+                    <span className="font-bold text-[var(--rm-csv)] whitespace-nowrap text-right text-xl pr-[14px] sm:pr-0 sm:min-w-24 sm:order-3">
                       ¥{csv.price.toLocaleString()}
                     </span>
                   </div>
