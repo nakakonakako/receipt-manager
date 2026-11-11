@@ -38,6 +38,7 @@ Gemini API が HEIC/HEIF を受け付ける場合でも、本アプリではデ�
 - 生 12,582,912 bytes を **1 つの blob** として Base64 すると **16,777,216** 文字。最大 10 枚に分割して独立にエンコードした場合のパディング込み上限は **16,777,240** 文字（`worst_case_split_base64_char_count`）。
 - 既存のプロンプト・`response_schema`・JSON ラッパのオーバーヘッドを残すため、**生データ合計 12 MiB** を上限とする（Base64 だけで SDK の inline 約 20 MB 枠の大半を使う）。
 - `GeminiService.analyze_receipt` 境界でも同じ生バイト・Base64 文字数・許可 MIME を再チェックする。SDK が「20MB」をリクエスト全体かパート単位かの保証が曖昧なため、画像生データは 12 MiB に抑え、超過は呼び出し前に拒否する。
+- 解析後の学習済みカテゴリ取得に失敗した場合は固定ログを記録し、Gemini のカテゴリを維持して結果を返す。Gemini 呼び出しと応答 JSON の失敗は機密データを含めず区別して記録する。
 
 nginx の `client_max_body_size 20M` は変更しない（multipart 本体は 12 MiB 生データ + フォームオーバーヘッドでも 20M 内に収まる想定）。
 

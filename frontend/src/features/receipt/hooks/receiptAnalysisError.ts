@@ -18,6 +18,7 @@ export type ReceiptAnalysisFailure =
   | { kind: 'validation'; message: string }
   | { kind: 'auth' }
   | { kind: 'rate_limit'; message: string }
+  | { kind: 'unavailable'; message: string }
   | { kind: 'generic' }
 
 const rateLimitMessage = (error: AxiosError): string => {
@@ -58,6 +59,34 @@ export const classifyReceiptAnalysisError = (
   if (status === 401 || status === 403) return { kind: 'auth' }
   if (status === 429) {
     return { kind: 'rate_limit', message: rateLimitMessage(error) }
+  }
+  if (status === 503) {
+    return {
+      kind: 'unavailable',
+      message: '現在AI機能を利用できません。時間をおいて再度お試しください。',
+    }
+  }
+  if (status === 502 || status === 504) {
+    return {
+      kind: 'unavailable',
+      message:
+        'サーバーとの通信に失敗しました。時間をおいて再度お試しください。',
+    }
+  }
+  if (
+    !error.response &&
+    (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT')
+  ) {
+    return {
+      kind: 'unavailable',
+      message: '解析がタイムアウトしました。時間をおいて再度お試しください。',
+    }
+  }
+  if (!error.response && error.code === 'ERR_NETWORK') {
+    return {
+      kind: 'unavailable',
+      message: '通信できませんでした。ネットワーク接続を確認してください。',
+    }
   }
   return { kind: 'generic' }
 }

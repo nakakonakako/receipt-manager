@@ -3,6 +3,7 @@ import json
 import logging
 import os
 
+import httpx
 from app.schemas.csv import CsvMapping
 from app.schemas.receipt import ReceiptDatas
 from app.schemas.receipt_image import (
@@ -19,6 +20,7 @@ from app.services.ai_usage import (
 )
 from dotenv import load_dotenv
 from google import genai
+from google.genai import errors
 from google.genai import types
 
 load_dotenv()
@@ -86,14 +88,23 @@ class GeminiService:
                 contents=contents,
                 config=config,
             )
-        except Exception:
-            logger.error("Gemini receipt analysis failed")
+        except Exception as exc:
+            if (
+                isinstance(exc, errors.APIError)
+                and isinstance(exc.code, int)
+                and 400 <= exc.code <= 599
+            ):
+                logger.error("Gemini receipt request failed: HTTP %d", exc.code)
+            elif isinstance(exc, (TimeoutError, httpx.TimeoutException)):
+                logger.error("Gemini receipt request timed out")
+            else:
+                logger.error("Gemini receipt request failed")
             raise
         usage = token_usage_from_response(response)
         try:
             parsed = json.loads(response.text)
         except Exception:
-            logger.error("Gemini receipt analysis failed")
+            logger.error("Gemini receipt response JSON failed")
             raise GeminiInvalidOutput(usage) from None
         return ModelResult(parsed, usage)
 

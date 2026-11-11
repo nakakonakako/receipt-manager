@@ -166,8 +166,9 @@ export const useReceiptUploader = () => {
         const pendingCombineFiles = current.isCombineMode
           ? [
               ...(current.cameraDraftTaskId
-                ? (current.tasks.find((task) => task.id === current.cameraDraftTaskId)
-                    ?.files ?? [])
+                ? (current.tasks.find(
+                    (task) => task.id === current.cameraDraftTaskId
+                  )?.files ?? [])
                 : []),
               ...current.cameraFiles,
               file,
@@ -345,9 +346,12 @@ export const useReceiptUploader = () => {
         return
       }
 
-      const preflight = await validateReceiptImageSelection(startingTask.files, {
-        combineMode: true,
-      })
+      const preflight = await validateReceiptImageSelection(
+        startingTask.files,
+        {
+          combineMode: true,
+        }
+      )
       if (!preflight.ok) {
         toast.error(formatReceiptImagePreflightToast(preflight))
         updateTasks(
@@ -419,7 +423,7 @@ export const useReceiptUploader = () => {
       )
       if (didUpdate) {
         toast.error(
-          failure.kind === 'rate_limit'
+          failure.kind === 'rate_limit' || failure.kind === 'unavailable'
             ? failure.message
             : 'レシートの解析中にエラーが発生しました。もう一度お試しください。'
         )

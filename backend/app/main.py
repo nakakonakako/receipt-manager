@@ -180,9 +180,13 @@ async def analyze_receipt(
                 item_names.append(item["item_name"])
 
         if item_names:
-            learned_data = await asyncio.to_thread(
-                supabase_service.get_learned_categories, item_names
-            )
+            try:
+                learned_data = await asyncio.to_thread(
+                    supabase_service.get_learned_categories, item_names
+                )
+            except Exception:
+                logger.warning("Receipt learned category lookup failed")
+                learned_data = {}
 
             for receipt in result.get("receipts", []):
                 for item in receipt.get("items", []):

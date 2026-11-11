@@ -404,6 +404,72 @@ class AiQuotaRuntimeTests(unittest.TestCase):
         self.assertEqual(events, ["usage", "text"])
         self.assertEqual(raised.exception.usage, TokenUsage(True, 9, 4, 2))
 
+    def test_category_lookup_success_overrides_gemini_category(self):
+        service = self.allow_user(Mock())
+        service.get_learned_categories.return_value = {
+            "private": {"main_category": "日用品", "sub_category": "生活用品"}
+        }
+        receipt = {
+            "receipts": [{"items": [{"item_name": "private", "main_category": "食費"}]}]
+        }
+        with patch.object(
+            main.gemini_service,
+            "analyze_receipt",
+            return_value=ModelResult(receipt, TokenUsage(True, 8, 5, 1)),
+        ):
+            response = self.client.post(
+                "/analyze",
+                files=[("files", ("receipt.jpg", _jpeg_bytes(), "image/jpeg"))],
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["receipts"][0]["items"][0]["main_category"], "日用品"
+        )
+        self.assertEqual(self.quota.finish_calls[-1][1:], (True, True, 8, 5, 1))
+
+    def test_category_lookup_failure_preserves_receipt_and_usage(self):
+        service = self.allow_user(Mock())
+        service.get_learned_categories.side_effect = RuntimeError(SECRET_PASSWORD)
+        receipt = {
+            "receipts": [{"items": [{"item_name": "private", "main_category": "食費"}]}]
+        }
+        with patch.object(
+            main.gemini_service,
+            "analyze_receipt",
+            return_value=ModelResult(receipt, TokenUsage(True, 8, 5, 1)),
+        ):
+            with self.assertLogs("app.main", level="WARNING") as logs:
+                response = self.client.post(
+                    "/analyze",
+                    files=[("files", ("receipt.jpg", _jpeg_bytes(), "image/jpeg"))],
+                )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), receipt)
+        self.assertEqual(self.quota.finish_calls[-1][1:], (True, True, 8, 5, 1))
+        self.assertNotIn(SECRET_PASSWORD, str(logs.output))
+        self.assertNotIn("private", str(logs.output))
+
+    def test_receipt_request_and_parse_failure_logs_are_distinct_and_safe(self):
+        service = GeminiService()
+        with patch.object(
+            service.client.models,
+            "generate_content",
+            side_effect=RuntimeError(SECRET_PASSWORD),
+        ):
+            with self.assertLogs("app.services.gemini_service", level="ERROR") as logs:
+                with self.assertRaises(RuntimeError):
+                    service.analyze_receipt([(_jpeg_bytes(), "image/jpeg")])
+        self.assertIn("request failed", str(logs.output))
+        self.assertNotIn(SECRET_PASSWORD, str(logs.output))
+        response = SimpleNamespace(text="{", usage_metadata=None)
+        with patch.object(
+            service.client.models, "generate_content", return_value=response
+        ):
+            with self.assertLogs("app.services.gemini_service", level="ERROR") as logs:
+                with self.assertRaises(GeminiInvalidOutput):
+                    service.analyze_receipt([(_jpeg_bytes(), "image/jpeg")])
+        self.assertIn("response JSON failed", str(logs.output))
+
     def test_analyze_search_and_csv_success_shapes(self):
         usage = TokenUsage(True, 8, 5, 1)
         self.allow_user()

@@ -187,13 +187,9 @@ describe('receipt uploader cache analysis queue', () => {
       started.push(taskId)
       if (taskId === 'old-1') await oldGate
     })
-    cache.startAnalysisQueue(
-      oldContext,
-      ['old-1', 'old-2'],
-      async (taskId) => {
-        started.push(`duplicate:${taskId}`)
-      }
-    )
+    cache.startAnalysisQueue(oldContext, ['old-1', 'old-2'], async (taskId) => {
+      started.push(`duplicate:${taskId}`)
+    })
 
     cache.setOwner('user-a')
     cache.setOwner(null)
@@ -234,6 +230,22 @@ const CONCURRENCY_LIMIT_DETAIL =
   'ほかのAI処理が実行中です。時間をおいて再度お試しください。'
 
 describe('receipt analysis error classification', () => {
+  it('distinguishes service, proxy, timeout and network failures without exposing details', () => {
+    const cases = [
+      [axiosError(503, { detail: 'secret' }), /AI機能/],
+      [axiosError(502), /サーバー/],
+      [axiosError(504), /サーバー/],
+      [new axios.AxiosError('secret', 'ECONNABORTED'), /タイムアウト/],
+      [new axios.AxiosError('secret', 'ERR_NETWORK'), /ネットワーク/],
+    ] as const
+    for (const [error, expected] of cases) {
+      const failure = classifyReceiptAnalysisError(error)
+      assert.equal(failure.kind, 'unavailable')
+      if (failure.kind === 'unavailable')
+        assert.match(failure.message, expected)
+      assert.doesNotMatch(JSON.stringify(failure), /secret/)
+    }
+  })
   it('classifies an exact daily-limit detail without echoing it', () => {
     const failure = classifyReceiptAnalysisError(
       axiosError(429, { detail: DAILY_LIMIT_DETAIL })
@@ -242,7 +254,10 @@ describe('receipt analysis error classification', () => {
       kind: 'rate_limit',
       message: RECEIPT_ANALYSIS_DAILY_LIMIT_MESSAGE,
     })
-    assert.equal(failure.kind === 'rate_limit' && failure.message.includes('本日'), true)
+    assert.equal(
+      failure.kind === 'rate_limit' && failure.message.includes('本日'),
+      true
+    )
     assert.notEqual(
       failure.kind === 'rate_limit' ? failure.message : '',
       DAILY_LIMIT_DETAIL
@@ -292,7 +307,9 @@ describe('receipt analysis error classification', () => {
 
   it('keeps validation and auth failures distinct from other errors', () => {
     assert.deepEqual(
-      classifyReceiptAnalysisError(axiosError(422, { detail: '画像が大きすぎます。' })),
+      classifyReceiptAnalysisError(
+        axiosError(422, { detail: '画像が大きすぎます。' })
+      ),
       { kind: 'validation', message: '画像が大きすぎます。' }
     )
     assert.deepEqual(classifyReceiptAnalysisError(axiosError(401)), {

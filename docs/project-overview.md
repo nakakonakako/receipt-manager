@@ -1,5 +1,7 @@
 # AI家計簿（receipt-manager）— プロジェクト概要
 
+レシート解析後の学習済みカテゴリ取得に失敗した場合、Gemini の解析結果をそのまま返す。AI 利用制限は従来どおり適用する。
+
 > **このリポジトリは機能 A（レシート管理）である。**
 > 厳密な単価比較（機能 B）は本リポジトリの責務外。分離方針は [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) を参照。
 
