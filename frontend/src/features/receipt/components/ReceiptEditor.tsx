@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input'
 import { DateInput } from '@/components/ui/DateInput'
 import { NumberInput } from '@/components/ui/NumberInput'
 import { getReceiptAdjustment, getReceiptTotal, updateReceiptTotal } from '../utils/receiptTotal'
+import { emptyLineItem, toSavedItem } from '../utils/receiptItems'
 
 function normalizeEditingItem(item: ReceiptItem): EditingItem {
   return {
@@ -18,16 +19,6 @@ function normalizeEditingItem(item: ReceiptItem): EditingItem {
     main_category: item.main_category ?? 'その他',
     sub_category: item.sub_category ?? 'その他',
     search_tags: item.search_tags ?? [],
-  }
-}
-
-function emptyLineItem(): EditingItem {
-  return {
-    item_name: '',
-    price: 0,
-    main_category: '食費',
-    sub_category: 'その他',
-    search_tags: [],
   }
 }
 
@@ -92,13 +83,7 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
       return
     }
 
-    const newItems: ReceiptItem[] = items.map((item) => ({
-      item_name: item.item_name.trim(),
-      price: item.price === '' ? 0 : item.price,
-      main_category: (item.main_category ?? 'その他').trim() || 'その他',
-      sub_category: (item.sub_category ?? 'その他').trim() || 'その他',
-      search_tags: (item.search_tags ?? []).filter((t) => t.trim().length > 0),
-    }))
+    const newItems = items.map(toSavedItem)
 
     const savedData: Receipt = {
       purchase_date: date,

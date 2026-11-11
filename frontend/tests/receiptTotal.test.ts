@@ -1,4 +1,5 @@
 import { strict as assert } from 'node:assert'
+import { emptyLineItem, toSavedItem } from '../src/features/receipt/utils/receiptItems.ts'
 import { getReceiptAdjustment, getReceiptTotal, updateReceiptTotal } from '../src/features/receipt/utils/receiptTotal.ts'
 
 let adjustment = 0
@@ -19,3 +20,9 @@ assert.equal(getReceiptTotal('ocr', 400, 330), 330)
 assert.equal(getReceiptAdjustment('ocr', 400, 330), -70)
 assert.equal(updateReceiptTotal('ocr', 400, 450), 450)
 assert.equal(getReceiptAdjustment('ocr', 400, 0), 0)
+
+const added = emptyLineItem()
+assert.equal(added.price, '')
+assert.equal(total([added.price]), 30) // the current manual adjustment remains intact
+assert.equal(toSavedItem({ ...added, item_name: '商品' }).price, 0)
+assert.equal(toSavedItem({ ...added, item_name: '商品', price: 125 }).price, 125)
