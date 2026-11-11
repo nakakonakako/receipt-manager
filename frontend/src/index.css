@@ -113,3 +113,34 @@ body {
   scrollbar-width: thin;
   scrollbar-color: #8b8580 transparent;
 }
+
+/* iOS WebKit can add date input padding outside its specified width. */
+.rm-date-wrap {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.rm-date-wrap:focus-within {
+  border-color: var(--rm-focus);
+}
+
+.rm-date-wrap:has(input:focus-visible) {
+  outline: 2px solid var(--rm-focus);
+  outline-offset: 1px;
+}
+
+input[type='date'].rm-date-input {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+}

@@ -2,6 +2,7 @@ import React from 'react'
 import { NumberInput } from '@/components/ui/NumberInput'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { DateInput } from '@/components/ui/DateInput'
 import { HistoryReceiptItems } from './HistoryReceiptItems'
 import type {
   HistoryReceipt,
@@ -44,8 +45,8 @@ export const HistoryEditModal: React.FC<HistoryEditModalProps> = ({
               <label className="block text-sm font-semibold text-[var(--rm-text-secondary)] mb-1">
                 購入日
               </label>
-              <Input
-                type="date"
+              <DateInput
+                aria-label="購入日"
                 value={editTarget.date}
                 onChange={(e) =>
                   setEditTarget({ ...editTarget, date: e.target.value } as

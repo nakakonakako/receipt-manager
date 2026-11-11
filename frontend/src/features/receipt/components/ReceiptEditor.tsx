@@ -7,6 +7,7 @@ import {
 } from '../types'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
+import { DateInput } from '@/components/ui/DateInput'
 import { NumberInput } from '@/components/ui/NumberInput'
 
 function normalizeEditingItem(item: ReceiptItem): EditingItem {
@@ -124,8 +125,8 @@ export const ReceiptEditor: React.FC<ReceiptEditorProps> = ({
           <label className="mb-1 block text-sm font-semibold text-[var(--rm-text-secondary)]">
             購入日
           </label>
-          <Input
-            type="date"
+          <DateInput
+            aria-label="購入日"
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="w-full"
