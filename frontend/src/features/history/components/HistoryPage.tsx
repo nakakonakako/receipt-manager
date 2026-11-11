@@ -119,10 +119,10 @@ export const HistoryPage: React.FC = () => {
         className="border-t border-[var(--rm-border-subtle)] mt-2"
       />
       <div className="flex flex-wrap sm:grid sm:grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-1 sm:gap-2 my-2">
-        <div className="flex bg-stone-100 border border-stone-200 p-0.5 sm:h-9 rounded-xl w-fit sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
+        <div className="flex bg-stone-100 ring-1 ring-inset ring-stone-200 h-11 p-0 sm:ring-0 sm:border sm:border-stone-200 sm:p-0.5 sm:h-9 rounded-xl w-fit sm:w-auto lg:w-fit shrink-0 whitespace-nowrap">
           <button
             onClick={() => setActiveTab('receipts')}
-            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-1 sm:px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`h-full min-h-0 flex-1 lg:flex-none px-1 sm:px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'receipts'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-receipt)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
@@ -132,7 +132,7 @@ export const HistoryPage: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('csv')}
-            className={`min-h-11 sm:min-h-0 sm:h-full flex-1 lg:flex-none px-1 sm:px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
+            className={`h-full min-h-0 flex-1 lg:flex-none px-1 sm:px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors duration-150 flex justify-center items-center gap-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 ${
               activeTab === 'csv'
                 ? 'bg-[var(--rm-surface)] text-[var(--rm-csv)] shadow-sm'
                 : 'text-[var(--rm-text-secondary)] hover:text-[var(--rm-text-primary)] hover:bg-stone-200/70'
