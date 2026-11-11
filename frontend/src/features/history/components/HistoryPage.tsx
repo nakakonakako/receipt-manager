@@ -21,6 +21,33 @@ const MonthChevron: React.FC<{ direction: 'left' | 'right' }> = ({
   </svg>
 )
 
+const HistoryActionIcon: React.FC<{ action: 'edit' | 'delete' }> = ({
+  action,
+}) => (
+  <svg
+    aria-hidden="true"
+    className="inline-block sm:hidden"
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    {action === 'edit' ? (
+      <>
+        <path d="m14 5 5 5M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z" />
+      </>
+    ) : (
+      <>
+        <path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+      </>
+    )}
+  </svg>
+)
+
 export const HistoryPage: React.FC = () => {
   const receiptCardRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const touchStartXRef = useRef<number | null>(null)
@@ -142,7 +169,7 @@ export const HistoryPage: React.FC = () => {
           </button>
         </div>
         {searchScope === 'current' && (
-          <div className="order-first sm:order-none w-full sm:w-auto flex items-center justify-center gap-2 relative z-20">
+          <div className="order-first sm:order-none w-full sm:w-auto mb-3 sm:mb-0 flex items-center justify-center gap-2 relative z-20">
             <button
               onClick={handlePrevMonth}
               disabled={currentIndex >= allMonths.length - 1}
@@ -374,16 +401,18 @@ export const HistoryPage: React.FC = () => {
                       <button
                         onClick={(e) => openEditReceipt(receipt, e)}
                         aria-label={`${receipt.store_name}を編集`}
-                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 flex items-center justify-center sm:inline-block text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-receipt-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                       >
-                        ✎
+                        <HistoryActionIcon action="edit" />
+                        <span className="hidden sm:inline">✎</span>
                       </button>
                       <button
                         onClick={(e) => requestDeleteReceipt(receipt.id, e)}
                         aria-label={`${receipt.store_name}を削除`}
-                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 flex items-center justify-center sm:inline-block text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                       >
-                        ×
+                        <HistoryActionIcon action="delete" />
+                        <span className="hidden sm:inline">×</span>
                       </button>
                     </div>
                     <div className="pointer-events-none font-semibold text-[var(--rm-text-primary)] min-w-0 truncate text-base sm:text-sm sm:flex-1 sm:order-2">
@@ -466,16 +495,18 @@ export const HistoryPage: React.FC = () => {
                       <button
                         onClick={() => openEditCsv(csv)}
                         aria-label={`${csv.store}を編集`}
-                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 flex items-center justify-center sm:inline-block text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-csv-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                       >
-                        ✎
+                        <HistoryActionIcon action="edit" />
+                        <span className="hidden sm:inline">✎</span>
                       </button>
                       <button
                         onClick={() => requestDeleteCsv(csv.id)}
                         aria-label={`${csv.store}を削除`}
-                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
+                        className="min-h-11 min-w-11 sm:min-h-9 sm:min-w-9 p-2 flex items-center justify-center sm:inline-block text-xl sm:text-base text-[var(--rm-text-secondary)] hover:bg-[var(--rm-danger-subtle)] rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-700"
                       >
-                        ×
+                        <HistoryActionIcon action="delete" />
+                        <span className="hidden sm:inline">×</span>
                       </button>
                     </div>
                     <div className="font-semibold text-[var(--rm-text-primary)] min-w-0 truncate text-base sm:text-sm sm:flex-1 sm:order-2">
