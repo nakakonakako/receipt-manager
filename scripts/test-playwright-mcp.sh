@@ -72,6 +72,8 @@ export DISPLAY=:91
 bash "$source_root/.cursor/playwright-mcp.sh"
 grep -Fq -- '--package=playwright@1.64.0-alpha-1790635538000 playwright install chromium' "$log_file"
 grep -Fq -- '@playwright/mcp@0.0.83 --config ' "$log_file"
+grep -Fq -- "--output-dir $HOME/.local/state/receipt-manager/playwright-mcp-output" "$log_file"
+[[ "$(stat -c %a "$HOME/.local/state/receipt-manager/playwright-mcp-output")" == 700 ]]
 grep -Fq -- "--user-data-dir $HOME/.local/state/receipt-manager/playwright-profile" "$log_file"
 grep -Fxq -- ':91|true' "$PLAYWRIGHT_MCP_TEST_ENV_LOG"
 [[ "$(wc -l < "$log_file")" -eq 2 ]]
@@ -142,10 +144,23 @@ export PLAYWRIGHT_MCP_STORAGE_STATE="$test_root/forbidden-state.json"
 bash "$source_root/.cursor/playwright-unauth-mcp.sh"
 unset PLAYWRIGHT_MCP_STORAGE_STATE
 grep -Fq -- '--isolated --headless' "$log_file"
+grep -Fq -- "--output-dir $HOME/.local/state/receipt-manager/playwright-mcp-output" "$log_file"
 if grep -Fq -- 'playwright-profile' "$log_file"; then
   echo "Unauthenticated MCP must not use the persistent profile." >&2
   exit 1
 fi
+
+# Both launchers reject a symlink as their shared output directory.
+output_dir="$HOME/.local/state/receipt-manager/playwright-mcp-output"
+rmdir "$output_dir"
+ln -s "$test_root" "$output_dir"
+for launcher in playwright-mcp.sh playwright-unauth-mcp.sh; do
+  if bash "$source_root/.cursor/$launcher" >/dev/null 2>&1; then
+    echo "Expected $launcher to reject a symlinked output directory." >&2
+    exit 1
+  fi
+done
+rm "$output_dir"
 
 # An unsuccessful matching-browser install must prevent MCP startup.
 rm -rf "$test_root/cache"

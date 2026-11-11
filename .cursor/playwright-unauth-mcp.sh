@@ -3,6 +3,7 @@ set -euo pipefail
 
 workspace_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd "$workspace_root"
+source "$workspace_root/.cursor/playwright-output-dir.sh"
 config_file="$workspace_root/.cursor/playwright-mcp.json"
 browser_cache="${PLAYWRIGHT_BROWSERS_PATH:-${HOME:?HOME must be set}/.cache/ms-playwright}"
 
@@ -23,5 +24,6 @@ fi
 unset PLAYWRIGHT_MCP_STORAGE_STATE
 exec npx --yes "@playwright/mcp@$mcp_version" \
   --config "$config_file" \
+  --output-dir "$output_dir" \
   --isolated \
   --headless

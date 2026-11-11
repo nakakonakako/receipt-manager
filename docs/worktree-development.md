@@ -147,6 +147,19 @@ The official MCP servers in `.cursor/mcp.json` are deliberately separate:
 - `playwright-unauth` is headless and starts with `--isolated`; it does not use
   the persistent profile or load storage state. Use it for pre-login screens.
 
+Both MCP launchers set `--output-dir` to
+`~/.local/state/receipt-manager/playwright-mcp-output/`, created with mode
+`0700` and a restrictive umask. Automatically named artifacts, including
+screenshots and logs, go there. The directory must not be a symlink. Restart
+the MCP after updating the launcher.
+
+Playwright MCP resolves an explicitly supplied filename relative to the workspace
+root instead of `--output-dir`; an absolute filename must be inside an allowed
+root (the workspace or output directory). Omit the filename for automatic
+placement, or specify an absolute path inside the output directory. Explicit
+workspace paths can still create files in the repository. Existing
+`.playwright-mcp/` directories are not removed automatically.
+
 Both launchers pin `@playwright/mcp@0.0.83`, Playwright
 `1.64.0-alpha-1790635538000`, and Chromium revision `1247`. They install the
 matching browser into `~/.cache/ms-playwright` if absent. The authenticated
