@@ -133,7 +133,7 @@ CSVの上限はヘッダーを含む論理行20,000行、および `csv_text` 20
 
 GeminiクライアントのHTTPタイムアウトは120秒（SDKの `HttpOptions.timeout` はミリ秒で `120000`）で、`retry_options` 未指定は1回だけ試行します。
 
-`/analyze`、`/search`、`/analyze_csv` は Gemini の直前に `ai_quota` の `claim_ai_request` が `granted` になったときだけモデルを呼びます。日次・同時実行の拒否は日本語の `429`、緊急停止・月次予算・DB 障害などは日本語の `503` です。成功時の応答形は変えません。設定または DB が使えなくても、AI 以外の API は起動したままです。詳細は [spec-ai-quota-database.md](./spec-ai-quota-database.md) です。
+`/analyze`、`/search`、`/analyze_csv` は Gemini の直前に `ai_quota` の `claim_ai_request` が `granted` になったときだけモデルを呼びます。日次・同時実行の拒否は日本語の `429`、緊急停止・月次予算・DB 障害などは日本語の `503` です。Gemini が API キー・請求・レート制限（HTTP 401/402/403/429）で拒否したときも同じ `503` で、原因はサーバーログにだけ出します。成功時の応答形は変えません。設定または DB が使えなくても、AI 以外の API は起動したままです。詳細は [spec-ai-quota-database.md](./spec-ai-quota-database.md) です。
 
 リクエスト本体の上限は、フロントのファイルサイズ20MiB、バックエンドの文字数20MiB、nginxの `client_max_body_size 20M` です。開発時のViteプロキシに追加の本体上限はありません。JSON化で引用符や改行、Shift-JISからUTF-8への展開が20MiBを超える場合、フロントは送信前に拒否し、本番nginxは413を返します。nginxの本体上限を20Mより大きくするかは未変更です。
 
