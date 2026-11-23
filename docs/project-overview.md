@@ -260,7 +260,7 @@ DB は private スキーマ `ai_quota` のみ。FastAPI は専用ロール `ai_q
 | Python | >=3.10（Docker / 実行は 3.12） |
 | FastAPI | >=0.124 |
 | Uvicorn | >=0.38 |
-| google-genai | >=1.53（モデル例: `gemini-3-flash-preview`） |
+| google-genai | >=1.53（モデル例: `gemini-3.8-flash`） |
 | psycopg | >=3.3（`psycopg[binary]` と `psycopg-pool`。AI 利用枠 RPC の非同期プール） |
 | Pillow | >=11.0（レシート画像の形式・破損・画素数検証） |
 | supabase (Python) | >=2.28 |

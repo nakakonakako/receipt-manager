@@ -26,6 +26,8 @@ from google.genai import types
 load_dotenv()
 logger = logging.getLogger(__name__)
 
+GEMINI_MODEL = "gemini-3.8-flash"
+
 
 class GeminiService:
     def __init__(self):
@@ -84,7 +86,7 @@ class GeminiService:
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model=GEMINI_MODEL,
                 contents=contents,
                 config=config,
             )
@@ -134,7 +136,7 @@ class GeminiService:
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model=GEMINI_MODEL,
                 contents=[prompt],
                 config=types.GenerateContentConfig(
                     temperature=0.0,
@@ -162,7 +164,7 @@ class GeminiService:
 
         try:
             response = self.client.models.generate_content(
-                model="gemini-3-flash-preview",
+                model=GEMINI_MODEL,
                 contents=[prompt, f"CSV Sample:\n{csv_sample}"],
                 config=types.GenerateContentConfig(
                     temperature=0.0,
