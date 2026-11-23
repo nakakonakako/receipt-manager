@@ -171,6 +171,16 @@ for name in ("playwright", "playwright-unauth"):
     assert server["command"] == "bash"
     assert server["args"] == [f".cursor/{name}-mcp.sh"]
     assert "cwd" not in server
+# Claude Code uses the same launchers through the project .mcp.json.
+import json
+claude = json.loads((root / ".mcp.json").read_text())["mcpServers"]
+assert set(claude) == {"playwright", "playwright-unauth"}
+for name, server in claude.items():
+    assert server == {"type": "stdio", "command": "bash", "args": [f".cursor/{name}-mcp.sh"]}
+sol = (root / ".claude/agents/sol-supervisor.md").read_text()
+header = sol.split("---")[1]
+tools = next(line for line in header.splitlines() if line.startswith("tools:"))
+assert not {"Edit", "Write", "NotebookEdit", "Agent"} & {t.strip() for t in tools[6:].split(",")}
 PYTEST
 
 echo "Playwright MCP configuration tests passed."
