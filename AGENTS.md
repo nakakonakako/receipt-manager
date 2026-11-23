@@ -205,9 +205,27 @@ When changing frontend UI:
   the Codex/Cursor and WSLg procedure in `docs/worktree-development.md`; if
   visibility or persistence cannot be confirmed, report it as unconfirmed.
 - Approve only the MCP needed for the task in `.cursor/mcp.json`. Never use
-  `--approve-mcps` to approve all servers.
+  `--approve-mcps` to approve all servers. Claude Code reads the same launchers
+  from `.mcp.json`; approve only the needed server there as well and never
+  enable all project MCP servers at once.
 
-## Cursor worker delegation (Codex supervisor only)
+## Cursor worker delegation (Codex / Claude Code supervisor only)
+
+### Claude Code as supervisor
+
+Claude Code acting as the supervisor follows every Luna rule in this section.
+Read "Codex CLI", "Codex supervisor", and "Luna" below as also meaning that
+Claude Code session.
+
+- Sol escalation uses the read-only `sol-supervisor` subagent in
+  `.claude/agents/sol-supervisor.md` with the same handoff fields. Codex uses
+  `.codex/agents/sol-supervisor.toml`; keep both instructions in sync.
+- Cursor delegation, tiers, retries, and the usage-exhausted takeover are
+  unchanged. On takeover, do not launch another Codex or Claude Code process
+  and do not switch models.
+- Claude Code desktop session worktrees under `.claude/worktrees/` are managed
+  by the app. `scripts/worktree.sh` does not create or remove them; use the
+  standard worktree commands for Cursor workers.
 
 ### Supervisor escalation (Codex CLI)
 
