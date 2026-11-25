@@ -80,7 +80,7 @@ does not invoke the Supabase CLI or make a network/database connection.
 
 The official source for migration inventory and Dev database history is
 `shared-supabase-db`. Run its Reader-only manual workflow to check the plan:
-[Dev migration plan](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml).
+[DB check](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/db-check.yml) (select `target=dev`).
 
 `npm run db:plan` prints that link and states that it did not check Dev database
 history. It does not read a database password, prepare a CLI link, or connect

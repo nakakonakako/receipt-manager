@@ -316,7 +316,7 @@ one browser process at a time.
 
 `shared-supabase-db` owns the migration inventory and Dev DB history. Its
 Reader-only manual workflow is the official way to review pending migrations:
-[Dev migration plan](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml).
+[DB check](https://github.com/nakakonakako/shared-supabase-db/actions/workflows/db-check.yml) (select `target=dev`).
 
 `npm run db:plan` prints this link and states clearly that no Dev DB history was
 checked. `npm run db:list` lists files in this receipt-manager checkout only;

@@ -26,36 +26,34 @@ Environmentは事前に作成し、deployment branchを`main`のみに制限す�
 
 Reader usernameは`migration_preflight_login.<project-ref>`。loginはshared-supabase-dbが管理するReader roleだけを継承し、Production DB identityと読み取り専用権限の検証を通す必要がある。workflow実行時にEnvironmentから値が渡らなければfail closedとなる。
 
-GitHub Settingsの読み取り専用確認では、`production-db-check` が存在し`main`限定、Environment secret `MIGRATION_READER_PASSWORD` が登録済み。`PROD_SUPABASE_POOLER_HOST` と `PROD_SUPABASE_PROJECT_REF` はEnvironment scopeではなくrepository scopeで登録されている。値は表示しない。Dev/ProdのReader検証と、Writer資格情報のread-only接続・identity probeは成功済み。read-only成功はPENDING migrationの実適用を証明しない。この文書の更新ではEnvironment・Secrets・Variablesを変更しない。
+GitHub Settingsの読み取り専用確認では、`production-db-check` が存在し`main`限定、Environment secret `MIGRATION_READER_PASSWORD` が登録済み。`PROD_SUPABASE_POOLER_HOST` と `PROD_SUPABASE_PROJECT_REF` はEnvironment scopeではなくrepository scopeで登録されている。値は表示しない。この文書の更新ではEnvironment・Secrets・Variablesを変更しない。
 
 ## Migration管理と現在の状態
 
 shared-supabase-dbがhosted migration inventoryとDev/Prod Writer適用を所有する。receipt-managerの旧Production apply workflowと、以前の手動Reader bootstrap workflowは撤去済み。本リポジトリのworkflowから本番migrationを適用できない。`npm run db:push` は停止しており、環境準備、パスワード入力、Supabase CLI呼び出しの前に終了する。アプリdeployは固定SHAのshared Reader gateと読み取り専用integrityだけを実行し、migrationを適用しない。
 
-shared-supabase-db `a22807e`（2026-10-31確認）時点の運用状態は次のとおり。
+shared-supabase-db `8104537`（2026-11-25確認）時点の運用状態は次のとおり。
 
-- Dev/Prod Reader検証と、Writer資格情報のread-only接続・identity probeは成功済み
-- sharedの `development-db-apply` と `production-db-apply` はmain限定、Required reviewers、administrator bypass無効を読み取り確認済み
-- `DEV_DB_WRITER_ENABLED=false`、`PROD_DB_WRITER_ENABLED=false`。flagがfalseの間、shared WriterはPENDINGを適用しない
-- Dev migration historyは `IN_SYNC`
-- Dev/Prodのshared WriterによるPENDING migration実適用は未検証。Devの `IN_SYNC` no-op成功は適用能力の証拠にならない
-- Prodへの実適用は別途の明示承認が必要
+- Dev/Prodのshared WriterによるPENDING migration実適用とReader postflightは成功済み（2026-11-23）
+- Writer適用の許可はEnvironment承認のみ。以前の `DEV_DB_WRITER_ENABLED` / `PROD_DB_WRITER_ENABLED` は廃止済み
+- sharedの `development-db-apply` と `production-db-apply` はmain限定、Required reviewers、administrator bypass無効
+- Reader専用の確認は `db-check.yml` に統合済み。2026-11-25にdev・productionとも成功し、history は `IN_SYNC`
+- `db-check.yml` は `PENDING` も成功扱いのため、job summaryのhistory結果を確認する。本リポジトリのdeploy gateは引き続き `IN_SYNC` が必須
+- Prodへの実適用は毎回別途の明示承認が必要
 - Dev DB passwordはローテーション済みで、旧ローカルWriter passwordは削除済み
 
-Reader loginやReader bootstrapの読み取り検証が失敗した場合、通常デプロイはReader gateまたはintegrityで停止する。適用、Environment、Secret、Variableの変更はこの文書更新では行わない。hosted migrationの追加と適用手順の正本は [shared-supabase-dbのMigration Writer運用手順](https://github.com/nakakonakako/shared-supabase-db/blob/a22807e/docs/migration-writer-handoff.md)。
+Reader loginやReader bootstrapの読み取り検証が失敗した場合、通常デプロイはReader gateまたはintegrityで停止する。適用、Environment、Secret、Variableの変更はこの文書更新では行わない。hosted migrationの追加と適用手順の正本は [shared-supabase-dbのMigration Writer運用手順](https://github.com/nakakonakako/shared-supabase-db/blob/8104537/docs/migration-writer-handoff.md)。
 
 ## 旧Production Writer Secretの保持
 
 receipt-managerに残る `production-db-apply` Environmentと `MIGRATION_SUPABASE_DB_PASSWORD` は未削除で、このリポジトリのworkflowからは参照しない。これはshared-supabase-db側の `production-db-apply` とは別の設定である。
 
-次がすべて完了するまで、receipt-managerの旧Production Writer Secretを削除しない。
+shared ProductionのPENDING migration実適用とReader postflightは2026-11-23に成功した。次がすべて完了するまで、receipt-managerの旧Production Writer Secretを削除しない。
 
-- shared ProductionのPENDING migration実適用
-- そのReader postflight
 - receipt-managerとprice-memoのDB互換性確認と本番配信成功
 - receipt-managerおよびsharedのworkflowに旧Writer参照経路がないことの再監査
 
-監査後も削除には別途承認が必要。初回のshared Production実適用より前には削除しない。資格情報の値をworkflow、コマンド、ログ、tracked fileへ出さない。`db:push` の停止は、このSecretの削除やProduction passwordのローテーションを意味しない。
+監査後も削除には別途承認が必要。資格情報の値をworkflow、コマンド、ログ、tracked fileへ出さない。`db:push` の停止は、このSecretの削除やProduction passwordのローテーションを意味しない。
 
 ## 運用境界
 

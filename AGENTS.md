@@ -64,23 +64,24 @@ this repository. New hosted migrations belong in shared-supabase-db and require
 separate approval there. Production app deployment runs only the pinned shared
 Reader gate and read-only integrity checks, and never applies migrations.
 
-Use `npm run db:plan` to find the official Reader-only migration plan workflow:
-https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml
+Use `npm run db:plan` to find the official Reader-only DB check workflow (run it
+with `target=dev`):
+https://github.com/nakakonakako/shared-supabase-db/actions/workflows/db-check.yml
 The local command does not query the Dev database and must not be described as
 a successful history check. `npm run db:list` lists receipt-manager's local
-migration files only. shared-supabase-db's Reader workflow is the official Dev
-migration plan check, and its protected Writer workflows own Dev and Prod
-migration application. Dev and Prod Reader checks, and Writer credential
-read-only connection identity probes, have succeeded. Actual Dev and Prod
-PENDING migration apply remains unverified. A Dev `IN_SYNC` no-op is not proof
-that apply works. `DEV_DB_WRITER_ENABLED` and `PROD_DB_WRITER_ENABLED` stay
-false until a separately approved apply.
+migration files only. shared-supabase-db's `db-check.yml` is the official Dev
+and Prod check, and its protected Writer workflows own Dev and Prod migration
+application. A successful `db-check.yml` run can still report `PENDING` history,
+so read the history result in the job summary. Writer applies are gated by
+Environment approval; there are no separate Writer enable flags. Dev and Prod
+`PENDING` migration applies with Reader postflight succeeded on 2026-11-23.
+Every hosted apply still requires separate approval.
 
-Keep the existing receipt-manager Production Writer Secret until shared
-Production PENDING apply, Reader postflight, both apps' DB compatibility and
-production deployment success, and an audit confirming no old Writer reference
-paths. Deletion still requires separate approval. Do not print credential
-values. Disabling `db:push` does not delete that retained Secret. The Dev
+Keep the existing receipt-manager Production Writer Secret until both apps' DB
+compatibility and production deployment success, and an audit confirming no old
+Writer reference paths, are confirmed. The shared Production `PENDING` apply and
+Reader postflight have succeeded. Deletion still requires separate approval. Do
+not print credential values. Disabling `db:push` does not delete that retained Secret. The Dev
 database password has been rotated and the old local Writer password removed.
 
 ## Git worktree and environment files
@@ -127,10 +128,8 @@ database password has been rotated and the old local Writer password removed.
   development and DB contract verification. Its legacy production apply and
   Reader bootstrap paths are removed. Production deployment uses the pinned
   shared Reader gate and read-only integrity checks, and never applies
-  migrations. Dev/Prod Reader checks and Writer credential read-only identity
-  probes have succeeded. PENDING migration apply remains unverified, and a Dev
-  `IN_SYNC` no-op is not apply proof. Outside these explicit DB commands, setup,
-  `npm run dev`, and `npm run check` do not link to Supabase or access a remote
+  migrations. Dev/Prod `PENDING` applies succeeded on 2026-11-23. Outside these
+  explicit DB commands, setup, `npm run dev`, and `npm run check` do not link to Supabase or access a remote
   database.
   A symlink makes its target readable to any worker trusted with that workspace,
   so provide only the development credentials required by the task.

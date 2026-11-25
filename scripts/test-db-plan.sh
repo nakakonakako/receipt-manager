@@ -18,7 +18,7 @@ exit 99
 EOF
 chmod +x "$bin/npx"
 export PATH="$bin:$PATH" DB_PLAN_TEST_CLI_LOG="$cli_log"
-workflow_url='https://github.com/nakakonakako/shared-supabase-db/actions/workflows/dev-migration-plan.yml'
+workflow_url='https://github.com/nakakonakako/shared-supabase-db/actions/workflows/db-check.yml'
 
 for command in db:plan db:list; do
   unset SUPABASE_DB_PASSWORD PGHOST PGUSER PGPASSWORD SUPABASE_DB_URL || true
