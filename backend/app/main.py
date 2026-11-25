@@ -27,6 +27,7 @@ from app.services.ai_usage import (
 )
 from app.services.csv_service import CsvRowLimitError, CsvService
 from app.services.gemini_service import GeminiService
+from google.genai import errors as genai_errors
 from app.services.receipt_image_service import (
     ReceiptImageService,
     ReceiptImageValidationError,
@@ -97,6 +98,24 @@ async def request_validation_error_handler(_, __: RequestValidationError):
 def _internal_server_error(operation: str) -> HTTPException:
     logger.error("Unexpected error while processing endpoint %s", operation)
     return HTTPException(status_code=500, detail=SAFE_INTERNAL_ERROR_DETAIL)
+
+
+# Gemini rejected the call because of the API key, billing, or rate limits
+# (for example HTTP 402 when prepaid credits run out). Users get the existing
+# 503 "AI unavailable" response; the cause is only written to the server log.
+GEMINI_UNAVAILABLE_STATUS_CODES = frozenset({401, 402, 403, 429})
+
+
+def _gemini_api_error(operation: str, exc: genai_errors.APIError) -> HTTPException:
+    if exc.code in GEMINI_UNAVAILABLE_STATUS_CODES:
+        logger.error(
+            "Gemini rejected the request during %s: HTTP %d. "
+            "Check the API key, billing, and rate limits.",
+            operation,
+            exc.code,
+        )
+        return HTTPException(status_code=503, detail=DETAIL_UNAVAILABLE)
+    return _internal_server_error(operation)
 
 
 def _quota_denied(exc: AiQuotaDenied) -> HTTPException:
@@ -210,6 +229,8 @@ async def analyze_receipt(
         ) from None
     except ReceiptImageValidationError as exc:
         raise HTTPException(status_code=422, detail=exc.detail) from None
+    except genai_errors.APIError as exc:
+        raise _gemini_api_error("analyze", exc) from None
     except Exception:
         raise _internal_server_error("analyze") from None
 
@@ -262,6 +283,8 @@ async def search_receipts(
         raise HTTPException(
             status_code=422, detail=SAFE_SEARCH_DATA_LIMIT_DETAIL
         ) from None
+    except genai_errors.APIError as exc:
+        raise _gemini_api_error("search", exc) from None
     except Exception:
         raise _internal_server_error("search") from None
 
@@ -356,6 +379,8 @@ async def analyze_csv(
         raise HTTPException(
             status_code=422, detail="CSVの内容を確認してください。"
         ) from None
+    except genai_errors.APIError as exc:
+        raise _gemini_api_error("analyze_csv", exc) from None
     except Exception:
         raise _internal_server_error("analyze_csv") from None
 

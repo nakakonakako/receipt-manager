@@ -6,11 +6,13 @@ os.environ.setdefault("GEMINI_API_KEY", "test-only-placeholder")
 
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from google.genai import errors as genai_errors
 from supabase_auth.errors import AuthApiError
 
 from app import main
 from app.services import csv_service as csv_service_module
 from app.services import gemini_service as gemini_service_module
+from app.services.ai_quota_guard import DETAIL_UNAVAILABLE
 from app.services.csv_service import CsvService
 from app.services.supabase_service import (
     InvalidSupabaseTokenError,
@@ -65,6 +67,51 @@ class ApiErrorSafetyTests(unittest.TestCase):
         self.assertEqual(response.status_code, 500)
         self.assertEqual(response.json(), {"detail": "Internal Server Error"})
         self.assertNotIn(secret, response.text)
+
+    def test_gemini_billing_key_or_rate_rejection_returns_503_without_details(self):
+        secret = "gemini-api-key-and-prompt-content"
+        for code in (401, 402, 403, 429):
+            with self.subTest(code=code):
+                install_granting_quota(self)
+                self._allow_authenticated_user(ensure_user_id(object()))
+                error = genai_errors.ClientError(
+                    code, {"error": {"message": secret, "status": "REJECTED"}}
+                )
+
+                with (
+                    patch.object(main.gemini_service, "analyze_csv", side_effect=error),
+                    patch.object(main.logger, "error") as error_log,
+                ):
+                    response = self.client.post(
+                        "/analyze_csv", json={"csv_text": "date,store,price\n"}
+                    )
+
+                self.assertEqual(response.status_code, 503)
+                self.assertEqual(response.json(), {"detail": DETAIL_UNAVAILABLE})
+                self.assertNotIn(secret, response.text)
+                self.assertNotIn(secret, repr(error_log.call_args_list))
+                self.assertEqual(error_log.call_args.args[2], code)
+
+    def test_other_gemini_api_errors_keep_fixed_500(self):
+        secret = "gemini-api-key-and-prompt-content"
+        for error in (
+            genai_errors.ClientError(400, {"error": {"message": secret}}),
+            genai_errors.ServerError(500, {"error": {"message": secret}}),
+        ):
+            with self.subTest(code=error.code):
+                install_granting_quota(self)
+                self._allow_authenticated_user(ensure_user_id(object()))
+
+                with patch.object(
+                    main.gemini_service, "analyze_csv", side_effect=error
+                ):
+                    response = self.client.post(
+                        "/analyze_csv", json={"csv_text": "date,store,price\n"}
+                    )
+
+                self.assertEqual(response.status_code, 500)
+                self.assertEqual(response.json(), {"detail": "Internal Server Error"})
+                self.assertNotIn(secret, response.text)
 
     def test_gemini_service_logs_no_exception_or_prompt_details(self):
         secret = "gemini-api-key-and-receipt-data"
