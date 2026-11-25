@@ -95,8 +95,8 @@ database password has been rotated and the old local Writer password removed.
   `scripts/worktree.sh create <task> --branch <branch> --base origin/main`.
   Reuse an existing path with `scripts/worktree.sh reuse <path>`.
 - Managed environment links must be direct absolute symlinks to the exact
-  configured source path. Setup validates them before dependencies, after link
-  creation, and again before Cursor starts; see `docs/worktree-development.md`.
+  configured source path. Setup validates them before dependencies and after
+  link creation; see `docs/worktree-development.md`.
 - Development environment files stay outside Git under
   `~/.config/receipt-manager/<environment>/` and are linked into worktrees by
   the setup command. For initial migration from `~/web/receipt-manager`, first
@@ -132,20 +132,19 @@ database password has been rotated and the old local Writer password removed.
   `IN_SYNC` no-op is not apply proof. Outside these explicit DB commands, setup,
   `npm run dev`, and `npm run check` do not link to Supabase or access a remote
   database.
-  A symlink makes its target readable to any worker trusted with that workspace,
+  A symlink makes its target readable to any agent trusted with that workspace,
   so provide only the development credentials required by the task.
 - `.env.ai-quota`, `secrets/ai-quota-ca/`, `service_account.json`, and
   production settings are excluded from the standard setup. Do not link these
-  into worker workspaces.
+  into agent workspaces.
 - `scripts/worktree.sh remove <path>` is an explicit, interactive operation for
   clean worktrees under `~/worktrees/receipt-manager/`. It never forces removal
-  or deletes the branch. Check for active workers and development servers
-  first. Worktrees under `/tmp`, `~/.cursor/worktrees`, or `~/web` are not
-  migrated or removed automatically.
-- Use `scripts/delegate-cursor.sh --worktree <task>` to create/reuse the
-  standard worktree, or `--workspace <path>` to reuse an existing one. Cursor
-  receives `--workspace`; do not use Cursor's own `--worktree` location.
-  New branches based on `origin/main` fetch and validate the remote ref in
+  or deletes the branch. Check for active sessions and development servers
+  first. Worktrees under `/tmp` or `~/web` are not migrated or removed
+  automatically.
+- Claude Code desktop session worktrees under `.claude/worktrees/` are managed
+  by the app. `scripts/worktree.sh` does not create or remove them.
+- New branches based on `origin/main` fetch and validate the remote ref in
   `scripts/worktree.sh create`; failed fetches stop creation instead of falling
   back to a stale ref. Explicit bases and existing local branches do not fetch.
   Existing worktrees are reused without fetching or changing their branch.
@@ -184,212 +183,12 @@ When changing frontend UI:
   before considering the task complete.
 - When changing shared layout, form, or responsive styles,
   check other screens that reuse the affected component or CSS.
-- The official Cursor browser path is: Codex supervisor plans and delegates;
-  Cursor worker runs `npm run devserver:ensure`, chooses `playwright` for
-  authenticated screens or `playwright-unauth` for pre-login screens, verifies
-  `http://localhost:5274/` on desktop and mobile viewports, reports evidence,
-  and runs `npm run devserver:stop` for its owned servers. Details are in
-  `docs/worktree-development.md`.
-- The authenticated MCP uses the shared
-  `~/.local/state/receipt-manager/playwright-profile`; only one browser may
-  open it at once. Do not inspect, copy, reset, or log profile/auth state and do
-  not automate Google OAuth. The unauthenticated MCP uses `--isolated` and
-  must not read saved auth state.
-- For manual login, use the actual authenticated MCP browser window; opening
-  the URL in a normal browser uses a different profile. A snapshot or a
-  running MCP does not prove the human can see or operate its window. Do not
-  report readiness until the human confirms both. The default mode is headless;
-  select GUI explicitly for manual login. Fully stop the owning MCP and browser
-  before switching modes. After manual login, select headless, fully restart
-  the MCP browser, and verify the authenticated screen again. Follow
-  the Codex/Cursor and WSLg procedure in `docs/worktree-development.md`; if
-  visibility or persistence cannot be confirmed, report it as unconfirmed.
-- Approve only the MCP needed for the task in `.cursor/mcp.json`. Never use
-  `--approve-mcps` to approve all servers. Claude Code reads the same launchers
-  from `.mcp.json`; approve only the needed server there as well and never
-  enable all project MCP servers at once.
-
-## Cursor worker delegation (Codex / Claude Code supervisor only)
-
-### Claude Code as supervisor
-
-Claude Code acting as the supervisor follows every Luna rule in this section.
-Read "Codex CLI", "Codex supervisor", and "Luna" below as also meaning that
-Claude Code session.
-
-- Sol escalation uses the read-only `sol-supervisor` subagent in
-  `.claude/agents/sol-supervisor.md` with the same handoff fields. Codex uses
-  `.codex/agents/sol-supervisor.toml`; keep both instructions in sync.
-- Cursor delegation, tiers, retries, and the usage-exhausted takeover are
-  unchanged. On takeover, do not launch another Codex or Claude Code process
-  and do not switch models.
-- Claude Code desktop session worktrees under `.claude/worktrees/` are managed
-  by the app. `scripts/worktree.sh` does not create or remove them; use the
-  standard worktree commands for Cursor workers.
-
-### Supervisor escalation (Codex CLI)
-
-Classify the request before broad repository investigation. For the escalation
-triggers below, do only the minimum initial check needed to confirm the task
-context, then delegate exactly one `sol_supervisor` subagent before design
-decisions or implementation. Give it a concise handoff containing only:
-`task`, `escalation reason`, `known facts`, and `required decision`.
-
-Escalate early for:
-
-- database schemas or migrations
-- authentication, authorization, or security boundaries
-- public API contract changes
-- CI/CD or deployment
-- Docker, nginx, or production infrastructure
-- cross-repository changes
-- undocumented architecture decisions
-- complex bugs spanning multiple areas when the cause is unclear
-- a Cursor `hard` implementation attempt that failed due to design or
-  implementation difficulty and now needs redesign
-
-Do not escalate routine UI/CSS, local bugs with an understood cause, normal
-feature implementation, lint/test work, or small refactors to Sol. Keep those
-on the Luna supervisor's normal routing path. "Handle those in the Luna
-supervisor" means Luna owns classification, scope, routing, and review.
-
-The `sol_supervisor` is a design and investigation adviser. It returns evidence,
-the required decision, tradeoffs, and a bounded implementation plan to the Luna
-supervisor. It must not implement changes or spawn agents. Luna owns the final
-design decision. Sol review is mandatory before design decisions and before
-implementation for every escalation trigger above, including when Luna
-implements that work directly.
-
-After a Sol handoff, do not start another Sol subagent for the same decision.
-If the scope changes materially and a new independent high-risk decision arises,
-the Luna supervisor may make a fresh escalation decision.
-
-### Implementation ownership
-
-When Codex CLI is acting as Luna, Luna is the supervisor. Cursor is the default
-implementation owner for ordinary UI/UX, features, localized bugs, routine
-test/lint fixes, and other bounded work with independently verifiable
-completion criteria. Luna classifies and routes that work, provides design and
-supervision, prepares the work order, and reviews Cursor's completion report
-and diff.
-
-Delegate that default work with `scripts/delegate-cursor.sh`. Sol escalation
-and implementation ownership are separate decisions: not escalating to Sol does
-not route implementation to Luna. Routine UI/CSS, understood local bugs, normal
-features, lint/test work, and small refactors need no Sol advice by default,
-and Cursor still implements them.
-
-Luna may implement directly when the work is high-risk or spans multiple areas
-and needs repeated short implementation and verification cycles, or when Cursor
-delegation is clearly less efficient for that task. State the concrete reason.
-Dirty checkout or delegation setup overhead alone is not a sufficient reason.
-Luna also implements directly when the user explicitly assigns the
-implementation to Luna, and when maintaining the delegation infrastructure
-itself.
-
-Do not take ordinary implementation over just because delegation takes setup or
-the checkout is dirty. If Cursor CLI is unavailable, the delegate script is
-broken, or another tooling failure prevents delegation, report the concrete
-failure. Follow the execution-environment policy below before any repair or
-retry. Do one bounded repair only when it addresses the observed cause;
-otherwise stop and report an approved alternative environment. Luna may take
-over only if the independent direct-implementation conditions above are met.
-Tooling failure alone does not justify takeover, skipping Sol review or quality
-checks, or changing the model family.
-
-### Execution environment and approval policy
-
-Before every delegation, inspect the execution tools and argument schemas
-available in the current session, plus its actual sandbox, network, and approval
-state. Use network access normally when already allowed; request only a
-currently supported limited approval when network access is blocked. If that
-approval is unavailable or denied, stop and report an approved alternative
-environment. Never enable `danger-full-access` automatically or assume tool
-names or arguments from another session. Classify network, authentication, MCP,
-execution-tool, and approval-policy failures separately. Environment failures
-do not justify model changes or repeated retries. Follow the decision table in
-[docs/cursor-delegation.md](docs/cursor-delegation.md#execution-tools-network-access-and-approval-policy).
-
-Quality checks, security review, tests, final diff review, and Git/worktree
-safety apply regardless of who implements.
-
-These instructions describe the supervisor's delegation process; they do not
-authorize Cursor, when acting as the implementation worker, to invoke the
-delegation script or re-delegate. Cursor must follow the repository rules above
-and the worker instructions in `.cursor/rules/worker.mdc`.
-
-### Cursor tiers, checkout, and retries
-
-Use the fixed tier mapping through the script, with `light` by default:
-
-- `light` -> `composer-2.5`
-- `normal` -> `grok-4.7-medium`
-- `hard` -> `grok-4.7-high`
-
-For an explicitly supervisor-approved Other Models route, use only:
-
-- `--fallback-tier light` -> `gemini-3.8-flash-low`
-- `--fallback-tier normal` -> `claude-sonnet-5-5-medium`
-- `--model-override gpt-5.6-luna-medium` -> reserve candidate
-
-These options are mutually exclusive with `--tier` and with each other.
-When the monitor reports `cursor_usage_exhausted`, stop Cursor retries and
-announce that the current Codex Supervisor is taking over because the CLI usage
-limit was confirmed. Inspect `git status --short`, `git diff --cached`,
-`git diff`, and untracked paths before working; preserve all existing staged,
-unstaged and untracked changes. Continue in the same worker worktree, without
-reset, clean, stash or removal. Do not launch another Codex process or switch
-models. Implement, run the normal quality checks, verify affected UI in a real
-browser, and perform the final review under the same criteria as a Cursor worker.
-For UI checks use the existing project Playwright MCP launcher and devserver
-helper if available, with the dedicated verification port, one authenticated
-profile user at a time, no credential inspection or OAuth automation, and stop
-only servers owned by the session. If browser operation is unavailable, report
-UI behavior as UNCONFIRMED with the cause and required setup; never claim PASS.
-The monitor recognizes the observed `ActionRequiredError` usage message only on
-failure, after ANSI removal. It does not infer quota from `resource_exhausted`,
-capacity, network, authentication, MCP, or implementation failures. The
-structured quota error format is unverified. Other Models options remain
-explicit and are never selected automatically.
-
-Implementation-difficulty escalation remains `light` → `normal` → `hard` after
-clarifying the work order. If a `hard` attempt still needs a design change,
-escalate to Sol; this is separate from an explicit Other Models route decision.
-The monitor must report the selected `route`, `tier`, and `model`. Model IDs
-remain account/team/CLI dependent; do not claim current account availability
-without checking an authorized model catalog. Explicit third-party routes may
-have different billing treatment; do not change account billing settings.
-
-Do not use `fast`, `xhigh`, or other model families by default. Do not change
-the model family as a workaround for an environment or tooling failure. For
-environment failures, follow the execution-environment policy above. For
-implementation difficulty, clarify the work order and follow the tier sequence
-below. If Luna's independent direct-implementation conditions are met, follow
-that route instead.
-
-Use direct checkout only when one worker is running, the checkout is clean, and
-there is no concurrent work. Use `scripts/delegate-cursor.sh --worktree <task>`
-or create a standard worktree and pass it through `--workspace <path>` when
-workers run in parallel, the checkout is dirty, edits are concurrent, or a
-large or risky change needs isolation. Do not use `--allow-dirty` as a shortcut;
-it is only appropriate when mixing changes is intentional and explicitly
-approved by the supervisor or user.
-
-Before delegation, fetch `origin/main` and verify the launcher checkout. A
-launcher started from branch `main` stops if its HEAD is older than, diverged
-from, or cannot be compared with the local `origin/main` commit. It never
-fetches or updates a checkout itself. If the ordinary checkout is behind, run
-the launcher from a dedicated worktree based on the fetched `origin/main`;
-never update the ordinary checkout as part of delegation. Feature branches and
-detached historical checkouts are not rejected just because their HEAD differs
-from `origin/main`. The launcher reports the source checkout, branch, HEAD,
-baseline ref and SHA, Worker workspace, and monitor path/checkout. This check
-cannot protect against invoking an older launcher that predates the check; the
-Supervisor must perform the fetch and choose the launcher checkout before
-starting it. See [the detailed freshness procedure](docs/cursor-delegation.md#launcher-checkout-freshness-and-provenance).
-
-If an implementation attempt is unproductive, clarify the work order and retry
-at the next tier. Do not repeat unproductive retries at the same tier. If a
-`hard` attempt still fails and redesign is needed, use the Sol escalation above
-before another implementation attempt. Review high-risk work in Codex even
-after a successful worker run.
+- Verify against the human development server from `npm run dev`
+  (`http://localhost:5174/`) on desktop and mobile viewports. Do not stop or
+  replace a server the session did not start.
+- Use the browser tools available in the current Claude Code session. Do not
+  inspect, copy, or log browser profile/auth state and do not automate Google
+  OAuth. If authenticated screens need a manual login, ask the human and do not
+  report readiness until they confirm it.
+- If browser operation is unavailable, report UI behavior as UNCONFIRMED with
+  the cause; never claim PASS.

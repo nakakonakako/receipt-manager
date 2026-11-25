@@ -9,7 +9,6 @@
 | [project-overview.md](./project-overview.md) | **プロジェクト概要（生きたドキュメント）** — 目的・機能・環境・スタック |
 | [spec-split-receipt-and-unit-price.md](./spec-split-receipt-and-unit-price.md) | レシート管理（A）と厳密単価比較（B）の分離方針 |
 | [planned-history-category-filter.md](./planned-history-category-filter.md) | **予定** — 履歴の大分類・サブを候補選択で絞る構想 |
-| [cursor-delegation.md](./cursor-delegation.md) | Codex supervisor から Cursor worker へ実装を委譲する手順 |
 | [spec-ai-quota-database.md](./spec-ai-quota-database.md) | Gemini 利用枠 DB と、`/analyze`・`/search`・`/analyze_csv` の FastAPI 統合 |
 | [../db-contracts/receipt-manager.json](../db-contracts/receipt-manager.json) / [../db-contracts/INTEGRATION_TESTS.md](../db-contracts/INTEGRATION_TESTS.md) | アプリDB契約v1とv1検証外の保証・統合テスト対象 |
 | [database-migration-deployment.md](./database-migration-deployment.md) | reader role migrationと履歴検証の実装メモ |

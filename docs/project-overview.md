@@ -59,7 +59,7 @@ Browser (React / Vite SPA)
   │  一部は Supabase JS 直アクセス（RLS）
   │  /api → Vite proxy（開発） / nginx（本番）
   ▼
-FastAPI（人間用開発 :8000 / Cursor UI 検証 :8100）
+FastAPI（開発 :8000）
   │  x-supabase-token → ユーザー単位の Supabase クライアント
   │  GEMINI_API_KEY → Google Gemini
   ▼
@@ -295,8 +295,7 @@ npm run dev
 # BACK:  uv run uvicorn app.main:app --reload（backend）
 ```
 
-- 人間用開発環境は Vite `5174` → FastAPI `8000`、Cursor検証用は Vite `5274` → FastAPI `8100` の固定構成。後者は `npm run devserver:ensure|status|stop` で同一worktree所有の検証済みプロセスだけを再利用・停止し、未知の占有者や設定不一致では失敗する。詳細は [worktree-development.md](./worktree-development.md)
-- 認証用Playwright MCPは通常ヘッドレスで、手動ログイン時のみ同じプロファイルのGUIを明示選択する。GUI時はWSLgの標準ソケットが存在する場合に限り未設定の `DISPLAY` を補完する。モード切替前にMCPとブラウザを終了し、人間が表示・操作を確認してログイン後、ヘッドレスで認証維持を確認する。詳細は [worktree-development.md](./worktree-development.md)
+- 開発環境は Vite `5174` → FastAPI `8000` の固定構成。UI検証もこの開発サーバーで行う
 - `scripts/worktree.sh remove` は確認プロンプト前と削除直前に `/proc` のcwdを検査し、対象worktree内の稼働プロセスや検査不能な同一ユーザーPIDがあれば削除を拒否する。cwdを読めず関連を確認できないPIDは検出限界として扱う。詳細は [worktree-development.md](./worktree-development.md)
 - `npm run dev` は起動前に、固定された開発Supabase refとVite・backend双方の実効URLを照合。URLのプロセス環境変数上書き、Viteの優先dotenvファイル、backend dotenv内の不一致・曖昧な設定では値を表示せず停止
 - ブラウザからの API 呼び出しは同一オリジンの `/api`（Vite / nginx 経由）のみ。FastAPI は CORS を有効化しない
@@ -305,9 +304,9 @@ npm run dev
 
 ### 7.2 環境変数
 
-Cursor CLI の明示的な利用枠切れ時は、現在の Codex Supervisor が既存変更を保護して同じ worktree で実装と検証を引き継ぐ。Codex は信頼済み worktree の `.codex/config.toml`、Claude Code は `.mcp.json` で同じ Playwright MCP 起動スクリプトを利用し、ブラウザーを利用できない場合は UI 検証を未確認として報告する。詳細は [cursor-delegation.md](./cursor-delegation.md)。Claude Code も Luna と同じ監督ルールに従い、Sol 相談には `.claude/agents/sol-supervisor.md` の読み取り専用サブエージェントを使う。
+開発エージェントは Claude Code のみを使い、Codex・Cursor への委譲は行わない。ブラウザーを利用できない場合は UI 検証を未確認として報告する。
 
-追加worktreeの保存先、開発設定のsymlink、依存関係セットアップ、Cursor委譲の手順は [worktree-development.md](./worktree-development.md) を参照。`.env.ai-quota`、CA、service account、本番設定は標準worktreeセットアップの対象外。
+追加worktreeの保存先、開発設定のsymlink、依存関係セットアップの手順は [worktree-development.md](./worktree-development.md) を参照。`.env.ai-quota`、CA、service account、本番設定は標準worktreeセットアップの対象外。
 
 **フロント（`frontend/.env`、Docker ビルド時に焼込）**
 
@@ -397,6 +396,7 @@ receipt-manager/
 
 | 日付 | 内容 |
 |------|------|
+| 2026-11-25 | Codex・Cursor連携、Solサブエージェント、Cursor用検証devserverとPlaywright MCP起動スクリプトを削除し、Claude Codeのみの開発体制に整理 |
 | 2026-11-11 | 履歴画面のスマートフォン操作列を月選択の下に集約し、履歴カードを2行に整理 |
 | 2026-11-10 | 認証用Playwright MCPのWSLg表示と手動ログイン確認手順を明確化 |
 | 2026-11-05 | Cursor用Playwright MCPを認証済み共有profileと未認証isolatedに分け、専用devserverを追加 |

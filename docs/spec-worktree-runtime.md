@@ -1,9 +1,5 @@
 # Worktree runtime and db:plan
 
-For the authenticated Playwright MCP's headed display requirements, human
-visibility gate, and login persistence verification, see
-[worktree-development.md](./worktree-development.md#human-sign-in-in-the-authenticated-mcp-browser).
-
 ## Worktree environment link validation
 
 `scripts/worktree.sh` remains responsible for Git operations, dependency setup,
@@ -15,7 +11,6 @@ for both pre-setup and strict checks. The sequence is:
    setup.
 2. Create only configured links, without replacing existing paths.
 3. Validate in `strict` mode after link setup.
-4. Validate in `strict` mode again immediately before starting Cursor.
 
 The managed files are `.env`, `frontend/.env`, `frontend/.env.local`, and
 `backend/.env`. The validator checks receipt-manager's dotenv lookup

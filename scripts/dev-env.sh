@@ -111,7 +111,7 @@ migrate_env() {
         [[ ! -e "$destination" && ! -L "$destination" ]] || die "Destination already exists; no files copied: $destination"
         selected+=("$candidate")
       done
-      printf 'Confirm these selected files contain development-only credentials (never production credentials for Cursor workers). Type copy to continue: '
+      printf 'Confirm these selected files contain development-only credentials (never production credentials). Type copy to continue: '
       read -r answer
       [[ "$answer" == copy ]] || die 'Migration cancelled.'
       umask 077
