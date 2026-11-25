@@ -7,9 +7,8 @@ This document defines the shared v1 safety contract for
 observable protections around deleting a Git worktree. It does not define or
 standardize the internal process-inspection implementation.
 
-The contract is independent of the Cursor delegation monitor contracts
-MON-01–08. It does not require a shared package, cross-repository CI, Cursor
-session tracking, or process termination.
+The contract does not require a shared package, cross-repository CI, session
+tracking, or process termination.
 
 The acceptance conditions below describe behavior that can be stated from the
 current receipt-manager implementation. Where test coverage is narrower than
@@ -199,6 +198,10 @@ inspection-to-removal race.
 
 ## price-memo optional extension (not required by v1)
 
+This section records the comparison snapshot. Both repositories removed their
+Cursor delegation and Cursor devserver tooling on 2026-11-25, so the extension
+below is historical evidence rather than a current price-memo guarantee.
+
 price-memo's Cursor Playwright devserver has additional evidence that
 receipt-manager does not issue: a worktree-specific recorded PID/PGID/SID/start
 time, a nonce marker, and recorded launch PIDs. Its guard can detect matching
@@ -238,7 +241,7 @@ claim receipt-manager provides it.
    proposing the change. Keep app-specific behavior in each repository's own
    tests and docs.
 3. Create independently reviewable PRs in each repository. Do not use one
-   worker or one PR to modify both repositories.
+   agent session or one PR to modify both repositories.
 4. In each adoption/update PR, record the contract version, compared base SHA,
    PR URL, merged commit, CI result, and any untested conditions. Update the
    adoption table only after the corresponding PR is merged and CI is green.
@@ -246,6 +249,3 @@ claim receipt-manager provides it.
    enforce this documentation contract. receipt-manager's v1 document and tests
    did not themselves adopt price-memo; price-memo's adoption is its own merged
    PR #58, recorded above.
-
-This document is the worktree-removal contract. The Cursor delegation monitor
-contracts MON-01–08 are separate and do not change these requirements.

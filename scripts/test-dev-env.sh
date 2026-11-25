@@ -246,13 +246,6 @@ const scripts = JSON.parse(fs.readFileSync(`${root}/package.json`, 'utf8')).scri
 if (!scripts.dev.startsWith('bash scripts/dev-env.sh prepare && ')) {
   throw new Error('npm run dev must run the environment preflight first')
 }
-if (name === 'price-memo') {
-  for (const command of ['dev:playwright', 'devserver:ensure']) {
-    if (!scripts[command].startsWith('bash scripts/dev-env.sh prepare && ')) {
-      throw new Error(`${command} must run the environment preflight first`)
-    }
-  }
-}
 NODE
 
 echo 'Development environment workflow tests passed.'

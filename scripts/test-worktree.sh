@@ -17,8 +17,6 @@ cp "$source_root/scripts/worktree.sh" "$fixture_repo/scripts/worktree.sh"
 cp "$source_root/scripts/worktree-env-validate.py" "$fixture_repo/scripts/worktree-env-validate.py"
 cp "$source_root/scripts/worktree-remove-inspect.py" "$fixture_repo/scripts/worktree-remove-inspect.py"
 cp "$source_root/scripts/lib-backend-runtime.sh" "$fixture_repo/scripts/lib-backend-runtime.sh"
-cp "$source_root/scripts/delegate-cursor-monitor.py" "$fixture_repo/scripts/delegate-cursor-monitor.py"
-cp "$source_root/scripts/delegate-cursor.sh" "$fixture_repo/scripts/delegate-cursor.sh"
 
 git -C "$fixture_repo" init -b main >/dev/null
 git -C "$fixture_repo" config user.name "Worktree Test"
@@ -260,50 +258,41 @@ git -C "$fixture_repo" show-ref --verify --quiet refs/heads/feature/review-task
 
 python3 "$source_root/scripts/test-worktree-remove-guard.py"
 
-cat > "$fixture_bin/agent" <<'EOF'
-#!/usr/bin/env bash
-if [[ -n "${WORKER_STARTED_FILE:-}" ]]; then
-  : > "$WORKER_STARTED_FILE"
-fi
-printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"session_id":"worktree-test"}'
-exit 0
-EOF
-chmod +x "$fixture_bin/agent"
 
 git -C "$fixture_repo" update-ref refs/remotes/origin/main "$stale_origin_main"
 : > "$command_log"
 cd "$fixture_repo"
-if ! "$fixture_repo/scripts/delegate-cursor.sh" --prompt "worktree fixture" --worktree delegate-fresh >"$test_root/delegate-create.log" 2>&1; then
-  echo "Expected delegate-cursor to create a worktree." >&2
-  cat "$test_root/delegate-create.log" >&2
+if ! "$fixture_repo/scripts/worktree.sh" create setup-fresh --branch feature/setup-fresh >"$test_root/setup-create.log" 2>&1; then
+  echo "Expected worktree create with setup to create a worktree." >&2
+  cat "$test_root/setup-create.log" >&2
   exit 1
 fi
-delegate_workspace="$fixture_home/worktrees/$repository_name/delegate-fresh"
-[[ -d "$delegate_workspace" ]]
-git -C "$fixture_repo" show-ref --verify --quiet refs/heads/codex/delegate-fresh
+task_workspace="$fixture_home/worktrees/$repository_name/setup-fresh"
+[[ -d "$task_workspace" ]]
+git -C "$fixture_repo" show-ref --verify --quiet refs/heads/feature/setup-fresh
 grep -Fq 'git fetch origin-main' "$command_log" || {
-  echo "Expected delegate-cursor new worktree path to fetch via worktree.sh." >&2
+  echo "Expected a new worktree path to fetch origin/main." >&2
   exit 1
 }
-[[ "$(git -C "$delegate_workspace" rev-parse HEAD)" == "$latest_origin_main" ]]
-grep -Fq "npm --prefix $delegate_workspace ci" "$command_log" || {
+[[ "$(git -C "$task_workspace" rev-parse HEAD)" == "$latest_origin_main" ]]
+grep -Fq "npm --prefix $task_workspace ci" "$command_log" || {
   echo "Expected setup to run dependencies after accepting not-yet-created environment links." >&2
   exit 1
 }
-[[ "$(readlink "$delegate_workspace/frontend/.env")" == "$fixture_config/frontend/.env" ]]
+[[ "$(readlink "$task_workspace/frontend/.env")" == "$fixture_config/frontend/.env" ]]
 
 : > "$command_log"
-if ! "$fixture_repo/scripts/delegate-cursor.sh" --prompt "worktree fixture" --worktree delegate-fresh >"$test_root/delegate-reuse.log" 2>&1; then
-  echo "Expected delegate-cursor to reuse an existing worktree." >&2
-  cat "$test_root/delegate-reuse.log" >&2
+if ! "$fixture_repo/scripts/worktree.sh" create setup-fresh --branch feature/setup-fresh >"$test_root/setup-reuse.log" 2>&1; then
+  echo "Expected worktree create to reuse an existing worktree." >&2
+  cat "$test_root/setup-reuse.log" >&2
   exit 1
 fi
 if grep -Fq 'git fetch origin-main' "$command_log"; then
-  echo "Expected delegate-cursor reuse not to fetch origin/main." >&2
+  echo "Expected worktree reuse not to fetch origin/main." >&2
   exit 1
 fi
 
-"$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >/dev/null
+"$fixture_repo/scripts/worktree.sh" validate-env "$task_workspace" >/dev/null
 
 staging_config="$fixture_home/.config/$repository_name/staging/frontend/.env"
 mkdir -p "$(dirname "$staging_config")"
@@ -318,12 +307,12 @@ staging_worktree="$fixture_home/worktrees/$repository_name/manual-staging"
 production_source="$fixture_home/.config/$repository_name/production/frontend/.env"
 mkdir -p "$(dirname "$production_source")"
 touch "$production_source"
-validation_target="$delegate_workspace/frontend/.env"
+validation_target="$task_workspace/frontend/.env"
 
 rm "$validation_target"
 ln -s "$production_source" "$validation_target"
 : > "$command_log"
-if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment development >"$test_root/pre-setup-alternate-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" setup "$task_workspace" --environment development >"$test_root/pre-setup-alternate-env.log" 2>&1; then
   echo 'Expected a different-environment link to be rejected before dependency setup.' >&2
   exit 1
 fi
@@ -337,7 +326,7 @@ ln -s "$fixture_config/frontend/.env" "$indirect_source"
 rm "$validation_target"
 ln -s "$indirect_source" "$validation_target"
 : > "$command_log"
-if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment development >"$test_root/pre-setup-indirect-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" setup "$task_workspace" --environment development >"$test_root/pre-setup-indirect-env.log" 2>&1; then
   echo 'Expected an indirect environment link to be rejected before dependency setup.' >&2
   exit 1
 fi
@@ -349,7 +338,7 @@ ln -s "$fixture_config/frontend/.env" "$validation_target"
 rm "$validation_target"
 printf 'SECRET_VALUE_MUST_NOT_APPEAR\n' > "$validation_target"
 : > "$command_log"
-if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment development >"$test_root/pre-setup-regular-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" setup "$task_workspace" --environment development >"$test_root/pre-setup-regular-env.log" 2>&1; then
   echo 'Expected a regular environment file to be rejected before dependency setup.' >&2
   exit 1
 fi
@@ -362,10 +351,10 @@ fi
 rm "$validation_target"
 ln -s "$fixture_config/frontend/.env" "$validation_target"
 
-unexpected_env="$delegate_workspace/.env.ai-quota"
+unexpected_env="$task_workspace/.env.ai-quota"
 touch "$unexpected_env"
 : > "$command_log"
-if "$fixture_repo/scripts/worktree.sh" setup "$delegate_workspace" --environment development >"$test_root/pre-setup-unexpected-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" setup "$task_workspace" --environment development >"$test_root/pre-setup-unexpected-env.log" 2>&1; then
   echo 'Expected an unexpected .env path to be rejected before dependency setup.' >&2
   exit 1
 fi
@@ -373,44 +362,16 @@ fi
 grep -Fq 'Unexpected .env-related path in workspace' "$test_root/pre-setup-unexpected-env.log"
 rm "$unexpected_env"
 
-real_worktree_script="$fixture_repo/scripts/worktree-real.sh"
-mv "$fixture_repo/scripts/worktree.sh" "$real_worktree_script"
-cat > "$fixture_repo/scripts/worktree.sh" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-real_script="${WORKTREE_TEST_REAL_WORKTREE:?}"
-if [[ "${1:-}" == reuse ]]; then
-  workspace="${2:?missing workspace}"
-  "$real_script" "$@"
-  touch "$workspace/.env.ai-quota"
-else
-  exec "$real_script" "$@"
-fi
-EOF
-chmod +x "$fixture_repo/scripts/worktree.sh"
-worker_started_after_setup="$test_root/worker-started-after-setup"
-if WORKTREE_TEST_REAL_WORKTREE="$real_worktree_script" WORKER_STARTED_FILE="$worker_started_after_setup" \
-  "$fixture_repo/scripts/delegate-cursor.sh" --prompt 'post-setup validation fixture' --workspace "$delegate_workspace" \
-  >"$test_root/post-setup-validation.log" 2>&1; then
-  echo 'Expected the final environment validation to reject a path added after setup.' >&2
-  exit 1
-fi
-[[ ! -e "$worker_started_after_setup" ]]
-grep -Fq 'Unexpected .env-related path in workspace' "$test_root/post-setup-validation.log"
-rm "$delegate_workspace/.env.ai-quota"
-mv "$real_worktree_script" "$fixture_repo/scripts/worktree.sh"
-chmod +x "$fixture_repo/scripts/worktree.sh"
-
 empty_home="$test_root/empty-home"
 mkdir -p "$empty_home"
 HOME="$empty_home" "$fixture_repo/scripts/worktree.sh" validate-env "$fixture_repo" >/dev/null
 
-validation_target="$delegate_workspace/frontend/.env"
+validation_target="$task_workspace/frontend/.env"
 development_source="$fixture_config/frontend/.env"
 
 rm "$validation_target"
 ln -s "$production_source" "$validation_target"
-if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/alternate-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" validate-env "$task_workspace" >"$test_root/alternate-env.log" 2>&1; then
   echo 'Expected an environment link to a different environment to be rejected.' >&2
   exit 1
 fi
@@ -418,7 +379,7 @@ grep -Fq 'does not directly target selected settings' "$test_root/alternate-env.
 
 rm "$validation_target"
 ln -s "$fixture_config/frontend/missing.env" "$validation_target"
-if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/broken-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" validate-env "$task_workspace" >"$test_root/broken-env.log" 2>&1; then
   echo 'Expected a broken environment link to be rejected.' >&2
   exit 1
 fi
@@ -426,7 +387,7 @@ grep -Fq 'Broken environment symlink' "$test_root/broken-env.log"
 
 rm "$validation_target"
 touch "$validation_target"
-if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/regular-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" validate-env "$task_workspace" >"$test_root/regular-env.log" 2>&1; then
   echo 'Expected an existing regular environment file to be rejected.' >&2
   exit 1
 fi
@@ -435,24 +396,21 @@ grep -Fq 'Environment path is not a symlink' "$test_root/regular-env.log"
 rm "$validation_target"
 ln -s "$development_source" "$validation_target"
 mv "$development_source" "$development_source.saved"
-if "$fixture_repo/scripts/worktree.sh" validate-env "$delegate_workspace" >"$test_root/missing-source-env.log" 2>&1; then
+if "$fixture_repo/scripts/worktree.sh" validate-env "$task_workspace" >"$test_root/missing-source-env.log" 2>&1; then
   echo 'Expected a stale link with a missing development source to be rejected.' >&2
   exit 1
 fi
 grep -Fq 'Broken environment symlink' "$test_root/missing-source-env.log"
 mv "$development_source.saved" "$development_source"
 
-unexpected_env="$delegate_workspace/.env.ai-quota"
+unexpected_env="$task_workspace/.env.ai-quota"
 printf 'SECRET_VALUE_MUST_NOT_APPEAR\n' > "$unexpected_env"
-worker_started="$test_root/unexpected-env-worker-started"
-if WORKER_STARTED_FILE="$worker_started" "$fixture_repo/scripts/delegate-cursor.sh" \
-  --prompt 'unexpected env fixture' --workspace "$delegate_workspace" >"$test_root/unexpected-env-delegate.log" 2>&1; then
-  echo 'Expected Cursor delegation to stop for an unexpected environment file.' >&2
+if "$fixture_repo/scripts/worktree.sh" validate-env "$task_workspace" >"$test_root/unexpected-env-validate.log" 2>&1; then
+  echo 'Expected validation to reject an unexpected environment file.' >&2
   exit 1
 fi
-[[ ! -e "$worker_started" ]]
-grep -Fq 'Unexpected .env-related path in workspace' "$test_root/unexpected-env-delegate.log"
-if grep -Fq 'SECRET_VALUE_MUST_NOT_APPEAR' "$test_root/unexpected-env-delegate.log"; then
+grep -Fq 'Unexpected .env-related path in workspace' "$test_root/unexpected-env-validate.log"
+if grep -Fq 'SECRET_VALUE_MUST_NOT_APPEAR' "$test_root/unexpected-env-validate.log"; then
   echo 'Environment file contents must not be included in validation errors.' >&2
   exit 1
 fi
