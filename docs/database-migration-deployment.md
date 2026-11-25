@@ -23,11 +23,9 @@ See [production-database-migration-gate.md](./production-database-migration-gate
 for current Reader and Writer verification status, retained legacy Production
 Writer Secret conditions, and the shared Writer operating procedure.
 
-Dev and Prod Reader checks and Writer credential read-only identity probes have
-succeeded. Dev history is `IN_SYNC`; actual Dev and Prod `PENDING` migration
-application remains unverified, and the Dev no-op is not proof of apply
-capability. The shared Writer enable flags remain false. The receipt-manager
-Production Writer Secret stays until a shared Production `PENDING` apply,
-Reader postflight, both apps' DB compatibility and production deployment, and
-an audit for old Writer references have succeeded. Deletion still requires
-separate approval.
+Dev and Prod `PENDING` migration applies with Reader postflight succeeded on
+2026-11-23. Writer applies are gated by Environment approval; the former shared
+Writer enable flags have been removed. The receipt-manager Production Writer
+Secret stays until both apps' DB compatibility and production deployment, and an
+audit for old Writer references, are confirmed. Deletion still requires separate
+approval.
